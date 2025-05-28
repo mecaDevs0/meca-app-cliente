@@ -25,6 +25,8 @@ Future<void> main() async {
   final String initialRoute = token == null ? AppPages.initial : Routes.home;
   initializeDateFormatting('pt_BR', null);
 
+  AliceAdapter.instance(Get.key);
+
   runApp(
     GetMaterialApp(
       title: 'Meca Cliente',
