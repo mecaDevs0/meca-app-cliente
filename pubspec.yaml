@@ -1,0 +1,48 @@
+name: meca_cliente
+description: "A new Flutter project."
+version: 1.0.0+21
+
+environment:
+  sdk: ^3.5.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  mega_commons_dependencies:
+  mega_commons:
+  mega_features:
+  mega_payment:
+  pay: ^3.1.0
+  validatorless: any
+  flutter_svg: ^2.0.17
+  map_launcher: ^3.5.0
+  file_picker: ^8.1.7
+  skeletonizer: ^2.0.1
+
+dependency_overrides:
+  open_filex: ^4.7.0
+  skeletonizer: ^2.0.1
+  mega_commons_dependencies:
+    path: ../mega_commons_dependencies
+  mega_commons:
+    path: ../mega_commons
+  mega_features:
+    path: ../mega_features
+  mega_payment:
+    path: ../mega_payment
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.13
+  hive_generator: ^2.0.1
+  json_serializable: ^6.9.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/

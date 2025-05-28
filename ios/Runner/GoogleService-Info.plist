@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>767232279794-roqqa6hu1tqjsdusu5a3halkheqet6b0.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.767232279794-roqqa6hu1tqjsdusu5a3halkheqet6b0</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>767232279794-gom2mm3q2l65aotqta7ki0sfhvq3vb25.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyCrPTUKg8WhqdoR7sWooJIBysXGr398A_A</string>
+	<key>GCM_SENDER_ID</key>
+	<string>767232279794</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>br.com.megaleios.mecaCliente</string>
+	<key>PROJECT_ID</key>
+	<string>meca-app-2025</string>
+	<key>STORAGE_BUCKET</key>
+	<string>meca-app-2025.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:767232279794:ios:01b87ad03b9f01953c3c6b</string>
+	<key>DATABASE_URL</key>
+	<string>https://meca-app-2025-default-rtdb.firebaseio.com</string>
+</dict>
+</plist>

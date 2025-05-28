@@ -1,0 +1,342 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_svg/svg.dart';
+import 'package:mega_commons/mega_commons.dart';
+import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
+
+import '../../../core/app_colors.dart';
+import '../../../core/app_images.dart';
+import '../../../core/args/workshop_args.dart';
+import '../../../core/modals/app_bottom_sheet.dart';
+import '../../../core/widgets/app_bar_custom.dart';
+import '../../../core/widgets/app_filter_bottom_sheet.dart';
+import '../../../data/models/mechanic_workshop.dart';
+import '../../../routes/app_pages.dart';
+import '../../app_filter/view/app_filter.dart';
+import '../controllers/home_controller.dart';
+import 'widgets/mechanic_workshops/card/mechanic_workshop_card.dart';
+import 'widgets/search_bar.dart';
+import 'widgets/services/services_list.dart';
+
+class HomeView extends StatefulWidget {
+  const HomeView({super.key});
+
+  @override
+  State<HomeView> createState() => _HomeViewState();
+}
+
+class _HomeViewState extends MegaState<HomeView, HomeController> {
+  final _searchController = TextEditingController();
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  void initState() {
+    ever(controller.hasRequestPermission, (bool hasPermission) {
+      if (!hasPermission) {
+        AppBottomSheet.showLocationBottomSheet(
+          context,
+          onRequestPermission: controller.requestPermission,
+        );
+      }
+    });
+    super.initState();
+  }
+
+  void _applyFilters(FilterParams filter) {
+    controller.updateFilters(
+      searchQuery: _searchController.text,
+      selectedCategories: filter.services,
+      rating: filter.rating,
+      distance: filter.distance,
+    );
+    controller.workshopsPagingController.refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBarCustom(
+        leading: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 5.0),
+          child: SvgPicture.asset(AppImages.homeLogo),
+        ),
+        backgroundColor: AppColors.primaryColor,
+        actions: [
+          IconButton(
+            icon: SvgPicture.asset(AppImages.icNotifications),
+            onPressed: () => Get.toNamed(Routes.notifications),
+          ),
+          IconButton(
+            icon: SvgPicture.asset(AppImages.icMenuHamburguer),
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          ),
+        ],
+      ),
+      drawer: _buildDrawer(),
+      body: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.all(16.0),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                const SizedBox(height: 16),
+                SearchBarWidget(
+                  controller: _searchController,
+                  onSearchChanged: (value) =>
+                      controller.updateFilters(searchQuery: value),
+                  onFilterTap: () => showFilterBottomSheet(
+                    context: context,
+                    initialParams: FilterParams(
+                      rating: controller.rating,
+                      services: controller.services,
+                      distance: controller.distance,
+                    ),
+                    onTap: _applyFilters,
+                    availableCategories: controller.availableCategories,
+                  ),
+                  hintText: 'O que você procura?',
+                  hasFilter: true,
+                ),
+                const SizedBox(height: 32),
+                const SizedBox(
+                  height: 200,
+                  child: ServicesList(),
+                ),
+                const SizedBox(height: 32),
+              ]),
+            ),
+          ),
+          Obx(() {
+            if (controller.isGettingLocation) {
+              return SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Skeletonizer(
+                        child: MechanicWorkshopCard(
+                          mechanicWorkshop: MechanicWorkshop(
+                            fullName: 'Oficina',
+                            streetAddress: 'Endereço',
+                            distance: 12,
+                            rating: 5,
+                          ),
+                          onTap: () {},
+                        ),
+                      ),
+                    ),
+                    childCount: 6,
+                  ),
+                ),
+              );
+            }
+            return SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              sliver: _buildWorkshopsList(),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkshopsList() {
+    return SliverToBoxAdapter(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Oficinas',
+                style: TextStyle(
+                  color: AppColors.blackPrimaryColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              InkWell(
+                onTap: () => Get.toNamed(Routes.mechanicWorkshops),
+                child: const Text(
+                  'Ver todos',
+                  style: TextStyle(
+                    color: AppColors.primaryColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 400,
+            child: RefreshIndicator(
+              onRefresh: () => Future.sync(
+                () => controller.workshopsPagingController.refresh(),
+              ),
+              child: PagedListView<int, MechanicWorkshop>(
+                pagingController: controller.workshopsPagingController,
+                builderDelegate: PagedChildBuilderDelegate<MechanicWorkshop>(
+                  itemBuilder: (context, item, index) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: MechanicWorkshopCard(
+                      mechanicWorkshop: item,
+                      onTap: () {
+                        if (item.id.isNullOrEmpty == false) {
+                          Get.toNamed(
+                            Routes.mechanicWorkshopDetails,
+                            arguments: WorkshopArgs(item.id!),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                  noItemsFoundIndicatorBuilder: (context) =>
+                      const EmptyListIndicator(
+                    isShowIcon: false,
+                    message: 'Nenhuma oficina encontrada',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      child: Stack(
+        children: [
+          ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            children: [
+              Stack(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: DrawerHeader(
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: SvgPicture.asset(
+                              AppImages.headerMenuHome,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Expanded(
+                            child: SvgPicture.asset(AppImages.loginLogo),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 32,
+                    right: 8,
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: SvgPicture.asset(
+                        AppImages.icCloseMenu,
+                        height: 24,
+                        width: 24,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                title: Row(
+                  children: [
+                    SvgPicture.asset(AppImages.icHome),
+                    const SizedBox(width: 10),
+                    const Text('Início'),
+                  ],
+                ),
+                onTap: () => Navigator.pop(context),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                title: Row(
+                  children: [
+                    SvgPicture.asset(AppImages.icCarHome),
+                    const SizedBox(width: 10),
+                    const Text('Meus veículos'),
+                  ],
+                ),
+                onTap: () => Get.toNamed(Routes.myVehicles),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                title: Row(
+                  children: [
+                    SvgPicture.asset(
+                      AppImages.icOrders,
+                      colorFilter: const ColorFilter.mode(
+                        AppColors.softBlackColor,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text('Pedidos'),
+                  ],
+                ),
+                onTap: () => Get.toNamed(Routes.ordersPlaced),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                title: Row(
+                  children: [
+                    SvgPicture.asset(AppImages.icUserHome),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Meu perfil',
+                      style: TextStyle(
+                        color: AppColors.softBlackColor,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+                onTap: () => Get.toNamed(Routes.userProfile),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                title: Row(
+                  children: [
+                    SvgPicture.asset(AppImages.icHelp),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Central de ajuda',
+                      style: TextStyle(
+                        color: AppColors.softBlackColor,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+                onTap: () => Get.toNamed(Routes.helpCenter),
+              ),
+              const SizedBox(height: 80),
+            ],
+          ),
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child:
+                SvgPicture.asset(AppImages.carMenuHome, height: 60, width: 60),
+          ),
+        ],
+      ),
+    );
+  }
+}
