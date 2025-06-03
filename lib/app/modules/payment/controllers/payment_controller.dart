@@ -4,8 +4,14 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import '../../../core/core.dart';
 import '../../../data/models/order.dart';
 import '../../../data/providers/payment_provider.dart';
-
+import '../../../core/utils/auth_helper.dart';
+import 'package:get/get.dart';
+import '../../../core/utils/auth_helper.dart';
+import '../../../core/app_colors.dart';
+import '../../../routes/app_pages.dart';
+import 'package:flutter/material.dart';
 class PaymentController extends GetxController with ProfileMixin {
+
   PaymentController({required PaymentProvider paymentProvider})
       : _paymentProvider = paymentProvider;
 
@@ -39,6 +45,22 @@ class PaymentController extends GetxController with ProfileMixin {
   }
 
   Future<void> getOrderDetails() async {
+    if (AuthHelper.isGuest) {
+      Get.defaultDialog(
+        title: 'Acesso restrito',
+        middleText: 'Para acessar esta funcionalidade, você precisa fazer login.',
+        textConfirm: 'Fazer login',
+        confirmTextColor: Colors.white,
+        buttonColor: AppColors.primaryColor,
+        onConfirm: () {
+          Get.back();
+          Get.offAllNamed(Routes.login);
+        },
+        textCancel: 'Cancelar',
+        cancelTextColor: AppColors.primaryColor,
+      );
+      return;
+    }
     _isLoadingDetails.value = true;
     await MegaRequestUtils.load(
       action: () async {

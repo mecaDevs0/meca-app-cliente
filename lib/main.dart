@@ -7,6 +7,7 @@ import 'app/application_binding.dart';
 import 'app/data/cache/base_hive.dart';
 import 'app/routes/app_pages.dart';
 import 'app/theme/app_theme.dart';
+import 'package:get_storage/get_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +16,7 @@ Future<void> main() async {
   await Future.wait([
     FirebaseConfig.initialize(),
     BaseHive.initHive(),
+    GetStorage.init(),
   ]);
   await MegaOneSignalConfig.configure(
     appKey: '7bbec33c-bffc-47b1-ab90-a080b7353763',

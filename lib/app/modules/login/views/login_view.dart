@@ -30,7 +30,7 @@ class LoginView extends GetView<LoginController> {
                   InkWell(
                     onTap: () {
                       controller.emailController.text =
-                          'lucas.silva@megaleios.com';
+                      'lucas.silva@megaleios.com';
                       controller.passwordController.text = '123456';
                     },
                     onDoubleTap: () {
@@ -97,7 +97,7 @@ class LoginView extends GetView<LoginController> {
                           ),
                           const SizedBox(height: 32),
                           Obx(
-                            () => MegaBaseButton(
+                                () => MegaBaseButton(
                               'Entrar',
                               buttonColor: AppColors.primaryColor,
                               textColor: AppColors.whiteColor,
@@ -108,6 +108,23 @@ class LoginView extends GetView<LoginController> {
                               borderRadius: 4.0,
                               isLoading: controller.isLoading,
                             ),
+                          ),
+
+
+                          // NOVO BOTÃO "ENTRAR COMO VISITANTE" ADICIONADO AQUI
+
+                          const SizedBox(height: 16),
+                          MegaBaseButton(
+                            'Entrar como Visitante',
+                            buttonColor: Colors.transparent,
+                            textColor: AppColors.primaryColor,
+                            // borderColor: AppColors.primaryColor,
+                            onButtonPress: () {
+                              controller.enterAsGuest();
+                            },
+                            buttonHeight: 46,
+                            borderRadius: 4.0,
+                            isLoading: false,
                           ),
                         ],
                       ),

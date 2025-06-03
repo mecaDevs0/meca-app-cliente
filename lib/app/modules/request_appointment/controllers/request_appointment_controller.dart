@@ -10,7 +10,17 @@ import '../../../data/models/workshopService/workshop_service.dart';
 import '../../../data/providers/core_provider.dart';
 import '../../../data/providers/request_appointment_provider.dart';
 
+import '../../../core/utils/auth_helper.dart';
+import 'package:get/get.dart';
+import '../../../core/utils/auth_helper.dart';
+import '../../../core/app_colors.dart';
+import '../../../routes/app_pages.dart';
+import 'package:flutter/material.dart';
+
 class RequestAppointmentController extends GetxController {
+
+
+
   RequestAppointmentController({
     required RequestAppointmentProvider requestAppointmentProvider,
     required CoreProvider coreProvider,
@@ -55,6 +65,22 @@ class RequestAppointmentController extends GetxController {
   }
 
   Future<void> initialize() async {
+    if (AuthHelper.isGuest) {
+      Get.defaultDialog(
+        title: 'Acesso restrito',
+        middleText: 'Para acessar esta funcionalidade, você precisa fazer login.',
+        textConfirm: 'Fazer login',
+        confirmTextColor: Colors.white,
+        buttonColor: AppColors.primaryColor,
+        onConfirm: () {
+          Get.back();
+          Get.offAllNamed(Routes.login);
+        },
+        textCancel: 'Cancelar',
+        cancelTextColor: AppColors.primaryColor,
+      );
+      return;
+    }
     _isLoading.value = true;
     await MegaRequestUtils.load(
       action: () async {
