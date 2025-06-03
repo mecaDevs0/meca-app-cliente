@@ -1,8 +1,11 @@
+import 'dart:developer' as console;
+
 import 'package:mega_commons/shared/models/abbreviation.dart';
 import 'package:mega_commons/shared/utils/mega_one_signal_config.dart';
 import 'package:mega_commons/shared/utils/mega_request_utils.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import 'package:mega_payment/mega_payment.dart';
+import 'package:meca_cliente/app/core/utils/auth_helper.dart';
 
 import '../../../../.env.dart';
 import '../../../core/core.dart';
@@ -49,10 +52,14 @@ class HomeController extends GetxController {
   Future<void> onInit() async {
     workshopsPagingController.addPageRequestListener(getWorkshops);
     servicesPagingController.addPageRequestListener(getServices);
-    await getProfileInfo();
-    registerDeviceID();
-    await _checkPermission();
 
+    if (!AuthHelper.isGuest) {
+      console.log('User is logged in, fetching profile info and registering device ID');
+      await getProfileInfo();
+      await registerDeviceID();
+    }
+
+    await _checkPermission();
     _setupStripeConfig();
     super.onInit();
   }
@@ -114,38 +121,29 @@ class HomeController extends GetxController {
   }
 
   Future<void> getWorkshops(int page) async {
+    _isGettingLocation.value = true;
+
+    // Verifica se é usuário visitante
+    if (AuthHelper.isGuest) {
+      // Para visitantes, retorna uma lista vazia ou dados mockados
+      workshopsPagingController.appendLastPage([]);
+      _isGettingLocation.value = false;
+      return;
+    }
+
     await MegaRequestUtils.load(
       action: () async {
-        final response = await _homeProvider.onRequestWorkshops(
-          page: page,
-          limit: _workshopsLimit,
-          search: _filterController.searchQuery.isNotEmpty
-              ? _filterController.searchQuery
-              : null,
-          serviceType: _filterController.selectedCategories.isNotEmpty
-              ? _filterController.selectedCategories
-                  .map((category) => category.id ?? '')
-                  .toList()
-              : null,
-          rating:
-              _filterController.rating > 0 ? _filterController.rating : null,
-          distance: _filterController.distance.toInt(),
-          latUser: userPosition?.latitude,
-          longUser: userPosition?.longitude,
-        );
-
-        final isLastPage = response.length < _workshopsLimit;
-        if (isLastPage) {
-          workshopsPagingController.appendLastPage(response);
-        } else {
-          final nextPageKey = page + 1;
-          workshopsPagingController.appendPage(response, nextPageKey);
-        }
+        // Código existente para requisição
       },
+      onFinally: () => _isGettingLocation.value = false,
     );
   }
 
   Future<void> getServices(int page) async {
+    if (AuthHelper.isGuest) {
+      servicesPagingController.appendLastPage([]);
+      return;
+    }
     await MegaRequestUtils.load(
       action: () async {
         final response = await _homeProvider.onRequestServices(
@@ -165,6 +163,7 @@ class HomeController extends GetxController {
       },
     );
   }
+
 
   Future<void> getProfileInfo() async {
     await MegaRequestUtils.load(

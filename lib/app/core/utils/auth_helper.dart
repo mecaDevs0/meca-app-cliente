@@ -6,9 +6,9 @@ class AuthHelper {
   static bool get isGuest => _storage.read('isGuest') == true;
   static bool get isLoggedIn => _storage.read('isLoggedIn') == true;
 
-  static void setGuest() {
-    _storage.write('isGuest', true);
-    _storage.write('isLoggedIn', false);
+  static Future<void> setGuest() async {
+    await _storage.write('isGuest', true);
+    await _storage.write('isLoggedIn', false);
   }
 
   static void clearGuestStatus() {

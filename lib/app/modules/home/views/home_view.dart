@@ -1,3 +1,5 @@
+import 'dart:developer' as console;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:mega_commons/mega_commons.dart';
@@ -7,6 +9,7 @@ import '../../../core/app_colors.dart';
 import '../../../core/app_images.dart';
 import '../../../core/args/workshop_args.dart';
 import '../../../core/modals/app_bottom_sheet.dart';
+import '../../../core/utils/guest_access_helper.dart';
 import '../../../core/widgets/app_bar_custom.dart';
 import '../../../core/widgets/app_filter_bottom_sheet.dart';
 import '../../../data/models/mechanic_workshop.dart';
@@ -16,6 +19,7 @@ import '../controllers/home_controller.dart';
 import 'widgets/mechanic_workshops/card/mechanic_workshop_card.dart';
 import 'widgets/search_bar.dart';
 import 'widgets/services/services_list.dart';
+import 'package:meca_cliente/app/core/utils/auth_helper.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -30,14 +34,27 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
 
   @override
   void initState() {
+    print('isGuest no HomeView: ${AuthHelper.isGuest}');
     ever(controller.hasRequestPermission, (bool hasPermission) {
       if (!hasPermission) {
+
         AppBottomSheet.showLocationBottomSheet(
           context,
           onRequestPermission: controller.requestPermission,
         );
       }
     });
+
+// Timer para forçar logout do visitante após alguns segundos
+    if (AuthHelper.isGuest) {
+      Future.delayed(const Duration(minutes: 10), () {
+        if (mounted && AuthHelper.isGuest) {
+          AuthHelper.logout();
+          Get.offAllNamed(Routes.login);
+        }
+      });
+    }
+
     super.initState();
   }
 
@@ -64,11 +81,24 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
         actions: [
           IconButton(
             icon: SvgPicture.asset(AppImages.icNotifications),
-            onPressed: () => Get.toNamed(Routes.notifications),
+            onPressed: () {
+              if (AuthHelper.isGuest) {
+                console.log('Usuário visitante tentando acessar notificações');
+                Get.offAllNamed(Routes.login);
+              } else {
+                Get.toNamed(Routes.notifications);
+              }
+            },
           ),
           IconButton(
             icon: SvgPicture.asset(AppImages.icMenuHamburguer),
-            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+            onPressed: () {
+              if (AuthHelper.isGuest) {
+                Get.offAllNamed(Routes.login);
+              } else {
+                _scaffoldKey.currentState?.openDrawer();
+              }
+            },
           ),
         ],
       ),
@@ -159,11 +189,16 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                 ),
               ),
               InkWell(
-                onTap: () => Get.toNamed(Routes.mechanicWorkshops),
+        onTap: () {
+      if (GuestAccessHelper.checkGuestAccess(context)) {
+        Get.toNamed(Routes.myVehicles);
+      }
+    },
                 child: const Text(
                   'Ver todos',
                   style: TextStyle(
-                    color: AppColors.primaryColor,
+                    color:
+                    AppColors.primaryColor,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
@@ -186,11 +221,8 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                     child: MechanicWorkshopCard(
                       mechanicWorkshop: item,
                       onTap: () {
-                        if (item.id.isNullOrEmpty == false) {
-                          Get.toNamed(
-                            Routes.mechanicWorkshopDetails,
-                            arguments: WorkshopArgs(item.id!),
-                          );
+                        if (GuestAccessHelper.checkGuestAccess(context)) {
+                          Get.toNamed(Routes.myVehicles);
                         }
                       },
                     ),
@@ -271,7 +303,11 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                     const Text('Meus veículos'),
                   ],
                 ),
-                onTap: () => Get.toNamed(Routes.myVehicles),
+                onTap: () {
+                  if (GuestAccessHelper.checkGuestAccess(context)) {
+                    Get.toNamed(Routes.myVehicles);
+                  }
+                },
               ),
               const SizedBox(height: 20),
               ListTile(
@@ -288,7 +324,14 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                     const Text('Pedidos'),
                   ],
                 ),
-                onTap: () => Get.toNamed(Routes.ordersPlaced),
+                onTap: () {
+                  if (AuthHelper.isGuest) {
+                    console.log('Usuário visitante tentando acessar pedidos');
+                    Get.offAllNamed(Routes.login);
+                  } else {
+                    Get.toNamed(Routes.ordersPlaced);
+                  }
+                },
               ),
               const SizedBox(height: 20),
               ListTile(
@@ -306,7 +349,14 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                     ),
                   ],
                 ),
-                onTap: () => Get.toNamed(Routes.userProfile),
+                onTap: () {
+                  if (AuthHelper.isGuest) {
+                    console.log('Usuário visitante tentando acessar meu perfil');
+                    Get.offAllNamed(Routes.login);
+                  } else {
+                    Get.toNamed(Routes.userProfile);
+                  }
+                },
               ),
               const SizedBox(height: 20),
               ListTile(
@@ -324,7 +374,14 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                     ),
                   ],
                 ),
-                onTap: () => Get.toNamed(Routes.helpCenter),
+                onTap: () {
+                  if (AuthHelper.isGuest) {
+                    console.log('Usuário visitante tentando acessar central de ajuda');
+                    Get.offAllNamed(Routes.login);
+                  } else {
+                    Get.toNamed(Routes.helpCenter);
+                  }
+                },
               ),
               const SizedBox(height: 80),
             ],

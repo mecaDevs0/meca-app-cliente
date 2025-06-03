@@ -56,6 +56,11 @@ class RequestAppointmentController extends GetxController {
 
   @override
   Future<void> onInit() async {
+    if (AuthHelper.isGuest) {
+      Get.offAllNamed(Routes.login);
+      return;
+    }
+
     final workshop = Get.arguments as WorkshopArgs;
     workshopId = workshop.workshopId;
     workshopName = workshop.workshopName ?? '';

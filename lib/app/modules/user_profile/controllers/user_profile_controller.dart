@@ -10,6 +10,7 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import 'package:mega_features/mega_features.dart';
 
 import '../../../core/core.dart';
+import '../../../core/utils/auth_helper.dart';
 import '../../../data/models/profile.dart';
 import '../../../data/providers/user_profile_provider.dart';
 import '../../../routes/app_pages.dart';
@@ -56,6 +57,11 @@ class UserProfileController extends GetxController {
   }
 
   Future<void> logout() async {
+    if (AuthHelper.isGuest) {
+      AuthHelper.logout();
+      Get.offAllNamed(Routes.login);
+      return;
+    }
     await _removeDeviceId();
     await AuthToken.remove();
     Get.offAllNamed(Routes.login);

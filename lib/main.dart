@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import 'package:mega_features/app/firebase/firebase_config.dart';
+import 'package:meca_cliente/app/core/utils/auth_helper.dart';
 
 import 'app/application_binding.dart';
 import 'app/data/cache/base_hive.dart';
@@ -24,7 +25,9 @@ Future<void> main() async {
 
   final token = AuthToken.fromCache();
 
-  final String initialRoute = token == null ? AppPages.initial : Routes.home;
+  final String initialRoute = (token == null && !AuthHelper.isGuest)
+      ? AppPages.initial
+      : Routes.home;
   initializeDateFormatting('pt_BR', null);
 
   AliceAdapter.instance(Get.key);

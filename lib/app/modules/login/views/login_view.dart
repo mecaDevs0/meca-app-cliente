@@ -1,3 +1,4 @@
+import 'dart:developer' as console;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -111,9 +112,9 @@ class LoginView extends GetView<LoginController> {
                           ),
 
 
-                          // NOVO BOTÃO "ENTRAR COMO VISITANTE" ADICIONADO AQUI
 
                           const SizedBox(height: 16),
+
                           MegaBaseButton(
                             'Entrar como Visitante',
                             buttonColor: Colors.transparent,
@@ -121,10 +122,11 @@ class LoginView extends GetView<LoginController> {
                             // borderColor: AppColors.primaryColor,
                             onButtonPress: () {
                               controller.enterAsGuest();
+                              console.log('Entrou como visitante', name: 'LoginView');
                             },
+
                             buttonHeight: 46,
                             borderRadius: 4.0,
-                            isLoading: false,
                           ),
                         ],
                       ),
