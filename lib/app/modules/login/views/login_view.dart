@@ -10,6 +10,7 @@ import 'package:mega_features/app/modules/login/controllers/login_controller.dar
 import '../../../core/app_colors.dart';
 import '../../../core/app_images.dart';
 import '../../../core/app_urls.dart';
+import '../../../core/utils/auth_helper.dart';
 import '../../../routes/app_pages.dart';
 import 'widgets/circle_button_widget.dart';
 
@@ -244,4 +245,15 @@ class LoginView extends GetView<LoginController> {
       ),
     );
   }
+}
+
+extension LoginControllerGuestExtension on LoginController {
+Future<void> enterAsGuest() async {
+  // Define o usuário como visitante
+  await AuthHelper.setGuest();
+  // Marca o usuário como não logado no cache, se necessário
+  await isLogged.put('isLogged', false);
+  // Redireciona para a home
+  Get.offAllNamed(Routes.home);
+}
 }
