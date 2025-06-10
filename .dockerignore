@@ -1,0 +1,24 @@
+# Ignorar arquivos de build e temporários
+.android/
+.ios/
+.idea/
+.git/
+.gitignore
+*.iml
+*.jks
+*.keystore
+*.pepk
+*.log
+*.tmp
+*.swp
+*.bak
+*.DS_Store
+*.xcworkspace
+*.xcuserstate
+*.xcuserdata
+*.vscode/
+
+# Ignorar arquivos temporários do sistema operacional
+Thumbs.db
+Desktop.ini
+
