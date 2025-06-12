@@ -1,17 +1,11 @@
 #!/bin/bash
 set -e
 
-echo "[INFO] Entrando na pasta do projeto: /meca/meca-app-cliente-main"
-cd /meca/meca-app-cliente-main
+echo "[INFO] Entrando na pasta do projeto: /workspace"
+cd /workspace
 
 echo "[INFO] Limpando builds anteriores..."
 flutter clean
-
-echo "[INFO] Verificando dependências locais..."
-ls -la /meca/mega_payment
-ls -la /meca/mega_commons
-ls -la /meca/mega_features
-ls -la /meca/mega_commons_dependencies
 
 echo "[INFO] Configurando Flutter..."
 flutter config --no-analytics
@@ -32,6 +26,7 @@ flutter build apk \
 
 if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
   echo "[INFO] APK gerado com sucesso, copiando para /output"
+  mkdir -p /output
   cp build/app/outputs/flutter-apk/app-release.apk /output/app-release.apk
   echo "[INFO] APK disponível em /output/app-release.apk"
 else
