@@ -34,10 +34,18 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
 
   @override
   void initState() {
+    // Verificando se o usuário possui um token válido e atualizando o status de visitante
+    final token = AuthToken.fromCache();
+    if (token != null && AuthHelper.isGuest) {
+      // Se há um token válido mas o usuário ainda está marcado como visitante,
+      // atualiza o status imediatamente
+      AuthHelper.setLoggedIn();
+      print('Token encontrado mas usuário estava marcado como visitante. Status atualizado.');
+    }
+
     print('isGuest no HomeView: ${AuthHelper.isGuest}');
     ever(controller.hasRequestPermission, (bool hasPermission) {
       if (!hasPermission) {
-
         AppBottomSheet.showLocationBottomSheet(
           context,
           onRequestPermission: controller.requestPermission,

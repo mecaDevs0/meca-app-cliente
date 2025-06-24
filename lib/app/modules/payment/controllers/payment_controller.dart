@@ -1,5 +1,6 @@
 import 'package:mega_commons/shared/utils/mega_request_utils.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
+import 'package:mega_commons/shared/models/auth_token.dart';
 
 import '../../../core/core.dart';
 import '../../../data/models/order.dart';
@@ -10,6 +11,7 @@ import '../../../core/utils/auth_helper.dart';
 import '../../../core/app_colors.dart';
 import '../../../routes/app_pages.dart';
 import 'package:flutter/material.dart';
+
 class PaymentController extends GetxController with ProfileMixin {
 
   PaymentController({required PaymentProvider paymentProvider})
@@ -37,6 +39,14 @@ class PaymentController extends GetxController with ProfileMixin {
 
   @override
   void onInit() {
+    // Verifica se há um token válido e atualiza o status do usuário
+    final token = AuthToken.fromCache();
+    if (token != null && AuthHelper.isGuest) {
+      // Se há um token válido mas o usuário ainda está marcado como visitante,
+      // atualiza o status antes de continuar
+      AuthHelper.setLoggedIn();
+    }
+
     final order = Get.arguments as OrderArgs;
     orderId = order.id;
     getOrderDetails();
@@ -45,6 +55,7 @@ class PaymentController extends GetxController with ProfileMixin {
   }
 
   Future<void> getOrderDetails() async {
+    // Verifica novamente o status atualizado
     if (AuthHelper.isGuest) {
       Get.defaultDialog(
         title: 'Acesso restrito',

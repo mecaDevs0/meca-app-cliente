@@ -56,7 +56,14 @@ class RequestAppointmentController extends GetxController {
 
   @override
   Future<void> onInit() async {
-    if (AuthHelper.isGuest) {
+    // Verifica se há um token válido e atualiza o status do usuário
+    final token = AuthToken.fromCache();
+    if (token != null && AuthHelper.isGuest) {
+      // Se há um token válido mas o usuário ainda está marcado como visitante,
+      // atualiza o status antes de continuar
+      AuthHelper.setLoggedIn();
+    } else if (AuthHelper.isGuest) {
+      // Se realmente é um visitante, redireciona para o login
       Get.offAllNamed(Routes.login);
       return;
     }

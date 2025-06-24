@@ -34,7 +34,7 @@ class AuthHelper {
     final token = AuthToken.fromCache();
     if (token != null) {
       _storage.write('isLoggedIn', true);
-      _storage.write('isGuest', false);
+      _storage.write('isGuest', false); // Garante que o modo visitante seja sempre desativado
     }
   }
 

@@ -1,6 +1,7 @@
 import 'dart:developer' as console;
 
 import 'package:mega_commons/shared/models/abbreviation.dart';
+import 'package:mega_commons/shared/models/auth_token.dart';
 import 'package:mega_commons/shared/utils/mega_one_signal_config.dart';
 import 'package:mega_commons/shared/utils/mega_request_utils.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
@@ -52,6 +53,9 @@ class HomeController extends GetxController {
   Future<void> onInit() async {
     workshopsPagingController.addPageRequestListener(getWorkshops);
     servicesPagingController.addPageRequestListener(getServices);
+
+    // Verifica e atualiza o status do usuário para corrigir problemas de persistência do modo visitante
+    await refreshUserStatus();
 
     if (!AuthHelper.isGuest) {
       console.log('User is logged in, fetching profile info and registering device ID');
@@ -164,7 +168,6 @@ class HomeController extends GetxController {
     );
   }
 
-
   Future<void> getProfileInfo() async {
     await MegaRequestUtils.load(
       action: () async {
@@ -186,6 +189,26 @@ class HomeController extends GetxController {
         }
       },
     );
+  }
+
+  // Método para atualizar o status do usuário com base no token de autenticação
+  Future<void> refreshUserStatus() async {
+    final token = AuthToken.fromCache();
+    if (token != null) {
+      // Se há um token válido, mas o sistema ainda considera como visitante,
+      // atualiza o status para usuário logado
+      if (AuthHelper.isGuest) {
+        console.log('Token found but user marked as guest. Updating status...', name: 'HomeController');
+        AuthHelper.setLoggedIn();
+      }
+    } else {
+      // Se não há token e o usuário não está marcado como visitante,
+      // define como visitante para evitar erros
+      if (!AuthHelper.isGuest && !AuthHelper.isLoggedIn) {
+        console.log('No token found and user not marked as guest. Setting as guest...', name: 'HomeController');
+        await AuthHelper.setGuest();
+      }
+    }
   }
 
   void updateFilters({

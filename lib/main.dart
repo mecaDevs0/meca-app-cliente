@@ -3,6 +3,7 @@ import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import 'package:mega_features/app/firebase/firebase_config.dart';
 import 'package:meca_cliente/app/core/utils/auth_helper.dart';
+import 'package:mega_commons/shared/models/auth_token.dart';
 
 import 'app/application_binding.dart';
 import 'app/data/cache/base_hive.dart';
@@ -24,6 +25,18 @@ Future<void> main() async {
   );
 
   final token = AuthToken.fromCache();
+
+  // Corrige inconsistências entre o token e o status de visitante na inicialização
+  if (token != null && AuthHelper.isGuest) {
+    // Se há um token válido mas o usuário está marcado como visitante, corrige o status
+    AuthHelper.setLoggedIn();
+    print('Token encontrado durante inicialização, mas usuário estava marcado como visitante. Status corrigido.');
+  } else if (token == null && !AuthHelper.isGuest && !AuthHelper.isLoggedIn) {
+    // Se não há token e o usuário não está marcado como visitante ou logado,
+    // configura como visitante para evitar comportamentos inesperados
+    await AuthHelper.setGuest();
+    print('Nenhum token encontrado e usuário não marcado como visitante. Status definido como visitante.');
+  }
 
   final String initialRoute = (token == null && !AuthHelper.isGuest)
       ? AppPages.initial

@@ -45,6 +45,13 @@ class UserProfileController extends GetxController {
 
   @override
   void onInit() {
+    // Verifica se o usuário tem um token válido para corrigir problemas de persistência do modo visitante
+    final token = AuthToken.fromCache();
+    if (token != null && AuthHelper.isGuest) {
+      // Se há token mas o usuário está marcado como visitante, corrige o status
+      AuthHelper.setLoggedIn();
+    }
+
     _profile.value = Profile.fromCache();
     Profile.cacheBox.listenable().addListener(() {
       _profile.value = Profile.fromCache();
