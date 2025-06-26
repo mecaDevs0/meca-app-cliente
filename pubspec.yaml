@@ -20,6 +20,7 @@ dependencies:
   map_launcher: ^3.5.0
   file_picker: ^8.1.7
   skeletonizer: ^2.0.1
+  sign_in_with_apple: ^6.1.2
 
 dependency_overrides:
   open_filex: ^4.7.0

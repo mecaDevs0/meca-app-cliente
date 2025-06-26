@@ -87,26 +87,42 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
         ),
         backgroundColor: AppColors.primaryColor,
         actions: [
-          IconButton(
-            icon: SvgPicture.asset(AppImages.icNotifications),
-            onPressed: () {
-              if (AuthHelper.isGuest) {
-                console.log('Usuário visitante tentando acessar notificações');
-                Get.offAllNamed(Routes.login);
-              } else {
-                Get.toNamed(Routes.notifications);
-              }
-            },
+          Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: IconButton(
+              icon: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: SvgPicture.asset(AppImages.icNotifications),
+              ),
+              iconSize: 44,
+              splashRadius: 24,
+              onPressed: () {
+                if (AuthHelper.isGuest) {
+                  console.log('Usuário visitante tentando acessar notificações');
+                  Get.offAllNamed(Routes.login);
+                } else {
+                  Get.toNamed(Routes.notifications);
+                }
+              },
+            ),
           ),
-          IconButton(
-            icon: SvgPicture.asset(AppImages.icMenuHamburguer),
-            onPressed: () {
-              if (AuthHelper.isGuest) {
-                Get.offAllNamed(Routes.login);
-              } else {
-                _scaffoldKey.currentState?.openDrawer();
-              }
-            },
+          Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: IconButton(
+              icon: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: SvgPicture.asset(AppImages.icMenuHamburguer),
+              ),
+              iconSize: 44,
+              splashRadius: 24,
+              onPressed: () {
+                if (AuthHelper.isGuest) {
+                  Get.offAllNamed(Routes.login);
+                } else {
+                  _scaffoldKey.currentState?.openDrawer();
+                }
+              },
+            ),
           ),
         ],
       ),

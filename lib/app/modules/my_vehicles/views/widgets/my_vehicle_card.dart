@@ -92,26 +92,42 @@ class MyVehicleCard extends GetView<MyVehiclesController> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              IconButton(
-                onPressed: () {
-                  controller.getVehicleDetails(vehicle.id!);
-                  Get.toNamed(
-                    Routes.editVehicle,
-                    arguments: {
-                      'vehicle': vehicle,
-                    },
-                  );
-                },
-                icon: SvgPicture.asset(
-                  AppImages.icEdit,
+              Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: IconButton(
+                  onPressed: () {
+                    controller.getVehicleDetails(vehicle.id!);
+                    Get.toNamed(
+                      Routes.editVehicle,
+                      arguments: {
+                        'vehicle': vehicle,
+                      },
+                    );
+                  },
+                  icon: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: SvgPicture.asset(
+                      AppImages.icEdit,
+                    ),
+                  ),
+                  iconSize: 44,
+                  splashRadius: 24,
                 ),
               ),
-              IconButton(
-                onPressed: () {
-                  controller.removeVehicle(vehicle.id!);
-                },
-                icon: SvgPicture.asset(
-                  AppImages.icTrash,
+              Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: IconButton(
+                  onPressed: () {
+                    controller.removeVehicle(vehicle.id!);
+                  },
+                  icon: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: SvgPicture.asset(
+                      AppImages.icTrash,
+                    ),
+                  ),
+                  iconSize: 44,
+                  splashRadius: 24,
                 ),
               ),
             ],

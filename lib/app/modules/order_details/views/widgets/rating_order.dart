@@ -55,9 +55,17 @@ class _RatingOrderBottomSheetState extends State<RatingOrderBottomSheet> {
                 padding: const EdgeInsets.all(10),
                 child: Align(
                   alignment: Alignment.topRight,
-                  child: IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4.0),
+                    child: IconButton(
+                      icon: const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Icon(Icons.close),
+                      ),
+                      iconSize: 44,
+                      splashRadius: 24,
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
                   ),
                 ),
               ),
@@ -87,21 +95,29 @@ class _RatingOrderBottomSheetState extends State<RatingOrderBottomSheet> {
                             ? AppColors.favoritesYellowColor
                             : AppColors.favoritesGrayColor;
 
-                        return IconButton(
-                          icon: SvgPicture.asset(
-                            AppImages.icFavorites,
-                            colorFilter:
-                                ColorFilter.mode(starColor, BlendMode.srcIn),
+                        return Padding(
+                          padding: const EdgeInsets.all(2.0),
+                          child: IconButton(
+                            icon: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: SvgPicture.asset(
+                                AppImages.icFavorites,
+                                colorFilter:
+                                    ColorFilter.mode(starColor, BlendMode.srcIn),
+                              ),
+                            ),
+                            iconSize: 44,
+                            splashRadius: 24,
+                            onPressed: () {
+                              setState(() {
+                                if (selectedRatingOne == index + 1) {
+                                  selectedRatingOne = index;
+                                } else {
+                                  selectedRatingOne = index + 1;
+                                }
+                              });
+                            },
                           ),
-                          onPressed: () {
-                            setState(() {
-                              if (selectedRatingOne == index + 1) {
-                                selectedRatingOne = index;
-                              } else {
-                                selectedRatingOne = index + 1;
-                              }
-                            });
-                          },
                         );
                       }),
                     ),
@@ -124,21 +140,29 @@ class _RatingOrderBottomSheetState extends State<RatingOrderBottomSheet> {
                             ? AppColors.favoritesYellowColor
                             : AppColors.favoritesGrayColor;
 
-                        return IconButton(
-                          icon: SvgPicture.asset(
-                            AppImages.icFavorites,
-                            colorFilter:
-                                ColorFilter.mode(starColor, BlendMode.srcIn),
+                        return Padding(
+                          padding: const EdgeInsets.all(2.0),
+                          child: IconButton(
+                            icon: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: SvgPicture.asset(
+                                AppImages.icFavorites,
+                                colorFilter:
+                                    ColorFilter.mode(starColor, BlendMode.srcIn),
+                              ),
+                            ),
+                            iconSize: 44,
+                            splashRadius: 24,
+                            onPressed: () {
+                              setState(() {
+                                if (selectedRatingTwo == index + 1) {
+                                  selectedRatingTwo = index;
+                                } else {
+                                  selectedRatingTwo = index + 1;
+                                }
+                              });
+                            },
                           ),
-                          onPressed: () {
-                            setState(() {
-                              if (selectedRatingTwo == index + 1) {
-                                selectedRatingTwo = index;
-                              } else {
-                                selectedRatingTwo = index + 1;
-                              }
-                            });
-                          },
                         );
                       }),
                     ),
@@ -161,21 +185,29 @@ class _RatingOrderBottomSheetState extends State<RatingOrderBottomSheet> {
                             ? AppColors.favoritesYellowColor
                             : AppColors.favoritesGrayColor;
 
-                        return IconButton(
-                          icon: SvgPicture.asset(
-                            AppImages.icFavorites,
-                            colorFilter:
-                                ColorFilter.mode(starColor, BlendMode.srcIn),
+                        return Padding(
+                          padding: const EdgeInsets.all(2.0),
+                          child: IconButton(
+                            icon: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: SvgPicture.asset(
+                                AppImages.icFavorites,
+                                colorFilter:
+                                    ColorFilter.mode(starColor, BlendMode.srcIn),
+                              ),
+                            ),
+                            iconSize: 44,
+                            splashRadius: 24,
+                            onPressed: () {
+                              setState(() {
+                                if (selectedRatingThree == index + 1) {
+                                  selectedRatingThree = index;
+                                } else {
+                                  selectedRatingThree = index + 1;
+                                }
+                              });
+                            },
                           ),
-                          onPressed: () {
-                            setState(() {
-                              if (selectedRatingThree == index + 1) {
-                                selectedRatingThree = index;
-                              } else {
-                                selectedRatingThree = index + 1;
-                              }
-                            });
-                          },
                         );
                       }),
                     ),

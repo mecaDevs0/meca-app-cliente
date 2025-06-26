@@ -75,9 +75,17 @@ class SelectedServicesList extends StatelessWidget {
                               fontSize: 14,
                             ),
                           ),
-                          IconButton(
-                            icon: SvgPicture.asset(AppImages.icTrash),
-                            onPressed: () => controller.selectService(service),
+                          Padding(
+                            padding: const EdgeInsets.all(4.0),
+                            child: IconButton(
+                              icon: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: SvgPicture.asset(AppImages.icTrash),
+                              ),
+                              iconSize: 44,
+                              splashRadius: 24,
+                              onPressed: () => controller.selectService(service),
+                            ),
                           ),
                         ],
                       ),

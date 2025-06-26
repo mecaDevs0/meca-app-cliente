@@ -1,5 +1,6 @@
 import 'dart:developer' as console;
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
@@ -189,7 +190,10 @@ class LoginView extends GetView<LoginController> {
                         ),
                       ),
                       const SizedBox(width: 16),
-                      if (Platform.isIOS)
+                      // Tornar o botão Apple sempre visível em plataformas Apple (iOS/macOS) e emuladores
+                      if (Platform.isIOS ||
+                          Platform.isMacOS ||
+                          kDebugMode) // Sempre visível em modo debug para testes
                         InkWell(
                           borderRadius: BorderRadius.circular(50),
                           onTap: controller.loginWithApple,

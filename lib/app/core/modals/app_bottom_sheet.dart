@@ -14,20 +14,15 @@ class AppBottomSheet {
   }) {
     showModalBottomSheet(
       context: context,
+      isDismissible: false,
+      enableDrag: false,
       builder: (context) {
         return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: Get.back,
-                  ),
-                ),
                 SvgPicture.asset(
                   AppImages.homeLocation,
                   height: 140,
@@ -54,7 +49,7 @@ class AppBottomSheet {
                 ),
                 const SizedBox(height: 32),
                 MegaBaseButton(
-                  'Ativar Localização',
+                  'Continuar',
                   textStyle: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
