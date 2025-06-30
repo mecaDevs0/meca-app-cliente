@@ -39,81 +39,95 @@ class MechanicWorkshopsView extends GetView<MechanicWorkshopsController> {
         backgroundColor: AppColors.primaryColor,
         titleColor: AppColors.whiteColor,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 16),
-            SearchBarWidget(
-              controller: _searchController,
-              onSearchChanged: (value) {
-                controller.updateFilters(searchQuery: value);
-              },
-              onFilterTap: () => showFilterBottomSheet(
-                context: context,
-                initialParams: FilterParams(
-                  rating: controller.rating,
-                  services: controller.services,
-                  distance: controller.distance,
-                ),
-                onTap: _applyFilters,
-                availableCategories: controller.availableCategories,
-              ),
-              hintText: 'Busque por serviço, estabelecimento',
-              hasFilter: true,
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => Future.sync(
-                  () => controller.pagingController.refresh(),
-                ),
-                child: PagedListView<int, MechanicWorkshop>(
-                  shrinkWrap: true,
-                  pagingController: controller.pagingController,
-                  builderDelegate: PagedChildBuilderDelegate(
-                    itemBuilder: (context, item, index) => MechanicWorkshopCard(
-                      mechanicWorkshop: item,
-                      onTap: () {
-                        if (item.id != null) {
-                          Get.toNamed(
-                            Routes.mechanicWorkshopDetails,
-                            arguments: WorkshopArgs(item.id!),
-                          );
-                        }
-                      },
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 600;
+
+          return Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 16),
+                SearchBarWidget(
+                  controller: _searchController,
+                  onSearchChanged: (value) {
+                    controller.updateFilters(searchQuery: value);
+                    controller.pagingController.refresh();
+                  },
+                  onFilterTap: () => showFilterBottomSheet(
+                    context: context,
+                    initialParams: FilterParams(
+                      rating: controller.rating,
+                      services: controller.services,
+                      distance: controller.distance,
                     ),
-                    firstPageErrorIndicatorBuilder: (context) => ErrorIndicator(
-                      error: controller.pagingController.error,
-                      onTryAgain: () => controller.pagingController.refresh(),
-                    ),
-                    noItemsFoundIndicatorBuilder: (context) =>
-                        const EmptyListIndicator(
-                      iconColor: AppColors.primaryColor,
-                      message: 'Sem estabelecimentos para exibir',
-                    ),
-                    firstPageProgressIndicatorBuilder: (context) {
-                      return const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text(
-                            'Carregando estabelecimentos...',
-                            style: TextStyle(
-                              color: AppColors.abbey,
-                              fontWeight: FontWeight.w300,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                    onTap: _applyFilters,
+                    availableCategories: controller.availableCategories,
                   ),
+                  hintText: 'Pesquisar oficinas...',
+                  hasFilter: true,
                 ),
-              ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: isTablet ? _buildTabletGrid() : _buildMobileList(),
+                ),
+              ],
             ),
-          ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTabletGrid() {
+    return PagedGridView<int, MechanicWorkshop>(
+      pagingController: controller.pagingController,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 1.1,
+      ),
+      builderDelegate: PagedChildBuilderDelegate<MechanicWorkshop>(
+        itemBuilder: (context, workshop, index) => MechanicWorkshopCard(
+          mechanicWorkshop: workshop,
+          onTap: () => Get.toNamed(
+            Routes.mechanicWorkshopDetails,
+            arguments: WorkshopArgs(workshop.id!, workshopName: workshop.fullName),
+          ),
+        ),
+        firstPageErrorIndicatorBuilder: (context) => ErrorIndicator(
+          error: controller.pagingController.error,
+          onTryAgain: () => controller.pagingController.refresh(),
+        ),
+        noItemsFoundIndicatorBuilder: (context) => const EmptyListIndicator(
+          message: 'Nenhuma oficina encontrada',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileList() {
+    return PagedListView<int, MechanicWorkshop>(
+      pagingController: controller.pagingController,
+      builderDelegate: PagedChildBuilderDelegate<MechanicWorkshop>(
+        itemBuilder: (context, workshop, index) => Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: MechanicWorkshopCard(
+            mechanicWorkshop: workshop,
+            onTap: () => Get.toNamed(
+              Routes.mechanicWorkshopDetails,
+              arguments: WorkshopArgs(workshop.id!, workshopName: workshop.fullName),
+            ),
+          ),
+        ),
+        firstPageErrorIndicatorBuilder: (context) => ErrorIndicator(
+          error: controller.pagingController.error,
+          onTryAgain: () => controller.pagingController.refresh(),
+        ),
+        noItemsFoundIndicatorBuilder: (context) => const EmptyListIndicator(
+          message: 'Nenhuma oficina encontrada',
         ),
       ),
     );

@@ -54,7 +54,7 @@
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>Permita o acesso para que você possa usar a localização no Meca Cliente.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Para encontrar as oficinas mais próximas de você e calcular a distância até elas, precisamos da sua localização.</string>
+	<string>Para mostrar oficinas próximas de você em nosso mapa, como a "Oficina do Bairro" a 2km de distância, precisamos saber sua localização.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Permita o acesso para que você possa escolher uma imagem para seu perfil no Meca Cliente.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

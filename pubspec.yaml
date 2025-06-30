@@ -1,6 +1,6 @@
 name: meca_cliente
 description: "A new Flutter project."
-version: 1.0.0+22
+version: 1.0.0+23
 
 environment:
   sdk: ^3.5.3

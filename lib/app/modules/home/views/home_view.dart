@@ -127,48 +127,97 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
         ],
       ),
       drawer: _buildDrawer(),
-      body: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.all(16.0),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                const SizedBox(height: 16),
-                SearchBarWidget(
-                  controller: _searchController,
-                  onSearchChanged: (value) =>
-                      controller.updateFilters(searchQuery: value),
-                  onFilterTap: () => showFilterBottomSheet(
-                    context: context,
-                    initialParams: FilterParams(
-                      rating: controller.rating,
-                      services: controller.services,
-                      distance: controller.distance,
-                    ),
-                    onTap: _applyFilters,
-                    availableCategories: controller.availableCategories,
-                  ),
-                  hintText: 'O que você procura?',
-                  hasFilter: true,
-                ),
-                const SizedBox(height: 32),
-                const SizedBox(
-                  height: 200,
-                  child: ServicesList(),
-                ),
-                const SizedBox(height: 32),
-              ]),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 600;
+
+          if (isTablet) {
+            return _buildTabletLayout(constraints);
+          } else {
+            return _buildMobileLayout();
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildTabletLayout(BoxConstraints constraints) {
+    return Row(
+      children: [
+        // Painel lateral com busca e serviços
+        Container(
+          width: constraints.maxWidth * 0.35,
+          padding: const EdgeInsets.all(16.0),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              right: BorderSide(color: AppColors.grayBorderColor, width: 1),
             ),
           ),
-          Obx(() {
-            if (controller.isGettingLocation) {
-              return SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) => Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Skeletonizer(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 16),
+              SearchBarWidget(
+                controller: _searchController,
+                onSearchChanged: (value) =>
+                    controller.updateFilters(searchQuery: value),
+                onFilterTap: () => showFilterBottomSheet(
+                  context: context,
+                  initialParams: FilterParams(
+                    rating: controller.rating,
+                    services: controller.services,
+                    distance: controller.distance,
+                  ),
+                  onTap: _applyFilters,
+                  availableCategories: controller.availableCategories,
+                ),
+                hintText: 'O que você procura?',
+                hasFilter: true,
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Serviços',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryColor,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Expanded(child: ServicesList()),
+            ],
+          ),
+        ),
+        // Área principal com lista de oficinas
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Oficinas próximas',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryColor,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Obx(() {
+                  if (controller.isGettingLocation) {
+                    return GridView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 16,
+                        crossAxisSpacing: 16,
+                        childAspectRatio: 1.2,
+                      ),
+                      itemCount: 6,
+                      itemBuilder: (context, index) => Skeletonizer(
                         child: MechanicWorkshopCard(
                           mechanicWorkshop: MechanicWorkshop(
                             fullName: 'Oficina',
@@ -179,19 +228,103 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                           onTap: () {},
                         ),
                       ),
+                    );
+                  }
+
+                  return GridView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 16,
+                      childAspectRatio: 1.2,
                     ),
-                    childCount: 6,
+                    itemCount: controller.workshopsPagingController.itemList?.length ?? 0,
+                    itemBuilder: (context, index) {
+                      final workshop = controller.workshopsPagingController.itemList![index];
+                      return MechanicWorkshopCard(
+                        mechanicWorkshop: workshop,
+                        onTap: () => Get.toNamed(
+                          Routes.mechanicWorkshopDetails,
+                          arguments: WorkshopArgs(workshop.id!, workshopName: workshop.fullName),
+                        ),
+                      );
+                    },
+                  );
+                }),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.all(16.0),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              const SizedBox(height: 16),
+              SearchBarWidget(
+                controller: _searchController,
+                onSearchChanged: (value) =>
+                    controller.updateFilters(searchQuery: value),
+                onFilterTap: () => showFilterBottomSheet(
+                  context: context,
+                  initialParams: FilterParams(
+                    rating: controller.rating,
+                    services: controller.services,
+                    distance: controller.distance,
                   ),
+                  onTap: _applyFilters,
+                  availableCategories: controller.availableCategories,
                 ),
-              );
-            }
+                hintText: 'O que você procura?',
+                hasFilter: true,
+              ),
+              const SizedBox(height: 32),
+              const SizedBox(
+                height: 200,
+                child: ServicesList(),
+              ),
+              const SizedBox(height: 32),
+            ]),
+          ),
+        ),
+        Obx(() {
+          if (controller.isGettingLocation) {
             return SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              sliver: _buildWorkshopsList(),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Skeletonizer(
+                      child: MechanicWorkshopCard(
+                        mechanicWorkshop: MechanicWorkshop(
+                          fullName: 'Oficina',
+                          streetAddress: 'Endereço',
+                          distance: 12,
+                          rating: 5,
+                        ),
+                        onTap: () {},
+                      ),
+                    ),
+                  ),
+                  childCount: 6,
+                ),
+              ),
             );
-          }),
-        ],
-      ),
+          }
+          return SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            sliver: _buildWorkshopsList(),
+          );
+        }),
+      ],
     );
   }
 
@@ -417,6 +550,88 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                 SvgPicture.asset(AppImages.carMenuHome, height: 60, width: 60),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWorkshopsGrid() {
+    return SliverGrid(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 1.2,
+      ),
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          return PagedListView<int, MechanicWorkshop>(
+            pagingController: controller.workshopsPagingController,
+            builderDelegate: PagedChildBuilderDelegate<MechanicWorkshop>(
+              itemBuilder: (context, workshop, index) {
+                return MechanicWorkshopCard(
+                  mechanicWorkshop: workshop,
+                  onTap: () {
+                    if (AuthHelper.isGuest) {
+                      console.log('Usuário visitante tentando acessar detalhes da oficina');
+                      Get.offAllNamed(Routes.login);
+                    } else {
+                      Get.toNamed(
+                        Routes.mechanicWorkshopDetails,
+                        arguments: WorkshopArgs(workshop.id!, workshopName: workshop.fullName),
+                      );
+                    }
+                  },
+                );
+              },
+              firstPageErrorIndicatorBuilder: (context) => Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: AppColors.grayBorderColor,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Erro ao carregar oficinas',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: AppColors.blackSecondaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: () => controller.workshopsPagingController.refresh(),
+                      child: const Text('Tentar novamente'),
+                    ),
+                  ],
+                ),
+              ),
+              noItemsFoundIndicatorBuilder: (context) => const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.search_off,
+                      size: 64,
+                      color: AppColors.grayBorderColor,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Nenhuma oficina encontrada',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: AppColors.blackSecondaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+        childCount: 1,
       ),
     );
   }
