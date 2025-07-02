@@ -150,12 +150,31 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
         ? constraints.maxWidth * 0.3  // Menor proporção para iPad Pro
         : constraints.maxWidth * 0.35; // Proporção para iPad normal
 
+    final sidebarPadding = EdgeInsets.all(isLargeTablet ? 24.0 : 16.0);
+    final sectionSpacing = SizedBox(height: isLargeTablet ? 32.0 : 24.0);
+    final titleStyle = TextStyle(
+      fontSize: isLargeTablet ? 22.0 : 18.0,
+      fontWeight: FontWeight.bold,
+      color: AppColors.primaryColor,
+    );
+
+    final searchTextStyle = TextStyle(
+      fontSize: isLargeTablet ? 18.0 : 16.0,
+    );
+
+    final mainAreaPadding = EdgeInsets.all(isLargeTablet ? 24.0 : 16.0);
+    final mainTitleStyle = TextStyle(
+      fontSize: isLargeTablet ? 24.0 : 20.0,
+      fontWeight: FontWeight.bold,
+      color: AppColors.primaryColor,
+    );
+
     return Row(
       children: [
         // Painel lateral com busca e serviços - Ajustado para ser mais proporcional
         Container(
           width: sidebarWidth,
-          padding: EdgeInsets.all(isLargeTablet ? 24.0 : 16.0),
+          padding: sidebarPadding,
           decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
@@ -184,19 +203,13 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                 hintText: 'O que você procura?',
                 hasFilter: true,
                 // Aumentar o tamanho da fonte para iPads
-                textStyle: TextStyle(
-                  fontSize: isLargeTablet ? 18.0 : 16.0,
-                ),
+                textStyle: searchTextStyle,
               ),
-              SizedBox(height: isLargeTablet ? 32.0 : 24.0),
+              sectionSpacing,
               // Título com tamanho maior
               Text(
                 'Serviços',
-                style: TextStyle(
-                  fontSize: isLargeTablet ? 22.0 : 18.0,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primaryColor,
-                ),
+                style: titleStyle,
               ),
               SizedBox(height: isLargeTablet ? 24.0 : 16.0),
               // Lista de serviços
@@ -210,74 +223,83 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: EdgeInsets.all(isLargeTablet ? 24.0 : 16.0),
+                padding: mainAreaPadding,
                 child: Text(
                   'Oficinas próximas',
-                  style: TextStyle(
-                    fontSize: isLargeTablet ? 24.0 : 20.0,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryColor,
-                  ),
+                  style: mainTitleStyle,
                 ),
               ),
               Expanded(
                 child: Obx(() {
                   if (controller.isGettingLocation) {
-                    return GridView.builder(
-                      padding: EdgeInsets.symmetric(horizontal: isLargeTablet ? 24.0 : 16.0),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        // Número de colunas ajustado ao tamanho da tela
-                        crossAxisCount: isLargeTablet ? 3 : 2,
-                        mainAxisSpacing: isLargeTablet ? 24 : 16,
-                        crossAxisSpacing: isLargeTablet ? 24 : 16,
-                        // Ajuste da proporção para melhor visualização
-                        childAspectRatio: isLargeTablet ? 1.3 : 1.2,
-                      ),
-                      itemCount: 6,
-                      itemBuilder: (context, index) => Skeletonizer(
-                        child: MechanicWorkshopCard(
-                          mechanicWorkshop: MechanicWorkshop(
-                            fullName: 'Oficina',
-                            streetAddress: 'Endereço',
-                            distance: 12,
-                            rating: 5,
-                          ),
-                          onTap: () {},
-                          // Aumentar tamanho dos elementos para iPad
-                          isTablet: true,
-                        ),
-                      ),
-                    );
+                    return _buildWorkshopsLoadingGrid(isLargeTablet);
                   }
-
-                  return GridView.builder(
-                    padding: EdgeInsets.symmetric(horizontal: isLargeTablet ? 24.0 : 16.0),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: isLargeTablet ? 3 : 2,
-                      mainAxisSpacing: isLargeTablet ? 24 : 16,
-                      crossAxisSpacing: isLargeTablet ? 24 : 16,
-                      childAspectRatio: isLargeTablet ? 1.3 : 1.2,
-                    ),
-                    itemCount: controller.workshopsPagingController.itemList?.length ?? 0,
-                    itemBuilder: (context, index) {
-                      final workshop = controller.workshopsPagingController.itemList![index];
-                      return MechanicWorkshopCard(
-                        mechanicWorkshop: workshop,
-                        onTap: () => Get.toNamed(
-                          Routes.mechanicWorkshopDetails,
-                          arguments: WorkshopArgs(workshop.id!, workshopName: workshop.fullName),
-                        ),
-                        // Passar indicador de tablet para ajustar elementos internos
-                        isTablet: true,
-                      );
-                    },
-                  );
+                  return _buildWorkshopsGrid(isLargeTablet);
                 }),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWorkshopsLoadingGrid(bool isLargeTablet) {
+    final horizontalPadding = EdgeInsets.symmetric(horizontal: isLargeTablet ? 24.0 : 16.0);
+    final gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
+      // Número de colunas ajustado ao tamanho da tela
+      crossAxisCount: isLargeTablet ? 3 : 2,
+      mainAxisSpacing: isLargeTablet ? 24 : 16,
+      crossAxisSpacing: isLargeTablet ? 24 : 16,
+      // Ajuste da proporção para melhor visualização
+      childAspectRatio: isLargeTablet ? 1.3 : 1.2,
+    );
+
+    return GridView.builder(
+      padding: horizontalPadding,
+      gridDelegate: gridDelegate,
+      itemCount: 6,
+      itemBuilder: (context, index) => Skeletonizer(
+        child: MechanicWorkshopCard(
+          mechanicWorkshop: MechanicWorkshop(
+            fullName: 'Oficina',
+            streetAddress: 'Endereço',
+            distance: 12,
+            rating: 5,
+          ),
+          onTap: null,
+          // Aumentar tamanho dos elementos para iPad
+          isTablet: true,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWorkshopsGrid(bool isLargeTablet) {
+    final horizontalPadding = EdgeInsets.symmetric(horizontal: isLargeTablet ? 24.0 : 16.0);
+    final gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: isLargeTablet ? 3 : 2,
+      mainAxisSpacing: isLargeTablet ? 24 : 16,
+      crossAxisSpacing: isLargeTablet ? 24 : 16,
+      childAspectRatio: isLargeTablet ? 1.3 : 1.2,
+    );
+
+    return GridView.builder(
+      padding: horizontalPadding,
+      gridDelegate: gridDelegate,
+      itemCount: controller.workshopsPagingController.itemList?.length ?? 0,
+      itemBuilder: (context, index) {
+        final workshop = controller.workshopsPagingController.itemList![index];
+        return MechanicWorkshopCard(
+          mechanicWorkshop: workshop,
+          onTap: () => Get.toNamed(
+            Routes.mechanicWorkshopDetails,
+            arguments: WorkshopArgs(workshop.id!, workshopName: workshop.fullName),
+          ),
+          // Passar indicador de tablet para ajustar elementos internos
+          isTablet: true,
+        );
+      },
     );
   }
 
@@ -593,7 +615,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
     );
   }
 
-  Widget _buildWorkshopsGrid() {
+  Widget _buildWorkshopsSliverGrid() {
     return SliverGrid(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,

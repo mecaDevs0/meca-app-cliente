@@ -13,23 +13,27 @@ class MechanicWorkshopCard extends StatelessWidget {
     super.key,
     required this.mechanicWorkshop,
     required this.onTap,
-    this.isTablet = false, // Novo parâmetro para indicar modo tablet
+    this.isTablet = false, // Parâmetro para indicar modo tablet
   });
 
   final MechanicWorkshop mechanicWorkshop;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool isTablet; // Usado para ajustar tamanhos e espaçamentos em tablets
 
   @override
   Widget build(BuildContext context) {
-    // Ajustar tamanhos com base no parâmetro isTablet
+    // Pré-calcular todos os valores dependentes de isTablet para evitar cálculos durante a construção
     final double padding = isTablet ? 12.0 : 8.0;
     final double imageSize = isTablet ? 90.0 : 70.0;
     final double borderRadius = isTablet ? 12.0 : 8.0;
     final double spacing = isTablet ? 20.0 : 15.0;
-    final double containerHeight = isTablet
-        ? MediaQuery.of(context).size.height * 0.15
-        : MediaQuery.of(context).size.height * 0.1;
+
+    // Evitar acesso ao MediaQuery durante a construção para melhorar performance
+    final double containerHeight = isTablet ? 140.0 : 100.0;
+
+    // Estilo de borda calculado uma vez
+    final border = Border.all(color: AppColors.grayDarkBorderColor, width: 1.0);
+    final borderRadiusGeometry = BorderRadius.circular(borderRadius);
 
     return GestureDetector(
       onTap: onTap,
@@ -38,9 +42,8 @@ class MechanicWorkshopCard extends StatelessWidget {
         height: containerHeight,
         padding: EdgeInsets.all(padding),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(borderRadius),
-          border: Border.all(color: AppColors.grayDarkBorderColor, width: 1.0),
-          // Removida sombra que não é essencial para a correção
+          borderRadius: borderRadiusGeometry,
+          border: border,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -48,8 +51,10 @@ class MechanicWorkshopCard extends StatelessWidget {
             SizedBox(
               width: imageSize,
               height: imageSize,
-              child: MechanicWorkshopImage(imageAsset: mechanicWorkshop.photo ?? '')
-                  .shade,
+              child: MechanicWorkshopImage(
+                imageAsset: mechanicWorkshop.photo ?? '',
+                key: ValueKey('workshop-image-${mechanicWorkshop.id}'),
+              ).shade,
             ),
             SizedBox(width: spacing),
             Expanded(
@@ -59,17 +64,20 @@ class MechanicWorkshopCard extends StatelessWidget {
                   Expanded(
                     child: MechanicWorkshopNameRow(
                       mechanicWorkshop: mechanicWorkshop,
-                      isTablet: isTablet, // Passar o parâmetro para componentes filhos
+                      isTablet: isTablet,
+                      key: ValueKey('workshop-name-${mechanicWorkshop.id}'),
                     ),
                   ),
                   Expanded(
                     child: MechanicWorkshopLocationRow(
                       mechanicWorkshop: mechanicWorkshop,
+                      key: ValueKey('workshop-location-${mechanicWorkshop.id}'),
                     ),
                   ),
                   Expanded(
                     child: MechanicWorkshopRatingRow(
                       mechanicWorkshop: mechanicWorkshop,
+                      key: ValueKey('workshop-rating-${mechanicWorkshop.id}'),
                     ),
                   ),
                 ],

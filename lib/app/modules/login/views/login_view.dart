@@ -281,6 +281,7 @@ class LoginView extends GetView<LoginController> {
               },
               buttonHeight: 46,
               borderRadius: 4.0,
+              key: const Key('guest_login_button'),
             ),
           ],
         ),
