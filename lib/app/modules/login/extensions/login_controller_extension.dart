@@ -2,6 +2,7 @@ import 'dart:developer' as console;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart'; // Importando o scheduler para usar o SchedulerBinding
 import 'package:get/get.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_features/app/modules/login/controllers/login_controller.dart';
@@ -106,26 +107,25 @@ extension LoginControllerExtension on LoginController {
           expiresIn: 3600, // 1 hora (padrão Firebase)
         );
 
-        // Salvar token no cache usando o método correto
-        final accessTokenBox = MegaDataCache.box<AuthToken>();
-        await accessTokenBox.put(
-          AuthToken.cacheBoxKey,
-          authToken,
-        );
+        // CORREÇÃO: Usando SchedulerBinding para garantir que a atualização de estado
+        // ocorra após a conclusão do frame de build atual
+        SchedulerBinding.instance.addPostFrameCallback((_) async {
+          // Salvar token no cache usando o método correto
+          final accessTokenBox = MegaDataCache.box<AuthToken>();
+          await accessTokenBox.put(
+            AuthToken.cacheBoxKey,
+            authToken,
+          );
 
-        console.log('AuthToken: Token salvo no cache com sucesso');
+          console.log('AuthToken: Token salvo no cache com sucesso');
 
-        // SOLUÇÃO PARA IPAD: Garantir que o estado seja atualizado completamente antes da navegação
-        await Future.microtask(() async {
           // Limpar estado de visitante e configurar como logado
           await AuthHelper.clearGuestStatus();
           await AuthHelper.setLoggedIn();
 
           console.log('AuthHelper: Estado atualizado - isLoggedIn: ${AuthHelper.isLoggedIn}, isGuest: ${AuthHelper.isGuest}');
-        });
 
-        // Navegação explícita com garantia de execução
-        Future.delayed(const Duration(milliseconds: 300), () {
+          // Navegação explícita após as atualizações de estado
           console.log('Navegando para tela principal...');
           Get.offAllNamed(Routes.home);
 

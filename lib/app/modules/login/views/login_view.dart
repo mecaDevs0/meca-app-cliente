@@ -26,86 +26,95 @@ class LoginView extends GetView<LoginController> {
           builder: (context, constraints) {
             final isTablet = constraints.maxWidth > 600;
 
-            return Column(
-              children: [
-                // Parte principal do conteúdo (expansível)
-                Expanded(
-                  child: Container(
-                    alignment: Alignment.center,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isTablet ? constraints.maxWidth * 0.2 : 16,
-                      vertical: 8,
-                    ),
-                    child: isTablet ? _buildTabletLayout(context) : _buildMobileLayout(context),
-                  ),
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
                 ),
-
-                // Botões de redes sociais (sempre visíveis)
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                child: IntrinsicHeight(
                   child: Column(
                     children: [
-                      const SizedBox(height: 8),
-                      _buildDivider(),
-                      const SizedBox(height: 16),
-                      _buildSocialButtons(),
-                      const SizedBox(height: 8),
-                    ],
-                  ),
-                ),
-
-                // Rodapé fixo no final da tela
-                SizedBox(
-                  width: double.infinity,
-                  child: Stack(
-                    alignment: Alignment.bottomCenter,
-                    children: [
-                      // Elemento gráfico de fundo
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: SvgPicture.asset(
-                          AppImages.bottomUnion,
-                          height: isTablet ? 100 : 66,
-                        ),
-                      ),
-
-                      // Link "Cadastre-se"
-                      Padding(
-                        padding: EdgeInsets.only(bottom: isTablet ? 40 : 25),
+                      // Parte principal do conteúdo (expansível)
+                      Expanded(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.white.withOpacity(0.9),
-                                Colors.white.withOpacity(0.7),
-                              ],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 5,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                          alignment: Alignment.center,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isTablet ? constraints.maxWidth * 0.2 : 16,
+                            vertical: 8,
                           ),
-                          child: _buildSignUpLink(),
+                          child: isTablet ? _buildTabletLayout(context) : _buildMobileLayout(context),
                         ),
                       ),
 
-                      // Indicador de versão
-                      const Positioned(
-                        bottom: 5,
-                        child: MegaVersionIndicator(),
+                      // Botões de redes sociais (sempre visíveis)
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16.0),
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 8),
+                            _buildDivider(),
+                            const SizedBox(height: 16),
+                            _buildSocialButtons(),
+                            const SizedBox(height: 8),
+                          ],
+                        ),
+                      ),
+
+                      // Rodapé fixo no final da tela
+                      SizedBox(
+                        width: double.infinity,
+                        child: Stack(
+                          alignment: Alignment.bottomCenter,
+                          children: [
+                            // Elemento gráfico de fundo
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: SvgPicture.asset(
+                                AppImages.bottomUnion,
+                                height: isTablet ? 100 : 66,
+                              ),
+                            ),
+
+                            // Link "Cadastre-se"
+                            Padding(
+                              padding: EdgeInsets.only(bottom: isTablet ? 40 : 25),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.white.withOpacity(0.9),
+                                      Colors.white.withOpacity(0.7),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 5,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: _buildSignUpLink(),
+                              ),
+                            ),
+
+                            // Indicador de versão
+                            const Positioned(
+                              bottom: 5,
+                              child: MegaVersionIndicator(),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ],
+              ),
             );
           },
         ),
