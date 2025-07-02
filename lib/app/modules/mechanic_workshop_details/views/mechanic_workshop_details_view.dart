@@ -100,10 +100,13 @@ class MechanicWorkshopDetailsView
         }
         return LayoutBuilder(
           builder: (context, constraints) {
+            // Definição mais precisa do que é um tablet e iPad grande para melhor adaptação
             final isTablet = constraints.maxWidth > 600;
+            // Ajuste adicional para iPads maiores como iPad Pro
+            final isLargeTablet = constraints.maxWidth > 900;
 
             if (isTablet) {
-              return _buildTabletLayout();
+              return _buildTabletLayout(isLargeTablet);
             } else {
               return _buildMobileLayout();
             }
@@ -113,9 +116,16 @@ class MechanicWorkshopDetailsView
     );
   }
 
-  Widget _buildTabletLayout() {
+  Widget _buildTabletLayout(bool isLargeTablet) {
+    // Ajustes de tamanho com base no tipo de tablet
+    final double padding = isLargeTablet ? 32.0 : 24.0;
+    final double spacing = isLargeTablet ? 48.0 : 32.0;
+    final double verticalSpacing = isLargeTablet ? 32.0 : 24.0;
+    final double mapHeight = isLargeTablet ? 350.0 : 280.0;
+    final double borderRadius = isLargeTablet ? 16.0 : 10.0;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.all(padding),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -125,47 +135,52 @@ class MechanicWorkshopDetailsView
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 32),
-                const MechanicWorkshopInfo(),
-                const SizedBox(height: 24),
-                const Divider(
+                SizedBox(height: verticalSpacing),
+                // Widget de informações da oficina com indicador de tablet
+                MechanicWorkshopInfo(isTablet: true),
+                SizedBox(height: verticalSpacing),
+                Divider(
                   color: AppColors.grayBorderColor,
-                  thickness: 1.0,
+                  thickness: isLargeTablet ? 1.5 : 1.0,
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: verticalSpacing),
                 DescriptionTile(
                   descriptionFontColor: AppColors.fontRegularBlackColor,
                   description:
                       controller.workshopDetails?.reason ?? 'Sem descrição',
                   title: 'Descrição',
+                  // Aumentar somente o tamanho do título para melhor legibilidade
+                  titleFontSize: isLargeTablet ? 20.0 : 18.0,
                 ),
-                const SizedBox(height: 24),
-                const Divider(
+                SizedBox(height: verticalSpacing),
+                Divider(
                   color: AppColors.grayBorderColor,
-                  thickness: 1.0,
+                  thickness: isLargeTablet ? 1.5 : 1.0,
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: verticalSpacing),
                 DescriptionTile(
                   descriptionFontColor: AppColors.fontRegularBlackColor,
                   description:
                       '${controller.workshopDetails?.streetAddress}, n${controller.workshopDetails?.number}, Bairro ${controller.workshopDetails?.neighborhood}',
                   title: 'Endereço',
+                  // Aumentar somente o tamanho do título para melhor legibilidade
+                  titleFontSize: isLargeTablet ? 20.0 : 18.0,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 32),
+          SizedBox(width: spacing),
           // Coluna direita - Mapa e horários
           Expanded(
             flex: 1,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 32),
+                SizedBox(height: verticalSpacing),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(borderRadius),
                   child: SizedBox(
-                    height: 250,
+                    height: mapHeight,
                     width: double.infinity,
                     child: InkWell(
                       onTap: () => openMapsSheet(
@@ -178,21 +193,22 @@ class MechanicWorkshopDetailsView
                         decoration: const BoxDecoration(
                           color: AppColors.grayBorderColor,
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
                                 Icons.map,
-                                size: 48,
+                                size: isLargeTablet ? 64 : 48,
                                 color: AppColors.primaryColor,
                               ),
-                              SizedBox(height: 8),
+                              const SizedBox(height: 8),
                               Text(
                                 'Toque para abrir o mapa',
                                 style: TextStyle(
                                   color: AppColors.primaryColor,
                                   fontWeight: FontWeight.w500,
+                                  fontSize: isLargeTablet ? 18.0 : 16.0,
                                 ),
                               ),
                             ],
@@ -202,10 +218,11 @@ class MechanicWorkshopDetailsView
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                const ScheduleWorking(),
-                const SizedBox(height: 24),
-                _buildActionButtons(),
+                SizedBox(height: verticalSpacing),
+                // Widget de horários de funcionamento com suporte a tablet
+                ScheduleWorking(isTablet: isLargeTablet),
+                SizedBox(height: verticalSpacing),
+                _buildActionButtons(isTablet: isLargeTablet),
               ],
             ),
           ),
@@ -296,7 +313,12 @@ class MechanicWorkshopDetailsView
     );
   }
 
-  Widget _buildActionButtons() {
+  Widget _buildActionButtons({bool isTablet = false}) {
+    // Ajustes de tamanho para tablets
+    final double buttonHeight = isTablet ? 56.0 : 46.0;
+    final double borderRadius = isTablet ? 8.0 : 4.0;
+    final double spacing = isTablet ? 24.0 : 16.0;
+
     return Column(
       children: [
         MegaBaseButton(
@@ -306,10 +328,10 @@ class MechanicWorkshopDetailsView
           onButtonPress: () {
             Get.toNamed(Routes.mechanicWorkshopReviews);
           },
-          buttonHeight: 46,
-          borderRadius: 4.0,
+          buttonHeight: buttonHeight,
+          borderRadius: borderRadius,
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: spacing),
         MegaBaseButton(
           'Continuar',
           buttonColor: AppColors.primaryColor,
@@ -317,8 +339,8 @@ class MechanicWorkshopDetailsView
           onButtonPress: () {
             Get.toNamed(Routes.services);
           },
-          buttonHeight: 46,
-          borderRadius: 4.0,
+          buttonHeight: buttonHeight,
+          borderRadius: borderRadius,
         ),
       ],
     );

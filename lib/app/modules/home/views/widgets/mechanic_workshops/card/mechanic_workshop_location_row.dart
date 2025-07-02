@@ -7,43 +7,49 @@ class MechanicWorkshopLocationRow extends StatelessWidget {
   const MechanicWorkshopLocationRow({
     super.key,
     required this.mechanicWorkshop,
+    this.isTablet = false, // Novo parâmetro para modo tablet
   });
 
   final MechanicWorkshop mechanicWorkshop;
+  final bool isTablet; // Controla o tamanho dos elementos em tablets
 
   @override
   Widget build(BuildContext context) {
+    // Define tamanhos baseados no modo de visualização
+    final double fontSize = isTablet ? 14.0 : 12.0;
+    final double dotSize = isTablet ? 6.0 : 4.0;
+    final double spacing = isTablet ? 8.0 : 4.0;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.start,
       children: [
-        Text(
-          mechanicWorkshop.streetAddress ?? '',
-          style: const TextStyle(
-            color: AppColors.neutralGrayColor,
-            fontWeight: FontWeight.w400,
-            fontSize: 12,
+        Expanded(
+          child: Text(
+            mechanicWorkshop.streetAddress ?? '',
+            style: TextStyle(
+              color: AppColors.neutralGrayColor,
+              fontWeight: FontWeight.w400,
+              fontSize: fontSize,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ),
-        const SizedBox(
-          width: 4,
-        ),
+        SizedBox(width: spacing),
         Container(
-          width: 4,
-          height: 4,
+          width: dotSize,
+          height: dotSize,
           decoration: const BoxDecoration(
             shape: BoxShape.circle,
             color: AppColors.pointGrayColor,
           ),
         ),
-        const SizedBox(
-          width: 4,
-        ),
+        SizedBox(width: spacing),
         Text(
           '${mechanicWorkshop.distance ?? 0} km',
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.neutralGrayColor,
             fontWeight: FontWeight.w400,
-            fontSize: 12,
+            fontSize: fontSize,
           ),
         ),
       ],

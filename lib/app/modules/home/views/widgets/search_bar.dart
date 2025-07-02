@@ -8,12 +8,14 @@ class SearchBarWidget extends StatelessWidget {
     required this.hintText,
     required this.hasFilter,
     this.onSearchChanged,
+    this.textStyle, // Novo parâmetro para customizar estilo do texto
   });
   final TextEditingController controller;
   final VoidCallback? onFilterTap;
   final ValueChanged<String>? onSearchChanged;
   final bool hasFilter;
   final String hintText;
+  final TextStyle? textStyle; // Estilo de texto para personalização em tablets
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +57,7 @@ class SearchBarWidget extends StatelessWidget {
                   fontSize: 14,
                 ),
               ),
+              style: textStyle, // Aplicando o estilo de texto personalizado
             ),
           ),
           if (hasFilter)

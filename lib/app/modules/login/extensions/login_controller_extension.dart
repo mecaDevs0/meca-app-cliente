@@ -1,6 +1,7 @@
 import 'dart:developer' as console;
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons/shared/models/auth_token.dart';
@@ -45,15 +46,32 @@ extension LoginControllerExtension on LoginController {
         return;
       }
 
-      // Solicitar credenciais do Apple
+      // Detectar se está rodando em iPad para ajustes específicos
+      final isTablet = MediaQuery.of(Get.context!).size.shortestSide >= 600;
+      console.log('Dispositivo detectado como tablet: $isTablet');
+
+      // Configurações específicas para iPad
+      WebAuthenticationOptions? webOptions;
+      if (isTablet) {
+        webOptions = WebAuthenticationOptions(
+          clientId: 'com.meca.app.service',
+          redirectUri: Uri.parse('https://meca-app.firebaseapp.com/__/auth/handler'),
+        );
+        console.log('Configurações específicas para iPad aplicadas');
+      }
+
+      // Solicitar credenciais do Apple com configuração otimizada
       final credential = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
+        webAuthenticationOptions: webOptions,
       );
 
       console.log('Apple Sign In: Credenciais obtidas com sucesso');
+      console.log('Apple Sign In: Identity Token presente: ${credential.identityToken != null}');
+      console.log('Apple Sign In: Authorization Code presente: ${credential.authorizationCode != null}');
 
       // Verificar se temos os tokens necessários
       if (credential.identityToken == null) {
@@ -66,15 +84,21 @@ extension LoginControllerExtension on LoginController {
         accessToken: credential.authorizationCode,
       );
 
+      console.log('Apple Sign In: Credential OAuth criado com sucesso');
+
       // Fazer login no Firebase Auth
       final userCredential = await FirebaseAuth.instance
           .signInWithCredential(oauthCredential);
+
+      console.log('Firebase Auth: UserCredential obtido: ${userCredential.user != null}');
+      console.log('Firebase Auth: User UID: ${userCredential.user?.uid}');
 
       if (userCredential.user != null) {
         console.log('Firebase Auth: Login com Apple realizado com sucesso');
 
         // Obter token do Firebase para autenticação com o backend
         final firebaseToken = await userCredential.user!.getIdToken();
+        console.log('Firebase Auth: Token obtido com sucesso (length: ${firebaseToken.length})');
 
         // Criar AuthToken com os dados do Firebase
         final authToken = AuthToken(
@@ -90,17 +114,30 @@ extension LoginControllerExtension on LoginController {
           authToken,
         );
 
-        // Limpar estado de visitante e configurar como logado
-        onSuccessfulLogin();
+        console.log('AuthToken: Token salvo no cache com sucesso');
 
-        // Navegar para a tela principal
-        Get.offAllNamed(Routes.home);
+        // SOLUÇÃO PARA IPAD: Garantir que o estado seja atualizado completamente antes da navegação
+        await Future.microtask(() async {
+          // Limpar estado de visitante e configurar como logado
+          await AuthHelper.clearGuestStatus();
+          await AuthHelper.setLoggedIn();
 
-        // Mostrar mensagem de sucesso
-        MegaSnackbar.showSuccessSnackBar('Login realizado com sucesso!');
+          console.log('AuthHelper: Estado atualizado - isLoggedIn: ${AuthHelper.isLoggedIn}, isGuest: ${AuthHelper.isGuest}');
+        });
+
+        // Navegação explícita com garantia de execução
+        Future.delayed(const Duration(milliseconds: 300), () {
+          console.log('Navegando para tela principal...');
+          Get.offAllNamed(Routes.home);
+
+          // Feedback visual após login bem-sucedido
+          MegaSnackbar.showSuccessSnackBar('Login realizado com sucesso!');
+        });
+
+        console.log('Login com Apple: Processo concluído com sucesso');
 
       } else {
-        throw Exception('Falha na autenticação com Firebase');
+        throw Exception('Falha na autenticação com Firebase - userCredential.user é null');
       }
 
     } on SignInWithAppleAuthorizationException catch (e) {
@@ -111,19 +148,24 @@ extension LoginControllerExtension on LoginController {
       switch (e.code) {
         case AuthorizationErrorCode.canceled:
           errorMessage = 'Login cancelado pelo usuário';
+          console.log('Apple Sign In: Cancelado pelo usuário');
           break;
         case AuthorizationErrorCode.failed:
           errorMessage = 'Falha na autenticação com Apple';
+          console.log('Apple Sign In: Falha na autenticação');
           break;
         case AuthorizationErrorCode.invalidResponse:
           errorMessage = 'Resposta inválida do Apple';
+          console.log('Apple Sign In: Resposta inválida');
           break;
         case AuthorizationErrorCode.notHandled:
           errorMessage = 'Erro não tratado na autenticação';
+          console.log('Apple Sign In: Erro não tratado');
           break;
         case AuthorizationErrorCode.unknown:
         default:
           errorMessage = 'Erro desconhecido na autenticação';
+          console.log('Apple Sign In: Erro desconhecido');
           break;
       }
 
@@ -133,6 +175,8 @@ extension LoginControllerExtension on LoginController {
 
     } on FirebaseAuthException catch (e) {
       console.log('Erro Firebase Auth: ${e.code} - ${e.message}');
+      // Log adicional para debugging no iPad
+      console.log('Firebase Auth Error Details: ${e.toString()}');
 
       // Tratar erros específicos do Firebase
       String errorMessage;
@@ -167,6 +211,7 @@ extension LoginControllerExtension on LoginController {
 
     } catch (e) {
       console.log('Erro geral no Apple Sign In: $e');
+      console.log('Stack trace: ${StackTrace.current}');
       MegaSnackbar.showErroSnackBar('Erro inesperado durante o login. Tente novamente.');
     }
   }

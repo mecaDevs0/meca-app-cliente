@@ -13,7 +13,10 @@ import '../../controllers/mechanic_workshop_details_controller.dart';
 class MechanicWorkshopInfo extends GetView<MechanicWorkshopDetailsController> {
   const MechanicWorkshopInfo({
     super.key,
+    this.isTablet = false, // Novo parâmetro para modo tablet
   });
+
+  final bool isTablet; // Controla o tamanho dos elementos em tablets
 
   @override
   Widget build(BuildContext context) {

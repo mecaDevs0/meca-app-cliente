@@ -24,36 +24,85 @@ class LoginView extends GetView<LoginController> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Determina se é uma tela grande (tablet/iPad)
             final isTablet = constraints.maxWidth > 600;
 
-            return Stack(
+            return Column(
               children: [
-                Container(
-                  alignment: Alignment.center,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isTablet ? constraints.maxWidth * 0.2 : 16,
-                    vertical: 8,
-                  ),
-                  child: isTablet ? _buildTabletLayout(context) : _buildMobileLayout(context),
-                ),
-                // Elemento gráfico atrás do conteúdo
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: SvgPicture.asset(
-                    AppImages.bottomUnion,
-                    height: isTablet ? 100 : 66,
-                  ),
-                ),
-                // Botão "Cadastre-se" na frente do elemento gráfico
-                Positioned(
-                  bottom: 40,
-                  left: 0,
-                  right: 0,
+                // Parte principal do conteúdo (expansível)
+                Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _buildSignUpLink(),
+                    alignment: Alignment.center,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isTablet ? constraints.maxWidth * 0.2 : 16,
+                      vertical: 8,
+                    ),
+                    child: isTablet ? _buildTabletLayout(context) : _buildMobileLayout(context),
+                  ),
+                ),
+
+                // Botões de redes sociais (sempre visíveis)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      _buildDivider(),
+                      const SizedBox(height: 16),
+                      _buildSocialButtons(),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+
+                // Rodapé fixo no final da tela
+                Container(
+                  width: double.infinity,
+                  child: Stack(
+                    alignment: Alignment.bottomCenter,
+                    children: [
+                      // Elemento gráfico de fundo
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: SvgPicture.asset(
+                          AppImages.bottomUnion,
+                          height: isTablet ? 100 : 66,
+                        ),
+                      ),
+
+                      // Link "Cadastre-se"
+                      Padding(
+                        padding: EdgeInsets.only(bottom: isTablet ? 40 : 25),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withOpacity(0.9),
+                                Colors.white.withOpacity(0.7),
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 5,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: _buildSignUpLink(),
+                        ),
+                      ),
+
+                      // Indicador de versão
+                      Positioned(
+                        bottom: 5,
+                        child: const MegaVersionIndicator(),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -80,9 +129,8 @@ class LoginView extends GetView<LoginController> {
           _buildDivider(),
           const SizedBox(height: 24),
           _buildSocialButtons(),
-          const SizedBox(height: 100), // Espaço para o botão posicionado fixo
-          const MegaVersionIndicator(),
-          SizedBox(height: MediaQuery.of(context).size.height * 0.05),
+          // O link de cadastro e o indicador de versão foram movidos para o rodapé
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -135,10 +183,8 @@ class LoginView extends GetView<LoginController> {
                 _buildDivider(),
                 const SizedBox(height: 32),
                 _buildSocialButtons(),
+                // O link de cadastro e o indicador de versão foram movidos para o rodapé
                 const SizedBox(height: 24),
-                _buildSignUpLink(),
-                const SizedBox(height: 16),
-                const MegaVersionIndicator(),
               ],
             ),
           ),
@@ -310,6 +356,56 @@ class LoginView extends GetView<LoginController> {
     );
   }
 
+  Widget _buildFooter(bool isTablet) {
+    return Stack(
+      alignment: Alignment.bottomCenter,
+      children: [
+        // Elemento gráfico de fundo (primeiro elemento da Stack, fica atrás)
+        Positioned(
+          bottom: 0,
+          right: 0,
+          child: SvgPicture.asset(
+            AppImages.bottomUnion,
+            height: isTablet ? 100 : 66,
+          ),
+        ),
+
+        // Container com o link "Cadastre-se" (segundo elemento da Stack, fica na frente)
+        Padding(
+          padding: EdgeInsets.only(bottom: isTablet ? 40 : 25),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withOpacity(0.9),
+                  Colors.white.withOpacity(0.7),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: _buildSignUpLink(),
+          ),
+        ),
+
+        // Indicador de versão posicionado mais abaixo, após o link de cadastro
+        Positioned(
+          bottom: 5, // Mais próximo à borda inferior
+          child: const MegaVersionIndicator(),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSignUpLink() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -322,22 +418,28 @@ class LoginView extends GetView<LoginController> {
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 6),
         InkWell(
           onTap: () {
-            print('Botão Cadastre-se clicado'); // Debug
             Get.toNamed(Routes.register);
           },
-          borderRadius: BorderRadius.circular(4),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: AppColors.primaryColor.withOpacity(0.3),
+                width: 1,
+              ),
+              color: AppColors.primaryColor.withOpacity(0.1),
+            ),
             child: const Text(
               'Cadastre-se',
               style: TextStyle(
                 fontSize: 14,
                 color: AppColors.primaryColor,
-                fontWeight: FontWeight.w500,
-                decoration: TextDecoration.underline,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),

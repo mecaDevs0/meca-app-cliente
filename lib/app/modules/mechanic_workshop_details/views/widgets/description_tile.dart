@@ -8,11 +8,13 @@ class DescriptionTile extends StatelessWidget {
     required this.descriptionFontColor,
     required this.description,
     required this.title,
+    this.titleFontSize = 16.0, // Parâmetro para tamanho da fonte do título
   });
 
   final Color descriptionFontColor;
   final String title;
   final String description;
+  final double titleFontSize; // Tamanho da fonte do título
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +23,9 @@ class DescriptionTile extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.w700,
-            fontSize: 16,
+            fontSize: titleFontSize,
             color: AppColors.darkCharcoal,
           ),
         ),
@@ -34,7 +36,7 @@ class DescriptionTile extends StatelessWidget {
           description,
           style: TextStyle(
             color: descriptionFontColor,
-            fontSize: 14,
+            fontSize: 14.0, // Tamanho fixo para descrição, adequado para todos os dispositivos
           ),
         ),
       ],

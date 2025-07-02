@@ -129,10 +129,13 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
       drawer: _buildDrawer(),
       body: LayoutBuilder(
         builder: (context, constraints) {
+          // Definição mais precisa do que é um tablet para melhor adaptação
           final isTablet = constraints.maxWidth > 600;
+          // Ajuste adicional para iPads maiores
+          final isLargeTablet = constraints.maxWidth > 900;
 
           if (isTablet) {
-            return _buildTabletLayout(constraints);
+            return _buildTabletLayout(constraints, isLargeTablet);
           } else {
             return _buildMobileLayout();
           }
@@ -141,13 +144,18 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
     );
   }
 
-  Widget _buildTabletLayout(BoxConstraints constraints) {
+  Widget _buildTabletLayout(BoxConstraints constraints, bool isLargeTablet) {
+    // Ajustar a proporção da barra lateral baseado no tamanho do tablet
+    final sidebarWidth = isLargeTablet
+        ? constraints.maxWidth * 0.3  // Menor proporção para iPad Pro
+        : constraints.maxWidth * 0.35; // Proporção para iPad normal
+
     return Row(
       children: [
-        // Painel lateral com busca e serviços
+        // Painel lateral com busca e serviços - Ajustado para ser mais proporcional
         Container(
-          width: constraints.maxWidth * 0.35,
-          padding: const EdgeInsets.all(16.0),
+          width: sidebarWidth,
+          padding: EdgeInsets.all(isLargeTablet ? 24.0 : 16.0),
           decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
@@ -157,7 +165,8 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 16),
+              SizedBox(height: isLargeTablet ? 24.0 : 16.0),
+              // Barra de busca com tamanho aumentado para iPad
               SearchBarWidget(
                 controller: _searchController,
                 onSearchChanged: (value) =>
@@ -174,17 +183,23 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                 ),
                 hintText: 'O que você procura?',
                 hasFilter: true,
+                // Aumentar o tamanho da fonte para iPads
+                textStyle: TextStyle(
+                  fontSize: isLargeTablet ? 18.0 : 16.0,
+                ),
               ),
-              const SizedBox(height: 24),
-              const Text(
+              SizedBox(height: isLargeTablet ? 32.0 : 24.0),
+              // Título com tamanho maior
+              Text(
                 'Serviços',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: isLargeTablet ? 22.0 : 18.0,
                   fontWeight: FontWeight.bold,
                   color: AppColors.primaryColor,
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: isLargeTablet ? 24.0 : 16.0),
+              // Lista de serviços
               const Expanded(child: ServicesList()),
             ],
           ),
@@ -194,12 +209,12 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Padding(
-                padding: EdgeInsets.all(16.0),
+              Padding(
+                padding: EdgeInsets.all(isLargeTablet ? 24.0 : 16.0),
                 child: Text(
                   'Oficinas próximas',
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: isLargeTablet ? 24.0 : 20.0,
                     fontWeight: FontWeight.bold,
                     color: AppColors.primaryColor,
                   ),
@@ -209,12 +224,14 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                 child: Obx(() {
                   if (controller.isGettingLocation) {
                     return GridView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 16,
-                        crossAxisSpacing: 16,
-                        childAspectRatio: 1.2,
+                      padding: EdgeInsets.symmetric(horizontal: isLargeTablet ? 24.0 : 16.0),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        // Número de colunas ajustado ao tamanho da tela
+                        crossAxisCount: isLargeTablet ? 3 : 2,
+                        mainAxisSpacing: isLargeTablet ? 24 : 16,
+                        crossAxisSpacing: isLargeTablet ? 24 : 16,
+                        // Ajuste da proporção para melhor visualização
+                        childAspectRatio: isLargeTablet ? 1.3 : 1.2,
                       ),
                       itemCount: 6,
                       itemBuilder: (context, index) => Skeletonizer(
@@ -226,18 +243,20 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                             rating: 5,
                           ),
                           onTap: () {},
+                          // Aumentar tamanho dos elementos para iPad
+                          isTablet: true,
                         ),
                       ),
                     );
                   }
 
                   return GridView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 16,
-                      childAspectRatio: 1.2,
+                    padding: EdgeInsets.symmetric(horizontal: isLargeTablet ? 24.0 : 16.0),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: isLargeTablet ? 3 : 2,
+                      mainAxisSpacing: isLargeTablet ? 24 : 16,
+                      crossAxisSpacing: isLargeTablet ? 24 : 16,
+                      childAspectRatio: isLargeTablet ? 1.3 : 1.2,
                     ),
                     itemCount: controller.workshopsPagingController.itemList?.length ?? 0,
                     itemBuilder: (context, index) {
@@ -248,6 +267,8 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                           Routes.mechanicWorkshopDetails,
                           arguments: WorkshopArgs(workshop.id!, workshopName: workshop.fullName),
                         ),
+                        // Passar indicador de tablet para ajustar elementos internos
+                        isTablet: true,
                       );
                     },
                   );

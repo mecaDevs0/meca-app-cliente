@@ -6,14 +6,18 @@ import '../utils/auth_helper.dart';
 class AuthMiddleware extends GetMiddleware {
   @override
   RouteSettings? redirect(String? route) {
-    // Check if we have a token but isGuest is still true (inconsistent state)
-    final token = AuthToken.fromCache();
-    if (token != null && AuthHelper.isGuest) {
-      // Fix the inconsistent state
-      AuthHelper.clearGuestStatus();
-      AuthHelper.setLoggedIn();
-      print('AuthMiddleware: Fixed inconsistent state - User has token but was marked as guest');
-    }
+    // Executar validação e correção de estado de forma assíncrona
+    _validateAuthState();
     return null;
+  }
+
+  /// Valida e corrige estados inconsistentes de autenticação
+  /// Especialmente importante para resolver problemas no iPad
+  Future<void> _validateAuthState() async {
+    try {
+      await AuthHelper.validateAndFixState();
+    } catch (e) {
+      print('AuthMiddleware: Erro ao validar estado de autenticação: $e');
+    }
   }
 }

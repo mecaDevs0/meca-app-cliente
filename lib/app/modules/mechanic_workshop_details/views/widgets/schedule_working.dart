@@ -7,7 +7,12 @@ import '../../../../data/models/workshopAgenda/agenda_model.dart';
 import '../../controllers/mechanic_workshop_details_controller.dart';
 
 class ScheduleWorking extends GetView<MechanicWorkshopDetailsController> {
-  const ScheduleWorking({super.key});
+  const ScheduleWorking({
+    super.key,
+    this.isTablet = false, // Novo parâmetro para modo tablet
+  });
+
+  final bool isTablet; // Controla o tamanho dos elementos em tablets
 
   @override
   Widget build(BuildContext context) {
