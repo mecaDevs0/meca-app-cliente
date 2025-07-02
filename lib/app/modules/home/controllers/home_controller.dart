@@ -1,5 +1,6 @@
 import 'dart:developer' as console;
 
+import 'package:flutter/scheduler.dart';
 import 'package:mega_commons/shared/models/abbreviation.dart';
 import 'package:mega_commons/shared/models/auth_token.dart';
 import 'package:mega_commons/shared/utils/mega_one_signal_config.dart';
@@ -125,13 +126,19 @@ class HomeController extends GetxController {
   }
 
   Future<void> getWorkshops(int page) async {
-    _isGettingLocation.value = true;
+    // Utilizando SchedulerBinding para garantir que a atualização de estado ocorra após o build
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _isGettingLocation.value = true;
+    });
 
     // Verifica se é usuário visitante
     if (AuthHelper.isGuest) {
       // Para visitantes, retorna uma lista vazia ou dados mockados
       workshopsPagingController.appendLastPage([]);
-      _isGettingLocation.value = false;
+      // Utilizando SchedulerBinding para garantir que a atualização de estado ocorra após o build
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _isGettingLocation.value = false;
+      });
       return;
     }
 
@@ -170,9 +177,15 @@ class HomeController extends GetxController {
       },
       onError: (_) {
         // Garantir que o estado de carregamento seja finalizado mesmo em caso de erro
-        _isGettingLocation.value = false;
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          _isGettingLocation.value = false;
+        });
       },
-      onFinally: () => _isGettingLocation.value = false,
+      onFinally: () {
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          _isGettingLocation.value = false;
+        });
+      },
     );
   }
 
