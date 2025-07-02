@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'auth_helper.dart';
-import '../app_colors.dart';
+
 import '../../routes/app_pages.dart';
+import '../app_colors.dart';
+import 'auth_helper.dart';
 
 class GuestAccessHelper {
   static bool checkGuestAccess(BuildContext? context) {

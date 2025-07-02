@@ -1,16 +1,14 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:mega_commons/shared/models/auth_token.dart';
 import 'package:mega_commons/shared/utils/mega_request_utils.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
-import 'package:mega_commons/shared/models/auth_token.dart';
 
 import '../../../core/core.dart';
+import '../../../core/utils/auth_helper.dart';
 import '../../../data/models/order.dart';
 import '../../../data/providers/payment_provider.dart';
-import '../../../core/utils/auth_helper.dart';
-import 'package:get/get.dart';
-import '../../../core/utils/auth_helper.dart';
-import '../../../core/app_colors.dart';
 import '../../../routes/app_pages.dart';
-import 'package:flutter/material.dart';
 
 class PaymentController extends GetxController with ProfileMixin {
 

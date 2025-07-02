@@ -137,7 +137,7 @@ class MechanicWorkshopDetailsView
               children: [
                 SizedBox(height: verticalSpacing),
                 // Widget de informações da oficina com indicador de tablet
-                MechanicWorkshopInfo(isTablet: true),
+                const MechanicWorkshopInfo(isTablet: true),
                 SizedBox(height: verticalSpacing),
                 Divider(
                   color: AppColors.grayBorderColor,

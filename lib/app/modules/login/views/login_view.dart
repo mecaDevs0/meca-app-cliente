@@ -55,7 +55,7 @@ class LoginView extends GetView<LoginController> {
                 ),
 
                 // Rodapé fixo no final da tela
-                Container(
+                SizedBox(
                   width: double.infinity,
                   child: Stack(
                     alignment: Alignment.bottomCenter,
@@ -98,9 +98,9 @@ class LoginView extends GetView<LoginController> {
                       ),
 
                       // Indicador de versão
-                      Positioned(
+                      const Positioned(
                         bottom: 5,
-                        child: const MegaVersionIndicator(),
+                        child: MegaVersionIndicator(),
                       ),
                     ],
                   ),
@@ -398,9 +398,9 @@ class LoginView extends GetView<LoginController> {
         ),
 
         // Indicador de versão posicionado mais abaixo, após o link de cadastro
-        Positioned(
+        const Positioned(
           bottom: 5, // Mais próximo à borda inferior
-          child: const MegaVersionIndicator(),
+          child: MegaVersionIndicator(),
         ),
       ],
     );

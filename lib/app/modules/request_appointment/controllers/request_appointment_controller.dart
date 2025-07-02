@@ -1,7 +1,10 @@
+import 'package:flutter/material.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
+import '../../../core/app_colors.dart';
 import '../../../core/args/workshop_args.dart';
+import '../../../core/utils/auth_helper.dart';
 import '../../../data/models/scheduling/scheduling.dart';
 import '../../../data/models/scheduling/vehicle_scheduling.dart';
 import '../../../data/models/service.dart';
@@ -9,13 +12,7 @@ import '../../../data/models/vehicle.dart';
 import '../../../data/models/workshopService/workshop_service.dart';
 import '../../../data/providers/core_provider.dart';
 import '../../../data/providers/request_appointment_provider.dart';
-
-import '../../../core/utils/auth_helper.dart';
-import 'package:get/get.dart';
-import '../../../core/utils/auth_helper.dart';
-import '../../../core/app_colors.dart';
 import '../../../routes/app_pages.dart';
-import 'package:flutter/material.dart';
 
 class RequestAppointmentController extends GetxController {
 

@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import 'package:mega_features/app/firebase/firebase_config.dart';
-import 'package:meca_cliente/app/core/utils/auth_helper.dart';
-import 'package:mega_commons/shared/models/auth_token.dart';
 
 import 'app/application_binding.dart';
+import 'app/core/utils/auth_helper.dart';
 import 'app/data/cache/base_hive.dart';
 import 'app/routes/app_pages.dart';
 import 'app/theme/app_theme.dart';
-import 'package:get_storage/get_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

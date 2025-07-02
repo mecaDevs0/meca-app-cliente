@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:mega_commons/shared/models/auth_token.dart';
 import '../utils/auth_helper.dart';
 
 class AuthMiddleware extends GetMiddleware {

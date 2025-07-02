@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:mega_commons/mega_commons.dart';
-import 'package:mega_commons/shared/models/auth_token.dart';
 import 'package:mega_features/app/modules/login/controllers/login_controller.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
@@ -41,7 +40,7 @@ extension LoginControllerExtension on LoginController {
       if (!isAvailable) {
         console.log('Sign in with Apple não está disponível neste dispositivo');
         MegaSnackbar.showErroSnackBar(
-          'Sign in with Apple não está disponível neste dispositivo'
+          'Sign in with Apple não está disponível neste dispositivo',
         );
         return;
       }
@@ -79,7 +78,7 @@ extension LoginControllerExtension on LoginController {
       }
 
       // Criar o provider OAuth para apple.com
-      final oauthCredential = OAuthProvider("apple.com").credential(
+      final oauthCredential = OAuthProvider('apple.com').credential(
         idToken: credential.identityToken,
         accessToken: credential.authorizationCode,
       );
@@ -98,7 +97,7 @@ extension LoginControllerExtension on LoginController {
 
         // Obter token do Firebase para autenticação com o backend
         final firebaseToken = await userCredential.user!.getIdToken();
-        console.log('Firebase Auth: Token obtido com sucesso (length: ${firebaseToken.length})');
+        console.log('Firebase Auth: Token obtido com sucesso (length: ${firebaseToken?.length ?? 0})');
 
         // Criar AuthToken com os dados do Firebase
         final authToken = AuthToken(

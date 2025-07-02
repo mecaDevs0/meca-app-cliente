@@ -1,6 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mega_commons/shared/models/auth_token.dart';
-import 'package:flutter/foundation.dart';
 
 class AuthHelper {
   static final GetStorage _storage = GetStorage();

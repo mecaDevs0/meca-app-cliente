@@ -6,10 +6,10 @@ import 'package:mega_commons/shared/utils/mega_one_signal_config.dart';
 import 'package:mega_commons/shared/utils/mega_request_utils.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import 'package:mega_payment/mega_payment.dart';
-import 'package:meca_cliente/app/core/utils/auth_helper.dart';
 
 import '../../../../.env.dart';
 import '../../../core/core.dart';
+import '../../../core/utils/auth_helper.dart';
 import '../../../data/models/mechanic_workshop.dart';
 import '../../../data/models/service.dart';
 import '../../../data/providers/home_provider.dart';
@@ -137,7 +137,40 @@ class HomeController extends GetxController {
 
     await MegaRequestUtils.load(
       action: () async {
-        // Código existente para requisição
+        try {
+          final response = await _homeProvider.onRequestWorkshops(
+            latUser: userPosition?.latitude,
+            longUser: userPosition?.longitude,
+            page: page,
+            limit: _workshopsLimit,
+            rating: rating > 0 ? rating : null,
+            distance: distance.toInt(),
+            serviceType: services.map((service) => service.id!).toList(),
+            search: _filterController.searchQuery,
+          );
+
+          // Verifica se a lista de oficinas está vazia
+          if (response.isEmpty && page == 1) {
+            // Mesmo sem oficinas, precisa marcar a lista como vazia para mostrar a mensagem
+            workshopsPagingController.appendLastPage([]);
+            return;
+          }
+
+          final isLastPage = response.length < _workshopsLimit;
+          if (isLastPage) {
+            workshopsPagingController.appendLastPage(response);
+          } else {
+            final nextPageKey = page + 1;
+            workshopsPagingController.appendPage(response, nextPageKey);
+          }
+        } catch (e) {
+          workshopsPagingController.error = e;
+          console.log('Erro ao buscar oficinas: $e', name: 'HomeController');
+        }
+      },
+      onError: (_) {
+        // Garantir que o estado de carregamento seja finalizado mesmo em caso de erro
+        _isGettingLocation.value = false;
       },
       onFinally: () => _isGettingLocation.value = false,
     );

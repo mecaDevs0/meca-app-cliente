@@ -9,6 +9,7 @@ import '../../../core/app_colors.dart';
 import '../../../core/app_images.dart';
 import '../../../core/args/workshop_args.dart';
 import '../../../core/modals/app_bottom_sheet.dart';
+import '../../../core/utils/auth_helper.dart';
 import '../../../core/utils/guest_access_helper.dart';
 import '../../../core/widgets/app_bar_custom.dart';
 import '../../../core/widgets/app_filter_bottom_sheet.dart';
@@ -19,7 +20,6 @@ import '../controllers/home_controller.dart';
 import 'widgets/mechanic_workshops/card/mechanic_workshop_card.dart';
 import 'widgets/search_bar.dart';
 import 'widgets/services/services_list.dart';
-import 'package:meca_cliente/app/core/utils/auth_helper.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -367,11 +367,11 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                 ),
               ),
               InkWell(
-        onTap: () {
-      if (GuestAccessHelper.checkGuestAccess(context)) {
-        Get.toNamed(Routes.myVehicles);
-      }
-    },
+                onTap: () {
+                  if (GuestAccessHelper.checkGuestAccess(context)) {
+                    Get.toNamed(Routes.mechanicWorkshops);
+                  }
+                },
                 child: const Text(
                   'Ver todos',
                   style: TextStyle(
@@ -400,15 +400,33 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                       mechanicWorkshop: item,
                       onTap: () {
                         if (GuestAccessHelper.checkGuestAccess(context)) {
-                          Get.toNamed(Routes.myVehicles);
+                          Get.toNamed(
+                            Routes.mechanicWorkshopDetails,
+                            arguments: WorkshopArgs(item.id!, workshopName: item.fullName),
+                          );
                         }
                       },
                     ),
                   ),
-                  noItemsFoundIndicatorBuilder: (context) =>
-                      const EmptyListIndicator(
-                    isShowIcon: false,
-                    message: 'Nenhuma oficina encontrada',
+                  noItemsFoundIndicatorBuilder: (context) => Obx(() {
+                    if (!controller.hasRequestPermission.value) {
+                      // Quando não tem permissão de localização
+                      return EmptyListIndicator(
+                        isShowIcon: true,
+                        title: 'Não foi possível encontrar oficinas próximas a você',
+                        message: 'Para ver oficinas próximas, permita o acesso à sua localização',
+                      );
+                    } else {
+                      // Quando tem permissão, mas não encontrou oficinas próximas
+                      return const EmptyListIndicator(
+                        isShowIcon: true,
+                        title: 'Não encontramos oficinas próximas a você',
+                        message: 'Tente ajustar seus filtros de busca ou ampliar a distância máxima',
+                      );
+                    }
+                  }),
+                  firstPageErrorIndicatorBuilder: (context) => ErrorIndicator(
+                    onTryAgain: () => controller.workshopsPagingController.refresh(),
                   ),
                 ),
               ),

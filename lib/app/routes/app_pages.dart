@@ -2,7 +2,6 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import 'package:mega_features/mega_features.dart';
 import 'package:mega_payment/mega_payment.dart';
 
-import '../core/middleware/auth_middleware.dart';
 
 import '../modules/change_password/views/change_password_view.dart';
 import '../modules/complete_registration/bindings/complete_registration_binding.dart';
