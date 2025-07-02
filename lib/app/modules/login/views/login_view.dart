@@ -20,99 +20,84 @@ class LoginView extends GetView<LoginController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             final isTablet = constraints.maxWidth > 600;
 
             return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   minHeight: constraints.maxHeight,
                 ),
-                child: IntrinsicHeight(
-                  child: Column(
-                    children: [
-                      // Parte principal do conteúdo (expansível)
-                      Expanded(
-                        child: Container(
-                          alignment: Alignment.center,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isTablet ? constraints.maxWidth * 0.2 : 16,
-                            vertical: 8,
+                child: Column(
+                  children: [
+                    // Parte principal do conteúdo
+                    Container(
+                      alignment: Alignment.center,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isTablet ? constraints.maxWidth * 0.1 : 16, // Reduzido para melhor aproveitamento do espaço
+                        vertical: isTablet ? 24 : 8, // Mais espaço vertical em tablets
+                      ),
+                      child: isTablet ? _buildTabletLayout(context) : _buildMobileLayout(context),
+                    ),
+
+                    // Rodapé no final da tela
+                    SizedBox(
+                      width: double.infinity,
+                      child: Stack(
+                        alignment: Alignment.bottomCenter,
+                        children: [
+                          // Elemento gráfico de fundo
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: SvgPicture.asset(
+                              AppImages.bottomUnion,
+                              height: isTablet ? 100 : 66,
+                            ),
                           ),
-                          child: isTablet ? _buildTabletLayout(context) : _buildMobileLayout(context),
-                        ),
-                      ),
 
-                      // Botões de redes sociais (sempre visíveis)
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        child: Column(
-                          children: [
-                            const SizedBox(height: 8),
-                            _buildDivider(),
-                            const SizedBox(height: 16),
-                            _buildSocialButtons(),
-                            const SizedBox(height: 8),
-                          ],
-                        ),
-                      ),
-
-                      // Rodapé fixo no final da tela
-                      SizedBox(
-                        width: double.infinity,
-                        child: Stack(
-                          alignment: Alignment.bottomCenter,
-                          children: [
-                            // Elemento gráfico de fundo
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: SvgPicture.asset(
-                                AppImages.bottomUnion,
-                                height: isTablet ? 100 : 66,
-                              ),
-                            ),
-
-                            // Link "Cadastre-se"
-                            Padding(
-                              padding: EdgeInsets.only(bottom: isTablet ? 40 : 25),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.white.withOpacity(0.9),
-                                      Colors.white.withOpacity(0.7),
-                                    ],
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                  ),
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 5,
-                                      offset: const Offset(0, 2),
-                                    ),
+                          // Link "Cadastre-se"
+                          Padding(
+                            padding: EdgeInsets.only(bottom: isTablet ? 40 : 25),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.white.withOpacity(0.9),
+                                    Colors.white.withOpacity(0.7),
                                   ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
                                 ),
-                                child: _buildSignUpLink(),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 5,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
+                              child: _buildSignUpLink(),
                             ),
+                          ),
 
-                            // Indicador de versão
-                            const Positioned(
-                              bottom: 5,
-                              child: MegaVersionIndicator(),
-                            ),
-                          ],
-                        ),
+                          // Indicador de versão
+                          const Positioned(
+                            bottom: 5,
+                            child: MegaVersionIndicator(),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    // Espaço adicional no final para garantir que os elementos não fiquem cortados
+                    SizedBox(height: isTablet ? 60 : 40),
+                  ],
                 ),
               ),
             );
@@ -138,7 +123,8 @@ class LoginView extends GetView<LoginController> {
           _buildDivider(),
           const SizedBox(height: 24),
           _buildSocialButtons(),
-          // O link de cadastro e o indicador de versão foram movidos para o rodapé
+          const SizedBox(height: 32),
+          _buildSignUpLink(), // Adicionando o link de cadastro também no layout mobile
           const SizedBox(height: 24),
         ],
       ),
@@ -146,59 +132,118 @@ class LoginView extends GetView<LoginController> {
   }
 
   Widget _buildTabletLayout(BuildContext context) {
-    return Row(
-      children: [
-        // Lado esquerdo - Logo e informações
-        Expanded(
-          flex: 1,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildLogo(),
-              const SizedBox(height: 48),
-              Text(
-                'Bem-vindo ao MECA',
-                style: context.textTheme.headlineMedium?.copyWith(
-                  color: AppColors.primaryColor,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Encontre as melhores oficinas próximas a você',
-                style: TextStyle(
-                  color: AppColors.blackSecondaryColor,
-                  fontSize: 16,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 48),
-        // Lado direito - Formulário de login
-        Expanded(
-          flex: 1,
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 400),
+    // Captura o tamanho da tela para cálculos de responsividade
+    final screenSize = MediaQuery.of(context).size;
+    final isLandscape = screenSize.width > screenSize.height;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        vertical: isLandscape ? 16.0 : 32.0,
+        horizontal: 16.0,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Lado esquerdo - Logo e informações
+          Expanded(
+            flex: 1,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildLoginForm(),
-                const SizedBox(height: 24),
-                _buildForgotPasswordLink(context),
+                SizedBox(height: isLandscape ? 16.0 : 32.0),
+                _buildLogo(),
                 const SizedBox(height: 32),
-                _buildDivider(),
-                const SizedBox(height: 32),
-                _buildSocialButtons(),
-                // O link de cadastro e o indicador de versão foram movidos para o rodapé
-                const SizedBox(height: 24),
+                Text(
+                  'Bem-vindo ao MECA',
+                  style: context.textTheme.headlineMedium?.copyWith(
+                    color: AppColors.primaryColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: isLandscape ? 24.0 : 28.0, // Ajuste de tamanho para landscape
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Encontre as melhores oficinas próximas a você',
+                  style: TextStyle(
+                    color: AppColors.blackSecondaryColor,
+                    fontSize: isLandscape ? 14.0 : 16.0,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                // Imagem ilustrativa apenas no modo landscape
+                if (isLandscape)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 24.0),
+                    child: SvgPicture.asset(
+                      AppImages.bottomUnion, // Considere usar uma imagem mais adequada
+                      height: 120,
+                    ),
+                  ),
               ],
             ),
           ),
-        ),
-      ],
+
+          // Separador vertical entre as seções
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24.0),
+            width: 1,
+            height: isLandscape ? 400 : 500,
+            color: AppColors.grayBorderColor.withOpacity(0.5),
+          ),
+
+          // Lado direito - Formulário de login
+          Expanded(
+            flex: isLandscape ? 1 : 1,
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: isLandscape ? 400 : 450,
+                minHeight: 500,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(height: isLandscape ? 16.0 : 24.0),
+                    Center(
+                      child: Text(
+                        'Acesse sua conta',
+                        style: TextStyle(
+                          color: AppColors.primaryColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildLoginForm(),
+                    const SizedBox(height: 16),
+                    Center(child: _buildForgotPasswordLink(context)),
+                    const SizedBox(height: 32),
+                    _buildDivider(),
+                    const SizedBox(height: 32),
+                    Center(
+                      child: Text(
+                        'Ou continue com',
+                        style: TextStyle(
+                          color: AppColors.blackSecondaryColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildSocialButtons(),
+                    const SizedBox(height: 24),
+                    _buildSignUpLink(), // Adicionando o link de cadastro também no layout tablet
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

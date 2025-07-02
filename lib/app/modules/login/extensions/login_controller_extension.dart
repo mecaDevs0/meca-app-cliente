@@ -96,45 +96,53 @@ extension LoginControllerExtension on LoginController {
       if (userCredential.user != null) {
         console.log('Firebase Auth: Login com Apple realizado com sucesso');
 
-        // Obter token do Firebase para autenticação com o backend
-        final firebaseToken = await userCredential.user!.getIdToken();
-        console.log('Firebase Auth: Token obtido com sucesso (length: ${firebaseToken?.length ?? 0})');
+        // IMPORTANTE: Todas as operações abaixo são movidas para o SchedulerBinding.addPostFrameCallback
+        // para evitar o erro de ciclo de vida "setState() or markNeedsBuild() called during build"
 
-        // Criar AuthToken com os dados do Firebase
-        final authToken = AuthToken(
-          accessToken: firebaseToken,
-          refreshToken: '', // Firebase gerencia automaticamente
-          expiresIn: 3600, // 1 hora (padrão Firebase)
-        );
-
-        // CORREÇÃO: Usando SchedulerBinding para garantir que a atualização de estado
-        // ocorra após a conclusão do frame de build atual
+        // Adiamos TODAS as operações após a autenticação para o próximo frame
         SchedulerBinding.instance.addPostFrameCallback((_) async {
-          // Salvar token no cache usando o método correto
-          final accessTokenBox = MegaDataCache.box<AuthToken>();
-          await accessTokenBox.put(
-            AuthToken.cacheBoxKey,
-            authToken,
-          );
+          try {
+            console.log('PostFrameCallback: Iniciando operações pós-autenticação');
 
-          console.log('AuthToken: Token salvo no cache com sucesso');
+            // Obter token do Firebase para autenticação com o backend
+            final firebaseToken = await userCredential.user!.getIdToken();
+            console.log('Firebase Auth: Token obtido com sucesso (length: ${firebaseToken?.length ?? 0})');
 
-          // Limpar estado de visitante e configurar como logado
-          await AuthHelper.clearGuestStatus();
-          await AuthHelper.setLoggedIn();
+            // Criar AuthToken com os dados do Firebase
+            final authToken = AuthToken(
+              accessToken: firebaseToken,
+              refreshToken: '', // Firebase gerencia automaticamente
+              expiresIn: 3600, // 1 hora (padrão Firebase)
+            );
 
-          console.log('AuthHelper: Estado atualizado - isLoggedIn: ${AuthHelper.isLoggedIn}, isGuest: ${AuthHelper.isGuest}');
+            // Salvar token no cache usando o método correto
+            final accessTokenBox = MegaDataCache.box<AuthToken>();
+            await accessTokenBox.put(
+              AuthToken.cacheBoxKey,
+              authToken,
+            );
+            console.log('AuthToken: Token salvo no cache com sucesso');
 
-          // Navegação explícita após as atualizações de estado
-          console.log('Navegando para tela principal...');
-          Get.offAllNamed(Routes.home);
+            // Limpar estado de visitante e configurar como logado
+            await AuthHelper.clearGuestStatus();
+            await AuthHelper.setLoggedIn();
+            console.log('AuthHelper: Estado atualizado - isLoggedIn: ${AuthHelper.isLoggedIn}, isGuest: ${AuthHelper.isGuest}');
 
-          // Feedback visual após login bem-sucedido
-          MegaSnackbar.showSuccessSnackBar('Login realizado com sucesso!');
+            // Navegação explícita após as atualizações de estado
+            console.log('Navegando para tela principal...');
+            Get.offAllNamed(Routes.home);
+
+            // Feedback visual após login bem-sucedido
+            MegaSnackbar.showSuccessSnackBar('Login realizado com sucesso!');
+
+            console.log('PostFrameCallback: Operações pós-autenticação concluídas com sucesso');
+          } catch (postFrameError) {
+            console.log('Erro nas operações pós-autenticação: ${postFrameError.toString()}');
+            MegaSnackbar.showErroSnackBar('Erro ao finalizar o login. Tente novamente.');
+          }
         });
 
-        console.log('Login com Apple: Processo concluído com sucesso');
-
+        console.log('Login com Apple: Processo iniciado com sucesso, operações pós-autenticação agendadas');
       } else {
         throw Exception('Falha na autenticação com Firebase - userCredential.user é null');
       }
@@ -205,13 +213,10 @@ extension LoginControllerExtension on LoginController {
           errorMessage = 'Erro na autenticação: ${e.message}';
           break;
       }
-
       MegaSnackbar.showErroSnackBar(errorMessage);
-
     } catch (e) {
-      console.log('Erro geral no Apple Sign In: $e');
-      console.log('Stack trace: ${StackTrace.current}');
-      MegaSnackbar.showErroSnackBar('Erro inesperado durante o login. Tente novamente.');
+      console.log('Erro não tratado no login com Apple: ${e.toString()}');
+      MegaSnackbar.showErroSnackBar('Erro ao fazer login com Apple. Tente novamente.');
     }
   }
 }
