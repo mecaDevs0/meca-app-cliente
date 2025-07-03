@@ -52,7 +52,10 @@ class ServiceWorkshopsList extends GetView<ServiceDetailsController> {
                         });
                         return Future.value();
                       }
-                      return Future.value(controller.workshopsPagingController.refresh());
+                      // Corrigido: chamamos refresh() e depois retornamos um Future vazio
+                      // ao invés de tentar usar o resultado void do refresh()
+                      controller.workshopsPagingController.refresh();
+                      return Future.value();
                     },
                   ),
                   child: controller.workshopsPagingController.error != null
