@@ -40,34 +40,59 @@ class ServicesController extends GetxController {
   }
 
   Future<void> getAllServices(int page) async {
-    await MegaRequestUtils.load(
-      action: () async {
-        final response = await _servicesProvider.onRequestServices(
-          page: page,
-          limit: _limit,
-          search: _filterController.searchQuery.isNotEmpty
-              ? _filterController.searchQuery
-              : null,
-          serviceType: _filterController.selectedCategories
-              .map((category) => category.id ?? '')
-              .toList(),
-          rating:
-              _filterController.rating > 0 ? _filterController.rating : null,
-          distance: _filterController.distance != null &&
-                  _filterController.distance != 0.0
-              ? _filterController.distance.toInt()
-              : null,
-        );
+    try {
+      await MegaRequestUtils.load(
+        action: () async {
+          try {
+            final response = await _servicesProvider.onRequestServices(
+              page: page,
+              limit: _limit,
+              search: _filterController.searchQuery.isNotEmpty
+                  ? _filterController.searchQuery
+                  : null,
+              serviceType: _filterController.selectedCategories
+                  .map((category) => category.id ?? '')
+                  .toList(),
+              rating:
+                  _filterController.rating > 0 ? _filterController.rating : null,
+              distance: _filterController.distance != null &&
+                      _filterController.distance != 0.0
+                  ? _filterController.distance.toInt()
+                  : null,
+            );
 
-        final isLastPage = response.length < _limit;
-        if (isLastPage) {
-          pagingController.appendLastPage(response);
-        } else {
-          final nextPageKey = page + 1;
-          pagingController.appendPage(response, nextPageKey);
-        }
-      },
-    );
+            // Verifica se a resposta está vazia ou tem menos itens que o limite
+            final isLastPage = response.isEmpty || response.length < _limit;
+            if (isLastPage) {
+              pagingController.appendLastPage(response);
+            } else {
+              final nextPageKey = page + 1;
+              pagingController.appendPage(response, nextPageKey);
+            }
+          } catch (e) {
+            // Captura específica para erros Dio
+            if (e is DioError && e.response?.statusCode == 400) {
+              // Caso específico de "Index was out of range"
+              // Este é um indicador de que tentamos buscar uma página que não existe
+              pagingController.appendLastPage([]);
+              log('Erro de paginação: tentativa de acessar página inexistente', error: e);
+            } else {
+              // Propaga outros erros para serem tratados pelo MegaRequestUtils
+              throw e;
+            }
+          }
+        },
+        onError: (error) {
+          // Garante que erros são propagados para o pagingController
+          pagingController.error = error;
+          log('Erro ao buscar serviços', error: error);
+        },
+      );
+    } catch (e) {
+      // Captura qualquer erro não tratado e evita que o app trave
+      pagingController.error = e;
+      log('Erro crítico ao buscar serviços', error: e);
+    }
   }
 
   void updateFilters({
@@ -87,8 +112,14 @@ class ServicesController extends GetxController {
     pagingController.refresh();
   }
 
+  // Método para limpar o estado de serviço selecionado
+  void clearServiceState() {
+    _serviceDetail.value = null;
+  }
+
   @override
   void dispose() {
+    clearServiceState();
     _filterController.clearFilters();
     super.dispose();
   }

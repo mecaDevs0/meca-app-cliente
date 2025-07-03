@@ -31,14 +31,56 @@ class ServicesView extends GetView<ServicesController> {
   }
 
   void _navigateToServiceDetails(Service service) {
-    // Navegação segura com verificações de nulidade e usando SchedulerBinding para evitar erros de estado
-    if (service.id != null && service.id!.isNotEmpty) {
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        Get.toNamed(
-          Routes.serviceDetails,
-          arguments: ServiceArgs(service.id!),
+    try {
+      // Verifica se o serviço tem ID válido antes de tentar navegar
+      if (service.id != null && service.id!.isNotEmpty) {
+        // Usando SchedulerBinding para garantir que a navegação ocorra após a construção do frame
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          try {
+            Get.toNamed(
+              Routes.serviceDetails,
+              arguments: ServiceArgs(service.id!),
+              // Prevenindo acúmulo de rotas e erros de navegação
+              preventDuplicates: true,
+            )?.then((_) {
+              // Limpa o estado quando retornar da tela de detalhes
+              controller.clearServiceState();
+            });
+          } catch (e) {
+            // Tratamento de erro caso a navegação falhe
+            controller.clearServiceState(); // Limpa o estado em caso de falha
+            log('Erro ao navegar para detalhes do serviço', error: e);
+            Get.snackbar(
+              'Atenção',
+              'Não foi possível carregar os detalhes deste serviço.',
+              backgroundColor: Colors.amber,
+              colorText: Colors.black,
+              snackPosition: SnackPosition.BOTTOM,
+            );
+          }
+        });
+      } else {
+        // Feedback para o usuário quando o ID for inválido
+        controller.clearServiceState(); // Limpa o estado em caso de ID inválido
+        Get.snackbar(
+          'Atenção',
+          'Informações do serviço incompletas. Tente novamente mais tarde.',
+          backgroundColor: Colors.amber,
+          colorText: Colors.black,
+          snackPosition: SnackPosition.BOTTOM,
         );
-      });
+      }
+    } catch (e) {
+      // Último nível de proteção para evitar que o app trave completamente
+      controller.clearServiceState(); // Limpa o estado em caso de erro crítico
+      log('Erro crítico ao processar navegação', error: e);
+      Get.snackbar(
+        'Erro',
+        'Ocorreu um erro ao processar sua solicitação.',
+        backgroundColor: Colors.red.withOpacity(0.8),
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
 
@@ -89,10 +131,11 @@ class ServicesView extends GetView<ServicesController> {
                       onRefresh: () => Future.sync(
                         () => controller.pagingController.refresh(),
                       ),
-                      child: PagedListView<int, Service>(
-                        shrinkWrap: true,
+                      child: PagedListView<int, Service>.separated(
                         pagingController: controller.pagingController,
-                        builderDelegate: PagedChildBuilderDelegate(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        separatorBuilder: (context, index) => const SizedBox(height: 8.0),
+                        builderDelegate: PagedChildBuilderDelegate<Service>(
                           itemBuilder: (context, item, index) => ServiceItem(
                             service: item,
                             onTap: () => _navigateToServiceDetails(item),
@@ -107,19 +150,21 @@ class ServicesView extends GetView<ServicesController> {
                             message: 'Sem serviços para exibir',
                           ),
                           firstPageProgressIndicatorBuilder: (context) {
-                            return const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                CircularProgressIndicator(),
-                                SizedBox(height: 16),
-                                Text(
-                                  'Carregando serviços...',
-                                  style: TextStyle(
-                                    color: AppColors.abbey,
-                                    fontWeight: FontWeight.w300,
+                            return const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  CircularProgressIndicator(),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'Carregando serviços...',
+                                    style: TextStyle(
+                                      color: AppColors.abbey,
+                                      fontWeight: FontWeight.w300,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             );
                           },
                         ),
