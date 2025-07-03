@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
