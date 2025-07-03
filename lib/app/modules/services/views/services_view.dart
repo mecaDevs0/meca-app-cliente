@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
@@ -29,6 +30,18 @@ class ServicesView extends GetView<ServicesController> {
     controller.pagingController.refresh();
   }
 
+  void _navigateToServiceDetails(Service service) {
+    // Navegação segura com verificações de nulidade e usando SchedulerBinding para evitar erros de estado
+    if (service.id != null && service.id!.isNotEmpty) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        Get.toNamed(
+          Routes.serviceDetails,
+          arguments: ServiceArgs(service.id!),
+        );
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -38,84 +51,86 @@ class ServicesView extends GetView<ServicesController> {
         backgroundColor: AppColors.primaryColor,
         titleColor: AppColors.whiteColor,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 16),
-            SearchBarWidget(
-              controller: _searchController,
-              onSearchChanged: (value) {
-                controller.updateFilters(searchQuery: value);
-              },
-              onFilterTap: () => showFilterBottomSheet(
-                context: context,
-                initialParams: FilterParams(
-                  rating: controller.rating,
-                  services: controller.services,
-                  distance: controller.distance,
-                ),
-                onTap: _applyFilters,
-                availableCategories: controller.availableCategories,
-              ),
-              hintText: 'Busque por nome do serviço',
-              hasFilter: true,
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => Future.sync(
-                  () => controller.pagingController.refresh(),
-                ),
-                child: PagedListView<int, Service>(
-                  shrinkWrap: true,
-                  pagingController: controller.pagingController,
-                  builderDelegate: PagedChildBuilderDelegate(
-                    itemBuilder: (context, item, index) => ServiceItem(
-                      service: item,
-                      onTap: () async {
-                        if (item.id.isNullOrEmpty == false) {
-                          Get.toNamed(
-                            Routes.serviceDetails,
-                            arguments: ServiceArgs(
-                              item.id!,
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                    firstPageErrorIndicatorBuilder: (context) => ErrorIndicator(
-                      error: controller.pagingController.error,
-                      onTryAgain: () => controller.pagingController.refresh(),
-                    ),
-                    noItemsFoundIndicatorBuilder: (context) =>
-                        const EmptyListIndicator(
-                      iconColor: AppColors.primaryColor,
-                      message: 'Sem serviços para exibir',
-                    ),
-                    firstPageProgressIndicatorBuilder: (context) {
-                      return const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text(
-                            'Carregando serviços...',
-                            style: TextStyle(
-                              color: AppColors.abbey,
-                              fontWeight: FontWeight.w300,
-                            ),
-                          ),
-                        ],
-                      );
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Adaptação para diferentes tamanhos de tela
+          final isTablet = constraints.maxWidth > 600;
+          final horizontalPadding = isTablet ? 24.0 : 16.0;
+          final verticalSpacing = isTablet ? 24.0 : 16.0;
+
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: verticalSpacing),
+                  SearchBarWidget(
+                    controller: _searchController,
+                    onSearchChanged: (value) {
+                      controller.updateFilters(searchQuery: value);
                     },
+                    onFilterTap: () => showFilterBottomSheet(
+                      context: context,
+                      initialParams: FilterParams(
+                        rating: controller.rating,
+                        services: controller.services,
+                        distance: controller.distance,
+                      ),
+                      onTap: _applyFilters,
+                      availableCategories: controller.availableCategories,
+                    ),
+                    hintText: 'Busque por nome do serviço',
+                    hasFilter: true,
                   ),
-                ),
+                  SizedBox(height: verticalSpacing),
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: () => Future.sync(
+                        () => controller.pagingController.refresh(),
+                      ),
+                      child: PagedListView<int, Service>(
+                        shrinkWrap: true,
+                        pagingController: controller.pagingController,
+                        builderDelegate: PagedChildBuilderDelegate(
+                          itemBuilder: (context, item, index) => ServiceItem(
+                            service: item,
+                            onTap: () => _navigateToServiceDetails(item),
+                          ),
+                          firstPageErrorIndicatorBuilder: (context) => ErrorIndicator(
+                            error: controller.pagingController.error,
+                            onTryAgain: () => controller.pagingController.refresh(),
+                          ),
+                          noItemsFoundIndicatorBuilder: (context) =>
+                              const EmptyListIndicator(
+                            iconColor: AppColors.primaryColor,
+                            message: 'Sem serviços para exibir',
+                          ),
+                          firstPageProgressIndicatorBuilder: (context) {
+                            return const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                CircularProgressIndicator(),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Carregando serviços...',
+                                  style: TextStyle(
+                                    color: AppColors.abbey,
+                                    fontWeight: FontWeight.w300,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

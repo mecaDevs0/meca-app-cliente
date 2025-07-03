@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
@@ -16,58 +17,125 @@ class ServiceWorkshopsList extends GetView<ServiceDetailsController> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(2.0),
-      child: Column(
-        children: [
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    // Verifica se estamos em um tablet
+    final isTablet = MediaQuery.of(context).size.width > 600;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Padding(
+          padding: const EdgeInsets.all(2.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Oficinas',
-                style: TextStyle(
-                  color: AppColors.blackPrimaryColor,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Oficinas',
+                    style: TextStyle(
+                      color: AppColors.blackPrimaryColor,
+                      fontSize: isTablet ? 16 : 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => Future.sync(
+                    () {
+                      // Prevenção contra chamadas durante a renderização
+                      if (controller.workshopsPagingController.error != null) {
+                        SchedulerBinding.instance.addPostFrameCallback((_) {
+                          controller.workshopsPagingController.refresh();
+                        });
+                        return Future.value();
+                      }
+                      return Future.value(controller.workshopsPagingController.refresh());
+                    },
+                  ),
+                  child: controller.workshopsPagingController.error != null
+                      ? _buildErrorView()
+                      : PagedListView<int, MechanicWorkshop>(
+                          pagingController: controller.workshopsPagingController,
+                          builderDelegate: PagedChildBuilderDelegate<MechanicWorkshop>(
+                            itemBuilder: (context, item, index) {
+                              return Padding(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: isTablet ? 12 : 10,
+                                  horizontal: isTablet ? 4 : 0,
+                                ),
+                                child: MechanicWorkshopCard(
+                                  mechanicWorkshop: item,
+                                  onTap: () {
+                                    if (item.id != null && item.id!.isNotEmpty) {
+                                      // Navegação segura com verificação de id
+                                      SchedulerBinding.instance.addPostFrameCallback((_) {
+                                        Get.toNamed(
+                                          Routes.mechanicWorkshopDetails,
+                                          arguments: WorkshopArgs(item.id!),
+                                        );
+                                      });
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                            noItemsFoundIndicatorBuilder: (context) =>
+                                const EmptyListIndicator(
+                              isShowIcon: false,
+                              message: 'Nenhuma oficina encontrada',
+                            ),
+                            firstPageProgressIndicatorBuilder: (context) {
+                              return const Center(
+                                child: CircularProgressIndicator(
+                                  color: AppColors.primaryColor,
+                                ),
+                              );
+                            },
+                            firstPageErrorIndicatorBuilder: (context) => _buildErrorView(),
+                          ),
+                        ),
                 ),
               ),
             ],
           ),
-          const SizedBox(
-            height: 8,
+        );
+      }
+    );
+  }
+
+  Widget _buildErrorView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: AppColors.primaryColor,
+            size: 48,
           ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => Future.sync(
-                () => controller.workshopsPagingController.refresh(),
-              ),
-              child: PagedListView<int, MechanicWorkshop>(
-                pagingController: controller.workshopsPagingController,
-                builderDelegate: PagedChildBuilderDelegate<MechanicWorkshop>(
-                  itemBuilder: (context, item, index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: MechanicWorkshopCard(
-                        mechanicWorkshop: item,
-                        onTap: () {
-                          if (item.id.isNullOrEmpty == false) {
-                            Get.toNamed(
-                              Routes.mechanicWorkshopDetails,
-                              arguments: WorkshopArgs(item.id!),
-                            );
-                          }
-                        },
-                      ),
-                    );
-                  },
-                  noItemsFoundIndicatorBuilder: (context) =>
-                      const EmptyListIndicator(
-                    isShowIcon: false,
-                    message: 'Nenhuma oficina encontrada',
-                  ),
-                ),
-              ),
+          const SizedBox(height: 16),
+          const Text(
+            'Ocorreu um erro ao carregar as oficinas',
+            style: TextStyle(
+              color: AppColors.fontRegularBlackColor,
+              fontSize: 14,
             ),
+          ),
+          const SizedBox(height: 24),
+          MegaBaseButton(
+            'Tentar novamente',
+            buttonColor: AppColors.primaryColor,
+            textColor: AppColors.whiteColor,
+            onButtonPress: () {
+              SchedulerBinding.instance.addPostFrameCallback((_) {
+                controller.workshopsPagingController.refresh();
+              });
+            },
+            buttonHeight: 46,
+            borderRadius: 4,
           ),
         ],
       ),
