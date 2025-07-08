@@ -2,6 +2,7 @@ import 'dart:developer';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
+import '../../../data/models/mechanic_workshop.dart';
 import '../../../data/models/service.dart';
 import '../../../data/providers/services_provider.dart';
 import '../../app_filter/controllers/filter_controller.dart';
@@ -20,6 +21,9 @@ class ServicesController extends GetxController {
 
   final _isLoading = RxBool(false);
   final _serviceDetail = Rx<Service?>(null);
+  // Adicionando variáveis para armazenar informações da oficina selecionada
+  final _selectedWorkshopId = RxString('');
+  final _selectedWorkshop = Rx<MechanicWorkshop?>(null);
 
   bool get isLoading => _isLoading.value;
   Service? get serviceDetail => _serviceDetail.value;
@@ -28,6 +32,10 @@ class ServicesController extends GetxController {
   List<Service> get services => _filterController.selectedCategories;
   List<Service> get availableCategories =>
       _filterController.availableCategories;
+  String get selectedWorkshopId => _selectedWorkshopId.value;
+  MechanicWorkshop? get selectedWorkshop => _selectedWorkshop.value;
+  // Flag para indicar se estamos filtrando por uma oficina específica
+  bool get hasSelectedWorkshop => _selectedWorkshopId.value.isNotEmpty;
 
   final PagingController<int, Service> pagingController =
       PagingController(firstPageKey: 1);
@@ -36,6 +44,19 @@ class ServicesController extends GetxController {
   @override
   void onInit() {
     _filterController.clearFilters();
+
+    // Verificar se recebemos argumentos com o ID da oficina
+    if (Get.arguments != null && Get.arguments is Map<String, dynamic>) {
+      final args = Get.arguments as Map<String, dynamic>;
+      if (args.containsKey('workshopId')) {
+        _selectedWorkshopId.value = args['workshopId'] as String;
+        log('Filtrando serviços para oficina ID: ${_selectedWorkshopId.value}');
+      }
+      if (args.containsKey('workshopDetails')) {
+        _selectedWorkshop.value = args['workshopDetails'] as MechanicWorkshop?;
+      }
+    }
+
     pagingController.addPageRequestListener(getAllServices);
     super.onInit();
   }
@@ -45,6 +66,7 @@ class ServicesController extends GetxController {
       await MegaRequestUtils.load(
         action: () async {
           try {
+            log('Buscando serviços - página: $page, oficina ID: ${_selectedWorkshopId.value}');
             final response = await _servicesProvider.onRequestServices(
               page: page,
               limit: _limit,
@@ -60,6 +82,8 @@ class ServicesController extends GetxController {
                       _filterController.distance != 0.0
                   ? _filterController.distance.toInt()
                   : null,
+              // Certifique-se de enviar o workshopId apenas se ele não estiver vazio
+              workshopId: _selectedWorkshopId.value.isNotEmpty ? _selectedWorkshopId.value : null,
             );
 
             // Verifica se a resposta está vazia ou tem menos itens que o limite

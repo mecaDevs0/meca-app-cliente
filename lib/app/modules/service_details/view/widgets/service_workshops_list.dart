@@ -4,9 +4,7 @@ import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../../../core/app_colors.dart';
-import '../../../../core/args/workshop_args.dart';
 import '../../../../data/models/mechanic_workshop.dart';
-import '../../../../routes/app_pages.dart';
 import '../../../home/views/widgets/mechanic_workshops/card/mechanic_workshop_card.dart';
 import '../../controllers/service_details_controller.dart';
 
@@ -73,13 +71,8 @@ class ServiceWorkshopsList extends GetView<ServiceDetailsController> {
                                   mechanicWorkshop: item,
                                   onTap: () {
                                     if (item.id != null && item.id!.isNotEmpty) {
-                                      // Navegação segura com verificação de id
-                                      SchedulerBinding.instance.addPostFrameCallback((_) {
-                                        Get.toNamed(
-                                          Routes.mechanicWorkshopDetails,
-                                          arguments: WorkshopArgs(item.id!),
-                                        );
-                                      });
+                                      // Usando o novo método selectWorkshop para evitar o loop de navegação
+                                      controller.selectWorkshop(item);
                                     }
                                   },
                                 ),

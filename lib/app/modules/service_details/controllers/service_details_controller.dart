@@ -4,10 +4,13 @@ import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../../core/args/service_args.dart';
+import '../../../core/args/workshop_args.dart';
 import '../../../data/models/mechanic_workshop.dart';
 import '../../../data/models/service.dart';
 import '../../../data/providers/services_provider.dart';
+import '../../../routes/app_pages.dart';  // Importação adicionada para Routes
 import '../../home/controllers/home_controller.dart';
+import '../../mechanic_workshop_details/controllers/mechanic_workshop_details_controller.dart';
 
 class ServiceDetailsController extends GetxController {
   ServiceDetailsController({required ServicesProvider servicesProvider})
@@ -21,10 +24,14 @@ class ServiceDetailsController extends GetxController {
   final _hasError = RxBool(false);
   final _errorMessage = RxString('');
 
+  // Armazena a oficina selecionada na tela atual para evitar referências cruzadas
+  final _selectedWorkshop = Rx<MechanicWorkshop?>(null);
+
   bool get isLoading => _isLoading.value;
   bool get hasError => _hasError.value;
   String get errorMessage => _errorMessage.value;
   Service? get serviceDetail => _serviceDetail.value;
+  MechanicWorkshop? get selectedWorkshop => _selectedWorkshop.value;
 
   HomeController? _homeController;
   HomeController get homeController {
@@ -171,9 +178,35 @@ class ServiceDetailsController extends GetxController {
     }
   }
 
+  // Método para lidar com a seleção de uma oficina na lista
+  void selectWorkshop(MechanicWorkshop workshop) {
+    _selectedWorkshop.value = workshop;
+
+    // Antes de navegar para a tela de detalhes, tenta remover qualquer instância
+    // existente do MechanicWorkshopDetailsController para evitar estado persistente
+    try {
+      if (Get.isRegistered<MechanicWorkshopDetailsController>()) {
+        Get.delete<MechanicWorkshopDetailsController>();
+      }
+    } catch (e) {
+      debugPrint('Erro ao limpar controlador anterior: ${e.toString()}');
+    }
+
+    // Navega para a tela de detalhes com os argumentos da oficina selecionada
+    Get.toNamed(
+      Routes.mechanicWorkshopDetails,
+      arguments: WorkshopArgs(workshop.id!),  // Corrigido: usando parâmetro posicional
+    );
+  }
+
+  void clearSelectedWorkshop() {
+    _selectedWorkshop.value = null;
+  }
+
   @override
   void dispose() {
     workshopsPagingController.dispose();
+    clearSelectedWorkshop();
     super.dispose();
   }
 }

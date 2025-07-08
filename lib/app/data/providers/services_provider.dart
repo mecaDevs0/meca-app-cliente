@@ -23,19 +23,26 @@ class ServicesProvider {
     String? workshopId,
     String? workshopName,
   }) async {
+    final queryParams = FilterQueryService(
+      page: page,
+      limit: limit,
+      dataBlocked: 0,
+      name: search,
+      serviceTypes: serviceType,
+      latUser: latUser,
+      longUser: longUser,
+      distance: distance,
+      rating: rating,
+    ).toJson();
+
+    // Adiciona workshopId na query caso tenha sido fornecido
+    if (workshopId != null && workshopId.isNotEmpty) {
+      queryParams['workshopId'] = workshopId;
+    }
+
     final response = await _restClientDio.get(
       BaseUrls.services,
-      queryParameters: FilterQueryService(
-        page: page,
-        limit: limit,
-        dataBlocked: 0,
-        name: search,
-        serviceTypes: serviceType,
-        latUser: latUser,
-        longUser: longUser,
-        distance: distance,
-        rating: rating,
-      ).toJson(),
+      queryParameters: queryParams,
     );
 
     return (response.data as List)

@@ -6,6 +6,7 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../../core/app_colors.dart';
 import '../../../core/args/service_args.dart';
+import '../../../core/args/workshop_args.dart';
 import '../../../core/widgets/app_bar_custom.dart';
 import '../../../core/widgets/app_filter_bottom_sheet.dart';
 import '../../../data/models/service.dart';
@@ -38,6 +39,7 @@ class ServicesView extends GetView<ServicesController> {
         // Usando SchedulerBinding para garantir que a navegação ocorra após a construção do frame
         SchedulerBinding.instance.addPostFrameCallback((_) {
           try {
+            // Sempre navegamos para os detalhes do serviço, independente se há uma oficina selecionada
             Get.toNamed(
               Routes.serviceDetails,
               arguments: ServiceArgs(service.id!),

@@ -337,7 +337,14 @@ class MechanicWorkshopDetailsView
           buttonColor: AppColors.primaryColor,
           textColor: AppColors.whiteColor,
           onButtonPress: () {
-            Get.toNamed(Routes.services);
+            // Navegação direta para a tela de agendamento com os dados da oficina
+            Get.toNamed(
+              Routes.requestAppointment,
+              arguments: {
+                'workshopId': controller.workshopId,
+                'workshopDetails': controller.workshopDetails,
+              },
+            );
           },
           buttonHeight: buttonHeight,
           borderRadius: borderRadius,
