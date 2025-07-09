@@ -19,6 +19,8 @@ Future<void> main() async {
     BaseHive.initHive(),
     GetStorage.init(),
   ]);
+
+  // Usar diretamente o MegaOneSignalConfig que já está implementado no projeto
   await MegaOneSignalConfig.configure(
     appKey: '7bbec33c-bffc-47b1-ab90-a080b7353763',
   );

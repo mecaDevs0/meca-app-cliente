@@ -76,63 +76,8 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
                   const SizedBox(height: 8),
                   const SelectVehicleWidget(),
                   const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Data',
-                    controller: dateController,
-                    hintText: 'Data do agendamento',
-                    suffixIcon: Padding(
-                      padding: const EdgeInsets.all(2),
-                      child: SvgPicture.asset(
-                        AppImages.icCalendar,
-                        width: 16,
-                        height: 16,
-                      ),
-                    ),
-                    isRequired: true,
-                    onTap: () {
-                      showMegaDatePicker(
-                        context,
-                        minimumDate: DateTime.now(),
-                        maximumDate:
-                            DateTime.now().add(const Duration(days: 365)),
-                        onSelectDate: (date) {
-                          dateController.text = date.toddMMyyyy();
-                        },
-                        onCancelClick: () {
-                          dateController.clear();
-                        },
-                      );
-                    },
-                  ).unite,
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    controller: timeController,
-                    label: 'Horário',
-                    hintText: 'Selecione o horário',
-                    suffixIcon: Padding(
-                      padding: const EdgeInsets.all(2),
-                      child: SvgPicture.asset(
-                        AppImages.clockHour,
-                        width: 16,
-                        height: 16,
-                      ),
-                    ),
-                    isRequired: true,
-                    onTap: () {
-                      showDialog(
-                        context: context,
-                        builder: (_) => Material(
-                          color: Colors.transparent,
-                          child: BodyModalTimer(
-                            value: _validTime,
-                            onChanged: (value) {
-                              timeController.text = value;
-                            },
-                          ),
-                        ),
-                      );
-                    },
-                  ).unite,
+                  // Seção de seleção de data e horário com feedback aprimorado
+                  _buildDateTimeSelection(context),
                   const SizedBox(height: 16),
                   BuildTextField(
                     label: 'Observações',
@@ -146,28 +91,20 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
                     textColor: AppColors.whiteColor,
                     isLoading: controller.isLoadingScheduling,
                     onButtonPress: () async {
+                      // Validação completa antes de prosseguir com o agendamento
+                      final validationError = controller.validateScheduling(
+                        dateText: dateController.text,
+                        timeText: timeController.text,
+                        vehicle: controller.selectedVehicle,
+                        services: controller.selectedServices,
+                      );
+
+                      if (validationError != null) {
+                        MegaSnackbar.showErroSnackBar(validationError);
+                        return;
+                      }
+
                       if (!formKey.currentState!.validate()) {
-                        return;
-                      }
-
-                      if (controller.vehicles.isEmpty) {
-                        MegaSnackbar.showErroSnackBar(
-                          'Cadastre pelo menos um veículo',
-                        );
-                        return;
-                      }
-
-                      if (controller.selectedServices.isEmpty) {
-                        MegaSnackbar.showErroSnackBar(
-                          'Selecione pelo menos um serviço para o agendamento',
-                        );
-                        return;
-                      }
-
-                      if (controller.selectedVehicle == null) {
-                        MegaSnackbar.showErroSnackBar(
-                          'Selecione um veículo para o agendamento',
-                        );
                         return;
                       }
 
@@ -208,6 +145,304 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Widget para seleção de data e horário com tratamento de erros aprimorado
+  Widget _buildDateTimeSelection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Seleção de data
+        AppTextField(
+          label: 'Data',
+          controller: dateController,
+          hintText: 'Data do agendamento',
+          suffixIcon: Padding(
+            padding: const EdgeInsets.all(2),
+            child: SvgPicture.asset(
+              AppImages.icCalendar,
+              width: 16,
+              height: 16,
+            ),
+          ),
+          isRequired: true,
+          onTap: () => _showDatePicker(context),
+        ).unite,
+
+        // Mensagem de erro de disponibilidade de data
+        Obx(() {
+          if (controller.hasAvailabilityError &&
+              controller.availabilityErrorMessage.contains('oficina não tem horários')) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      controller.availabilityErrorMessage,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        }),
+
+        const SizedBox(height: 16),
+
+        // Seleção de horário
+        AppTextField(
+          controller: timeController,
+          label: 'Horário',
+          hintText: 'Selecione o horário',
+          suffixIcon: Padding(
+            padding: const EdgeInsets.all(2),
+            child: SvgPicture.asset(
+              AppImages.clockHour,
+              width: 16,
+              height: 16,
+            ),
+          ),
+          isRequired: true,
+          onTap: () => _showTimePicker(context),
+        ).unite,
+
+        // Indicador de carregando ou mensagem de erro para horários
+        Obx(() {
+          if (controller.isLoadingAvailability) {
+            return const Padding(
+              padding: EdgeInsets.only(top: 8.0),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primaryColor,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Carregando horários disponíveis...',
+                    style: TextStyle(
+                      color: AppColors.fontDarkGrayColor,
+                      fontSize: 12
+                    ),
+                  ),
+                ],
+              ),
+            );
+          } else if (controller.hasAvailabilityError &&
+                     controller.availabilityErrorMessage.contains('horários disponíveis')) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.orange, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      controller.availabilityErrorMessage,
+                      style: const TextStyle(color: Colors.orange, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        }),
+      ],
+    );
+  }
+
+  /// Mostra o seletor de data com validação aprimorada
+  Future<void> _showDatePicker(BuildContext context) async {
+    // Carrega as datas disponíveis antes de mostrar o calendário
+    final success = await controller.loadAvailableDates();
+
+    if (!success) {
+      // Se houve erro ao carregar datas, mostra mensagem
+      if (controller.hasAvailabilityError) {
+        MegaSnackbar.showErroSnackBar(controller.availabilityErrorMessage);
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    // Mostra o seletor de data
+    showMegaDatePicker(
+      context,
+      minimumDate: DateTime.now(),
+      maximumDate: DateTime.now().add(const Duration(days: 365)),
+      onSelectDate: (date) {
+        // Verifica se a data selecionada está disponível
+        final isDateAvailable = controller.isDateAvailable(date);
+
+        if (!isDateAvailable) {
+          MegaSnackbar.showErroSnackBar(
+            'A oficina não tem disponibilidade nesta data. Por favor, escolha outra data.',
+          );
+          return;
+        }
+
+        dateController.text = date.toddMMyyyy();
+        // Limpa o horário selecionado anteriormente
+        timeController.clear();
+        // Carrega os horários disponíveis para a data selecionada
+        controller.checkAvailabilityForDate(date);
+      },
+      onCancelClick: () {
+        dateController.clear();
+      },
+    );
+  }
+
+  /// Mostra o seletor de horário com validação aprimorada
+  Future<void> _showTimePicker(BuildContext context) async {
+    // Verifica se uma data foi selecionada primeiro
+    if (dateController.text.isEmpty) {
+      MegaSnackbar.showErroSnackBar(
+        'Selecione uma data antes de escolher o horário',
+      );
+      return;
+    }
+
+    if (controller.isLoadingAvailability) {
+      MegaSnackbar.showSuccessSnackBar(
+        'Carregando horários disponíveis, aguarde...',
+      );
+      return;
+    }
+
+    if (controller.availableHours.isEmpty) {
+      // Se não carregamos os horários ainda, tentamos carregar
+      if (controller.selectedDate != null) {
+        final success = await controller.checkAvailabilityForDate(controller.selectedDate!);
+        if (!success) {
+          MegaSnackbar.showErroSnackBar(
+            controller.availabilityErrorMessage.isNotEmpty
+                ? controller.availabilityErrorMessage
+                : 'Não há horários disponíveis para esta data',
+          );
+          return;
+        }
+      } else {
+        MegaSnackbar.showErroSnackBar(
+          'Selecione uma data válida antes de escolher o horário',
+        );
+        return;
+      }
+    }
+
+    // Se ainda não temos horários disponíveis após tentar carregar
+    if (controller.availableHours.isEmpty) {
+      MegaSnackbar.showErroSnackBar(
+        'Não há horários disponíveis para esta data. Por favor, escolha outra data.',
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    // Mostra diálogo com lista de horários disponíveis em um layout mais amigável
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  const Icon(Icons.access_time, color: AppColors.primaryColor),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Horários Disponíveis',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.4,
+                maxWidth: double.infinity,
+              ),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: controller.availableHours.map((hour) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: ChoiceChip(
+                          label: Text(hour),
+                          selected: timeController.text == hour,
+                          onSelected: (selected) {
+                            if (selected) {
+                              timeController.text = hour;
+                              Navigator.pop(context);
+                            }
+                          },
+                          selectedColor: AppColors.primaryColor,
+                          labelStyle: TextStyle(
+                            color: timeController.text == hour
+                                ? Colors.white
+                                : AppColors.blackPrimaryColor,
+                          ),
+                          backgroundColor: Colors.grey.shade200,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Cancelar',
+                      style: TextStyle(color: AppColors.primaryColor),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

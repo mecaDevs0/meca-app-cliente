@@ -239,12 +239,73 @@ class RequestAppointmentController extends GetxController {
         },
         onError: (error) {
           log('Erro ao registrar agendamento: $error');
-          Get.snackbar(
-            'Erro',
-            'Não foi possível registrar o agendamento. Tente novamente.',
-            backgroundColor: Colors.red.withOpacity(0.8),
-            colorText: Colors.white,
-            snackPosition: SnackPosition.BOTTOM,
+
+          // Extrai a mensagem de erro do backend
+          String errorMessage = 'Não foi possível registrar o agendamento. Tente novamente.';
+
+          try {
+            // Converte a resposta para string e extrai a mensagem de erro
+            final errorStr = error.toString();
+            if (errorStr.contains('message')) {
+              // Tenta extrair a mensagem de formatos diferentes de resposta
+              final regex = RegExp(r'message: ([^,}]+)');
+              final match = regex.firstMatch(errorStr);
+              if (match != null && match.groupCount >= 1) {
+                errorMessage = match.group(1)!.trim();
+              }
+            }
+          } catch (e) {
+            log('Erro ao extrair mensagem de erro: $e');
+          }
+
+          // Exibe um diálogo em vez de snackbar para maior visibilidade
+          Get.dialog(
+            Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 48,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Erro no Agendamento',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      errorMessage,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Get.back(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('Entendi'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            barrierDismissible: false,
           );
         },
         onFinally: () {
@@ -254,12 +315,54 @@ class RequestAppointmentController extends GetxController {
     } catch (e) {
       _isLoadingScheduling.value = false;
       log('Erro crítico ao registrar agendamento: $e');
-      Get.snackbar(
-        'Erro',
-        'Ocorreu um erro inesperado ao processar o agendamento.',
-        backgroundColor: Colors.red.withOpacity(0.8),
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
+
+      Get.dialog(
+        Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  color: Colors.red,
+                  size: 48,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Erro no Agendamento',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Ocorreu um erro inesperado ao processar o agendamento. Por favor, tente novamente mais tarde.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Get.back(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('Entendi'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        barrierDismissible: false,
       );
     }
 
@@ -270,5 +373,159 @@ class RequestAppointmentController extends GetxController {
   Future<void> retryLoading() async {
     _hasError.value = false;
     await initialize();
+  }
+
+  // Horários disponíveis para agendamento
+  final _availableHours = RxList<String>.empty();
+  final _availableDates = RxList<DateTime>.empty();
+  final _isLoadingAvailability = RxBool(false);
+  final _selectedDate = Rx<DateTime?>(null);
+  final _hasAvailabilityError = RxBool(false);
+  final _availabilityErrorMessage = RxString('');
+
+  List<String> get availableHours => _availableHours.toList();
+  List<DateTime> get availableDates => _availableDates.toList();
+  bool get isLoadingAvailability => _isLoadingAvailability.value;
+  DateTime? get selectedDate => _selectedDate.value;
+  bool get hasAvailabilityError => _hasAvailabilityError.value;
+  String get availabilityErrorMessage => _availabilityErrorMessage.value;
+
+  // Função para verificar disponibilidade de horários para a data selecionada
+  Future<bool> checkAvailabilityForDate(DateTime date) async {
+    _isLoadingAvailability.value = true;
+    _availableHours.clear();
+    _hasAvailabilityError.value = false;
+    _availabilityErrorMessage.value = '';
+    _selectedDate.value = date;
+
+    try {
+      bool success = false;
+      await MegaRequestUtils.load(
+        action: () async {
+          // Chamada à API para verificar horários disponíveis
+          final response = await _requestAppointmentProvider.getAvailableHours(
+            workshopId: workshopId,
+            date: date,
+          );
+
+          // Atualiza a lista de horários disponíveis
+          _availableHours.assignAll(response);
+
+          if (response.isEmpty) {
+            _hasAvailabilityError.value = true;
+            _availabilityErrorMessage.value = 'Não há horários disponíveis para esta data. Por favor, selecione outra data.';
+            log('Nenhum horário disponível para ${date.toddMMyyyy()}');
+            success = false;
+          } else {
+            log('Horários disponíveis carregados: ${response.length}');
+            success = true;
+          }
+        },
+        onError: (error) {
+          _hasAvailabilityError.value = true;
+          _availabilityErrorMessage.value = 'Não foi possível carregar os horários disponíveis. Tente novamente.';
+          log('Erro ao carregar horários disponíveis: $error');
+          success = false;
+        },
+        onFinally: () => _isLoadingAvailability.value = false,
+      );
+      return success;
+    } catch (e) {
+      _isLoadingAvailability.value = false;
+      _hasAvailabilityError.value = true;
+      _availabilityErrorMessage.value = 'Ocorreu um erro inesperado. Tente novamente.';
+      log('Erro crítico ao carregar horários disponíveis: $e');
+      return false;
+    }
+  }
+
+  // Função para carregar os dias disponíveis para agendamento
+  Future<bool> loadAvailableDates() async {
+    _isLoadingAvailability.value = true;
+    _availableDates.clear();
+    _hasAvailabilityError.value = false;
+    _availabilityErrorMessage.value = '';
+
+    try {
+      bool success = false;
+      await MegaRequestUtils.load(
+        action: () async {
+          // Chamada à API para verificar datas disponíveis
+          final response = await _requestAppointmentProvider.getAvailableDates(
+            workshopId: workshopId,
+          );
+
+          // Atualiza a lista de datas disponíveis
+          _availableDates.assignAll(response);
+
+          if (response.isEmpty) {
+            _hasAvailabilityError.value = true;
+            _availabilityErrorMessage.value = 'Esta oficina não tem horários disponíveis para agendamento. Por favor, selecione outra oficina.';
+            log('Nenhuma data disponível para agendamento');
+            success = false;
+          } else {
+            // Ordena as datas por ordem crescente
+            _availableDates.sort((a, b) => a.compareTo(b));
+            log('Datas disponíveis carregadas: ${response.length}');
+            success = true;
+          }
+        },
+        onError: (error) {
+          _hasAvailabilityError.value = true;
+          _availabilityErrorMessage.value = 'Não foi possível carregar as datas disponíveis. Tente novamente.';
+          log('Erro ao carregar datas disponíveis: $error');
+          success = false;
+        },
+        onFinally: () => _isLoadingAvailability.value = false,
+      );
+      return success;
+    } catch (e) {
+      _isLoadingAvailability.value = false;
+      _hasAvailabilityError.value = true;
+      _availabilityErrorMessage.value = 'Ocorreu um erro inesperado. Tente novamente.';
+      log('Erro crítico ao carregar datas disponíveis: $e');
+      return false;
+    }
+  }
+
+  // Método para verificar se uma data está disponível para agendamento
+  bool isDateAvailable(DateTime date) {
+    if (_availableDates.isEmpty) {
+      // Se não temos datas disponíveis especificadas, permitimos qualquer data futura
+      return date.isAfter(DateTime.now().subtract(const Duration(days: 1)));
+    }
+
+    // Verificamos se a data está na lista de datas disponíveis
+    return _availableDates.any((availableDate) =>
+      availableDate.year == date.year &&
+      availableDate.month == date.month &&
+      availableDate.day == date.day
+    );
+  }
+
+  // Método para validar o agendamento antes de enviar
+  String? validateScheduling({
+    required String dateText,
+    required String timeText,
+    required VehicleScheduling? vehicle,
+    required List<WorkshopService> services,
+  }) {
+    if (dateText.isEmpty) {
+      return 'Selecione uma data para o agendamento';
+    }
+
+    if (timeText.isEmpty) {
+      return 'Selecione um horário para o agendamento';
+    }
+
+    if (vehicle == null) {
+      return 'Selecione um veículo para o agendamento';
+    }
+
+    if (services.isEmpty) {
+      return 'Selecione pelo menos um serviço para o agendamento';
+    }
+
+    return null; // Sem erros de validação
   }
 }

@@ -233,6 +233,9 @@ class _RegisterView extends MegaState<RegisterView, RegisterController> {
                       buttonColor: AppColors.primaryColor,
                       textColor: AppColors.whiteColor,
                       onButtonPress: () async {
+                        // Verifica se o botão está habilitado antes de prosseguir
+                        if (!controller.isButtonEnabled) return;
+
                         if (passwordController.text !=
                             confirmPasswordController.text) {
                           ScaffoldMessenger.of(context).showSnackBar(

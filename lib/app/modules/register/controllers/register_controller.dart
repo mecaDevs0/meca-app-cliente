@@ -14,17 +14,24 @@ class RegisterController extends GetxController {
 
   final _hasAcceptTerms = RxBool(false);
   final _isLoadingUser = RxBool(false);
+  final _isButtonEnabled = RxBool(true); // Variável para controlar o estado do botão
   final accessTokenBox = MegaDataCache.box<AuthToken>();
 
   bool get hasAcceptTerms => _hasAcceptTerms.value;
   bool get loadingUser => _isLoadingUser.value;
+  bool get isButtonEnabled => _isButtonEnabled.value;
 
   void setHasAcceptTerms(bool value) {
     _hasAcceptTerms.value = value;
   }
 
   Future<bool> createUserProfile(Profile profile) async {
+    // Previne cliques duplicados
+    if (!_isButtonEnabled.value || _isLoadingUser.value) return false;
+
+    _isButtonEnabled.value = false;
     _isLoadingUser.value = true;
+
     bool isSuccess = false;
     await MegaRequestUtils.load(
       action: () async {
@@ -37,6 +44,9 @@ class RegisterController extends GetxController {
       },
       onFinally: () {
         _isLoadingUser.value = false;
+        Future.delayed(const Duration(seconds: 2), () {
+          _isButtonEnabled.value = true;
+        });
       },
     );
 

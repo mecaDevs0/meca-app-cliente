@@ -1,3 +1,4 @@
+import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
@@ -26,54 +27,79 @@ class ScheduleWorking extends GetView<MechanicWorkshopDetailsController> {
             fontSize: 16,
           ),
         ),
-        const SizedBox(
-          height: 20,
-        ),
-        SizedBox(
-          height: MediaQuery.of(context).size.height * 0.20,
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: DaysOfWeek.values.length,
-            itemBuilder: (context, index) {
-              final day = DaysOfWeek.values[index];
-              final schedule =
-                  _getScheduleForDay(day, controller.workshopSchedule);
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1.5),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      day.description,
-                      style: const TextStyle(
+        const SizedBox(height: 20),
+        Obx(() {
+          if (controller.isLoadingWorkshopSchedule) {
+            return const Center(
+              child: CircularProgressIndicator(
+                color: AppColors.primaryColor,
+                strokeWidth: 2,
+              ),
+            );
+          }
+
+          if (controller.workshopSchedule == null) {
+            dev.log('Workshop schedule is null', name: 'ScheduleWorking');
+            return const Text(
+              'Informações de horário não disponíveis',
+              style: TextStyle(
+                color: AppColors.fontDarkGrayColor,
+                fontStyle: FontStyle.italic,
+              ),
+            );
+          }
+
+          dev.log('Dados de agenda disponíveis: ${controller.workshopSchedule != null}',
+              name: 'ScheduleWorking');
+
+          return SizedBox(
+            height: MediaQuery.of(context).size.height * 0.20,
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: DaysOfWeek.values.length,
+              itemBuilder: (context, index) {
+                final day = DaysOfWeek.values[index];
+                final schedule = _getScheduleForDay(day, controller.workshopSchedule);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 1.5),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        day.description,
+                        style: const TextStyle(
+                          color: AppColors.boldFontColor,
+                        ),
+                      ),
+                      const Divider(
+                        thickness: 1.0,
                         color: AppColors.boldFontColor,
                       ),
-                    ),
-                    const Divider(
-                      thickness: 1.0,
-                      color: AppColors.boldFontColor,
-                    ),
-                    Text(
-                      schedule,
-                      style: const TextStyle(
-                        color: AppColors.fontDarkGrayColor,
+                      Text(
+                        schedule,
+                        style: const TextStyle(
+                          color: AppColors.fontDarkGrayColor,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          );
+        }),
       ],
     );
   }
 
   String _getScheduleForDay(DaysOfWeek day, AgendaModel? agenda) {
     if (agenda == null) {
+      dev.log('Agenda é nula - retornando fechado', name: 'ScheduleWorking');
       return 'Fechado';
     }
+
+    dev.log('Verificando horário para ${day.description}', name: 'ScheduleWorking');
 
     final weekDayModel = switch (day) {
       DaysOfWeek.monday => agenda.monday,
@@ -85,10 +111,42 @@ class ScheduleWorking extends GetView<MechanicWorkshopDetailsController> {
       DaysOfWeek.sunday => agenda.sunday,
     };
 
-    if (!weekDayModel.open) {
-      return 'Fechado';
+    // Log para debug dos valores recebidos da API
+    dev.log('${day.description} - open: ${weekDayModel.open}, start: "${weekDayModel.startTime}", close: "${weekDayModel.closingTime}"',
+        name: 'ScheduleWorking');
+
+    // Considera aberto se tiver horários válidos, mesmo que open seja false
+    bool hasValidTimes = weekDayModel.startTime.isNotEmpty &&
+                         weekDayModel.closingTime.isNotEmpty &&
+                         weekDayModel.startTime != '00:00:00' &&
+                         weekDayModel.closingTime != '00:00:00';
+
+    // Verificar horários com ou sem segundos
+    if (hasValidTimes || weekDayModel.open == true) {
+      // Formatando os horários para exibição (removendo segundos se existirem)
+      String startTime = _formatTimeString(weekDayModel.startTime);
+      String closingTime = _formatTimeString(weekDayModel.closingTime);
+
+      if (startTime.isNotEmpty && closingTime.isNotEmpty) {
+        return '$startTime - $closingTime';
+      }
+
+      // Se os horários estiverem vazios, mas o campo open for true, usamos um horário padrão
+      return '08:00 - 18:00';
     }
 
-    return '${weekDayModel.startTime} - ${weekDayModel.closingTime}';
+    return 'Fechado';
+  }
+
+  // Método auxiliar para formatar strings de horário (remove segundos se presentes)
+  String _formatTimeString(String timeString) {
+    if (timeString.isEmpty) return '';
+
+    // Se o formato for HH:MM:SS, converte para HH:MM
+    if (timeString.length >= 8 && timeString.contains(':')) {
+      return timeString.substring(0, 5);
+    }
+
+    return timeString;
   }
 }

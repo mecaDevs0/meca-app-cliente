@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:map_launcher/map_launcher.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
@@ -182,40 +184,78 @@ class MechanicWorkshopDetailsView
                   child: SizedBox(
                     height: mapHeight,
                     width: double.infinity,
-                    child: InkWell(
-                      onTap: () => openMapsSheet(
-                        Get.context!,
-                        workshopName: controller.workshopDetails?.fullName ?? '',
-                        lat: controller.workshopDetails?.latitude ?? 0.0,
-                        long: controller.workshopDetails?.longitude ?? 0.0,
-                      ),
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: AppColors.grayBorderColor,
+                    child: GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(
+                          controller.workshopDetails?.latitude ?? 0.0,
+                          controller.workshopDetails?.longitude ?? 0.0,
                         ),
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.map,
-                                size: isLargeTablet ? 64 : 48,
-                                color: AppColors.primaryColor,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Toque para abrir o mapa',
-                                style: TextStyle(
-                                  color: AppColors.primaryColor,
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: isLargeTablet ? 18.0 : 16.0,
-                                ),
-                              ),
-                            ],
+                        zoom: 14.0,
+                      ),
+                      markers: {
+                        Marker(
+                          markerId: const MarkerId('workshopLocation'),
+                          position: LatLng(
+                            controller.workshopDetails?.latitude ?? 0.0,
+                            controller.workshopDetails?.longitude ?? 0.0,
+                          ),
+                          infoWindow: InfoWindow(
+                            title: controller.workshopDetails?.fullName,
                           ),
                         ),
-                      ),
+                      },
+                      onMapCreated: (GoogleMapController controller) {
+                        // Adicione qualquer configuração adicional do mapa aqui, se necessário
+                      },
                     ),
+                  ),
+                ),
+                SizedBox(height: verticalSpacing),
+                // Adicionando widget de preview do endereço
+                Container(
+                  padding: const EdgeInsets.all(12.0),
+                  decoration: BoxDecoration(
+                    color: AppColors.whiteColor,
+                    borderRadius: BorderRadius.circular(borderRadius),
+                    border: Border.all(color: AppColors.grayBorderColor),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on, color: AppColors.primaryColor, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Endereço da Oficina',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: AppColors.blackPrimaryColor,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${controller.workshopDetails?.streetAddress ?? ''}, '
+                              'n${controller.workshopDetails?.number ?? ''}, '
+                              '${controller.workshopDetails?.neighborhood ?? ''}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.fontRegularBlackColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 SizedBox(height: verticalSpacing),
@@ -269,38 +309,29 @@ class MechanicWorkshopDetailsView
             child: SizedBox(
               height: 200,
               width: double.infinity,
-              child: InkWell(
-                onTap: () => openMapsSheet(
-                  Get.context!,
-                  workshopName: controller.workshopDetails?.fullName ?? '',
-                  lat: controller.workshopDetails?.latitude ?? 0.0,
-                  long: controller.workshopDetails?.longitude ?? 0.0,
-                ),
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: AppColors.grayBorderColor,
+              child: GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: LatLng(
+                    controller.workshopDetails?.latitude ?? 0.0,
+                    controller.workshopDetails?.longitude ?? 0.0,
                   ),
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.map,
-                          size: 48,
-                          color: AppColors.primaryColor,
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Toque para abrir o mapa',
-                          style: TextStyle(
-                            color: AppColors.primaryColor,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                  zoom: 14.0,
+                ),
+                markers: {
+                  Marker(
+                    markerId: const MarkerId('workshopLocation'),
+                    position: LatLng(
+                      controller.workshopDetails?.latitude ?? 0.0,
+                      controller.workshopDetails?.longitude ?? 0.0,
+                    ),
+                    infoWindow: InfoWindow(
+                      title: controller.workshopDetails?.fullName,
                     ),
                   ),
-                ),
+                },
+                onMapCreated: (GoogleMapController controller) {
+                  // Adicione qualquer configuração adicional do mapa aqui, se necessário
+                },
               ),
             ),
           ),

@@ -124,7 +124,7 @@ class LoginView extends GetView<LoginController> {
           const SizedBox(height: 24),
           _buildSocialButtons(),
           const SizedBox(height: 32),
-          _buildSignUpLink(), // Adicionando o link de cadastro também no layout mobile
+          // Link de cadastro removido daqui para evitar duplicação
           const SizedBox(height: 24),
         ],
       ),
@@ -235,7 +235,7 @@ class LoginView extends GetView<LoginController> {
                     const SizedBox(height: 16),
                     _buildSocialButtons(),
                     const SizedBox(height: 24),
-                    _buildSignUpLink(), // Adicionando o link de cadastro também no layout tablet
+                    // Link de cadastro removido daqui para evitar duplicação
                     const SizedBox(height: 24),
                   ],
                 ),

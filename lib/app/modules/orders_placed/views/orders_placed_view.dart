@@ -16,85 +16,94 @@ class OrdersPlacedView extends GetView<OrdersPlacedController> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const AppBarCustom(
-        iconColor: AppColors.whiteColor,
-        title: 'Pedidos realizados',
-        backgroundColor: AppColors.primaryColor,
-        titleColor: AppColors.whiteColor,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(
-              height: 20,
-            ),
-            OrdersStatusFilter(
-              onTap: (int status) {
-                controller.filterByStatus(status);
-              },
-            ),
-            const SizedBox(
-              height: 10,
-            ),
-            const Text(
-              'Aperte no pedido para ver os detalhes',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.softBlackColor,
+    return WillPopScope(
+      // Quando o usuário pressionar o botão voltar, navegamos diretamente para a home
+      onWillPop: () async {
+        Get.offAllNamed(Routes.home);
+        return false; // Impede o comportamento padrão do botão voltar
+      },
+      child: Scaffold(
+        appBar: AppBarCustom(
+          iconColor: AppColors.whiteColor,
+          title: 'Pedidos realizados',
+          backgroundColor: AppColors.primaryColor,
+          titleColor: AppColors.whiteColor,
+          // Usando o parâmetro correto onLeadingIconTap em vez de onLeadingTap
+          onLeadingIconTap: () => Get.offAllNamed(Routes.home),
+        ),
+        body: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(
+                height: 20,
               ),
-            ),
-            const SizedBox(
-              height: 10,
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => Future.sync(
-                  () => controller.pagingController.refresh(),
+              OrdersStatusFilter(
+                onTap: (int status) {
+                  controller.filterByStatus(status);
+                },
+              ),
+              const SizedBox(
+                height: 10,
+              ),
+              const Text(
+                'Aperte no pedido para ver os detalhes',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.softBlackColor,
                 ),
-                child: PagedListView<int, Order>(
-                  shrinkWrap: true,
-                  pagingController: controller.pagingController,
-                  builderDelegate: PagedChildBuilderDelegate(
-                    itemBuilder: (context, item, index) => GestureDetector(
-                      onTap: () => Get.toNamed(
-                        Routes.orderDetails,
-                        arguments: {'orderId': item.id!},
+              ),
+              const SizedBox(
+                height: 10,
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => Future.sync(
+                    () => controller.pagingController.refresh(),
+                  ),
+                  child: PagedListView<int, Order>(
+                    shrinkWrap: true,
+                    pagingController: controller.pagingController,
+                    builderDelegate: PagedChildBuilderDelegate(
+                      itemBuilder: (context, item, index) => GestureDetector(
+                        onTap: () => Get.toNamed(
+                          Routes.orderDetails,
+                          arguments: {'orderId': item.id!},
+                        ),
+                        child: OrderCard(order: item),
                       ),
-                      child: OrderCard(order: item),
-                    ),
-                    firstPageErrorIndicatorBuilder: (context) => ErrorIndicator(
-                      error: controller.pagingController.error,
-                      onTryAgain: () => controller.pagingController.refresh(),
-                    ),
-                    noItemsFoundIndicatorBuilder: (context) =>
-                        const EmptyListIndicator(
-                      iconColor: AppColors.primaryColor,
-                      message: 'Sem pedidos para exibir',
-                    ),
-                    firstPageProgressIndicatorBuilder: (context) {
-                      return const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text(
-                            'Carregando pedidos...',
-                            style: TextStyle(
-                              color: AppColors.abbey,
-                              fontWeight: FontWeight.w300,
+                      firstPageErrorIndicatorBuilder: (context) => ErrorIndicator(
+                        error: controller.pagingController.error,
+                        onTryAgain: () => controller.pagingController.refresh(),
+                      ),
+                      noItemsFoundIndicatorBuilder: (context) =>
+                          const EmptyListIndicator(
+                        iconColor: AppColors.primaryColor,
+                        message: 'Sem pedidos para exibir',
+                      ),
+                      firstPageProgressIndicatorBuilder: (context) {
+                        return const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text(
+                              'Carregando pedidos...',
+                              style: TextStyle(
+                                color: AppColors.abbey,
+                                fontWeight: FontWeight.w300,
+                              ),
                             ),
-                          ),
-                        ],
-                      );
-                    },
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

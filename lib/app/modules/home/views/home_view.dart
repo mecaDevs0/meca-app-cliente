@@ -83,7 +83,19 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
       appBar: AppBarCustom(
         leading: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 5.0),
-          child: SvgPicture.asset(AppImages.homeLogo),
+          child: IconButton(
+            icon: Padding(
+              padding: const EdgeInsets.all(2.0),
+              child: SvgPicture.asset(AppImages.icMenuHamburguer),
+            ),
+            onPressed: () {
+              if (AuthHelper.isGuest) {
+                Get.offAllNamed(Routes.login);
+              } else {
+                _scaffoldKey.currentState?.openDrawer();
+              }
+            },
+          ),
         ),
         backgroundColor: AppColors.primaryColor,
         actions: [
@@ -106,23 +118,10 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
               },
             ),
           ),
+          // Logo da Meca à direita
           Padding(
-            padding: const EdgeInsets.all(4.0),
-            child: IconButton(
-              icon: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: SvgPicture.asset(AppImages.icMenuHamburguer),
-              ),
-              iconSize: 44,
-              splashRadius: 24,
-              onPressed: () {
-                if (AuthHelper.isGuest) {
-                  Get.offAllNamed(Routes.login);
-                } else {
-                  _scaffoldKey.currentState?.openDrawer();
-                }
-              },
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 5.0),
+            child: SvgPicture.asset(AppImages.homeLogo),
           ),
         ],
       ),
