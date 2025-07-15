@@ -305,6 +305,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
   Widget _buildMobileLayout() {
     return CustomScrollView(
       slivers: [
+        SliverToBoxAdapter(child: _buildGuestLoginBanner()),
         SliverPadding(
           padding: const EdgeInsets.all(16.0),
           sliver: SliverList(
@@ -608,6 +609,38 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
             right: 16,
             child:
                 SvgPicture.asset(AppImages.carMenuHome, height: 60, width: 60),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuestLoginBanner() {
+    if (!AuthHelper.isGuest) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      color: AppColors.primaryColor.withOpacity(0.1),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: AppColors.primaryColor),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Text(
+              'Você está navegando como visitante. Faça login para ter acesso a todos os recursos.',
+              style: TextStyle(color: AppColors.primaryColor, fontWeight: FontWeight.w500),
+            ),
+          ),
+          const SizedBox(width: 16),
+          ElevatedButton(
+            onPressed: () => Get.offAllNamed(Routes.login),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryColor,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Login'),
           ),
         ],
       ),

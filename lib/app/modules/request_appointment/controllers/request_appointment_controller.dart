@@ -53,6 +53,7 @@ class RequestAppointmentController extends GetxController {
 
   late String workshopId;
   late String workshopName;
+  String? _openingHours;
 
   @override
   Future<void> onInit() async {
@@ -82,10 +83,12 @@ class RequestAppointmentController extends GetxController {
         final workshop = Get.arguments as WorkshopArgs;
         workshopId = workshop.workshopId;
         workshopName = workshop.workshopName ?? 'Oficina';
+        _openingHours = workshop.openingHours;
       } else if (Get.arguments is Map<String, dynamic>) {
         final args = Get.arguments as Map<String, dynamic>;
         workshopId = args['workshopId'] as String? ?? '';
         workshopName = args['workshopDetails']?.fullName ?? 'Oficina';
+        _openingHours = args['workshopDetails']?.openingHours as String?;
       } else {
         _setError('Formato de dados inválido');
         return;
@@ -463,20 +466,28 @@ class RequestAppointmentController extends GetxController {
           _availableDates.assignAll(response);
 
           if (response.isEmpty) {
-            // Tenta obter o horário de funcionamento da oficina
-            String? openingHours;
-            if (Get.arguments is Map<String, dynamic>) {
-              final args = Get.arguments as Map<String, dynamic>;
-              openingHours = args['workshopDetails']?.openingHours as String?;
-            }
-            // Gera datas dos próximos 30 dias se houver horário de funcionamento
-            if (openingHours != null && openingHours.isNotEmpty) {
-              final today = DateTime.now();
+            // Gera datas dos próximos 60 dias se houver horário de funcionamento
+            if (_openingHours != null && _openingHours!.isNotEmpty) {
+              final now = DateTime.now();
+              final today = DateTime(now.year, now.month, now.day);
               final List<DateTime> generatedDates = [];
-              for (int i = 0; i < 30; i++) {
+
+              // Mapeia os dias da semana de openingHours para o formato do Dart (1=Seg, 7=Dom)
+              final availableWeekdays = <int>{};
+              if (_openingHours!.toLowerCase().contains('seg')) availableWeekdays.add(DateTime.monday);
+              if (_openingHours!.toLowerCase().contains('ter')) availableWeekdays.add(DateTime.tuesday);
+              if (_openingHours!.toLowerCase().contains('qua')) availableWeekdays.add(DateTime.wednesday);
+              if (_openingHours!.toLowerCase().contains('qui')) availableWeekdays.add(DateTime.thursday);
+              if (_openingHours!.toLowerCase().contains('sex')) availableWeekdays.add(DateTime.friday);
+              if (_openingHours!.toLowerCase().contains('sáb')) availableWeekdays.add(DateTime.saturday);
+              if (_openingHours!.toLowerCase().contains('dom')) availableWeekdays.add(DateTime.sunday);
+
+              for (int i = 0; i < 60; i++) {
                 final date = today.add(Duration(days: i));
-                // Aqui você pode adicionar lógica para filtrar dias da semana conforme openingHours, se necessário
-                generatedDates.add(date);
+                // Adiciona a data apenas se for um dia da semana válido
+                if (availableWeekdays.contains(date.weekday)) {
+                  generatedDates.add(date);
+                }
               }
               _availableDates.assignAll(generatedDates);
               _availableDates.sort((a, b) => a.compareTo(b));
