@@ -616,7 +616,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
   }
 
   Widget _buildGuestLoginBanner() {
-    if (!AuthHelper.isGuest) {
+    if (AuthHelper.isLoggedIn) {
       return const SizedBox.shrink();
     }
 

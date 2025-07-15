@@ -4,6 +4,7 @@ import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../../core/core.dart';
+import '../../../core/utils/auth_helper.dart';
 import '../../../core/widgets/body_modal_timer.dart';
 import '../../../data/models/scheduling/scheduling.dart';
 import '../../../data/models/scheduling/vehicle_scheduling.dart';
@@ -174,8 +175,9 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
 
         // Mensagem de erro de disponibilidade de data
         Obx(() {
+          // Só mostra erro se for visitante E não estiver logado
           if (controller.hasAvailabilityError &&
-              controller.availabilityErrorMessage.contains('oficina não tem horários')) {
+              controller.availabilityErrorMessage.contains('oficina não tem horários') && AuthHelper.isGuest) {
             return Padding(
               padding: const EdgeInsets.only(top: 8.0),
               child: Row(

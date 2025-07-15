@@ -416,10 +416,27 @@ class RequestAppointmentController extends GetxController {
           _availableHours.assignAll(response);
 
           if (response.isEmpty) {
-            _hasAvailabilityError.value = true;
-            _availabilityErrorMessage.value = 'Não há horários disponíveis para esta data. Por favor, selecione outra data.';
-            log('Nenhum horário disponível para ${date.toddMMyyyy()}');
-            success = false;
+            // Se não veio nenhum horário da API, gera horários com base no horário de funcionamento
+            if (_openingHours != null && _openingHours!.isNotEmpty) {
+              final generatedHours = _generateHoursFromOpening(_openingHours!);
+              if (generatedHours.isNotEmpty) {
+                _availableHours.assignAll(generatedHours);
+                _hasAvailabilityError.value = false;
+                _availabilityErrorMessage.value = '';
+                log('Horários gerados localmente: ${generatedHours.length}');
+                success = true;
+              } else {
+                _hasAvailabilityError.value = true;
+                _availabilityErrorMessage.value = 'Não há horários disponíveis para esta data. Por favor, selecione outra data.';
+                log('Nenhum horário disponível para ${date.toddMMyyyy()}');
+                success = false;
+              }
+            } else {
+              _hasAvailabilityError.value = true;
+              _availabilityErrorMessage.value = 'Não há horários disponíveis para esta data. Por favor, selecione outra data.';
+              log('Nenhum horário disponível para ${date.toddMMyyyy()}');
+              success = false;
+            }
           } else {
             log('Horários disponíveis carregados: ${response.length}');
             // Ordenando os horários cronologicamente
@@ -443,6 +460,36 @@ class RequestAppointmentController extends GetxController {
       log('Erro crítico ao carregar horários disponíveis: $e');
       return false;
     }
+  }
+
+  // Função auxiliar para gerar horários a partir do horário de funcionamento
+  List<String> _generateHoursFromOpening(String openingHours) {
+    // Exemplo: "Seg-Sex: 08:00-18:00" ou "08:00 às 18:00"
+    final regex = RegExp(r'(\d{2}:\d{2})\s*[aà]?\s*(\d{2}:\d{2})');
+    final match = regex.firstMatch(openingHours);
+    if (match != null && match.groupCount >= 2) {
+      final start = match.group(1)!;
+      final end = match.group(2)!;
+
+      final startParts = start.split(':');
+      final startHour = int.parse(startParts[0]);
+      final startMinute = int.parse(startParts[1]);
+
+      final endParts = end.split(':');
+      final endHour = int.parse(endParts[0]);
+      final endMinute = int.parse(endParts[1]);
+
+      final hours = <String>[];
+      DateTime current = DateTime(2000, 1, 1, startHour, startMinute);
+      final endDateTime = DateTime(2000, 1, 1, endHour, endMinute);
+
+      while (current.isBefore(endDateTime) || current.isAtSameMomentAs(endDateTime)) {
+        hours.add('${current.hour.toString().padLeft(2, '0')}:${current.minute.toString().padLeft(2, '0')}');
+        current = current.add(const Duration(minutes: 30));
+      }
+      return hours;
+    }
+    return [];
   }
 
   // Função para carregar os dias disponíveis para agendamento
@@ -471,20 +518,11 @@ class RequestAppointmentController extends GetxController {
               final today = DateTime(now.year, now.month, now.day);
               final List<DateTime> generatedDates = [];
 
-              // Mapeia os dias da semana de openingHours para o formato do Dart (1=Seg, 7=Dom)
-              final availableWeekdays = <int>{};
-              if (_openingHours!.toLowerCase().contains('seg')) availableWeekdays.add(DateTime.monday);
-              if (_openingHours!.toLowerCase().contains('ter')) availableWeekdays.add(DateTime.tuesday);
-              if (_openingHours!.toLowerCase().contains('qua')) availableWeekdays.add(DateTime.wednesday);
-              if (_openingHours!.toLowerCase().contains('qui')) availableWeekdays.add(DateTime.thursday);
-              if (_openingHours!.toLowerCase().contains('sex')) availableWeekdays.add(DateTime.friday);
-              if (_openingHours!.toLowerCase().contains('sáb')) availableWeekdays.add(DateTime.saturday);
-              if (_openingHours!.toLowerCase().contains('dom')) availableWeekdays.add(DateTime.sunday);
-
+              // Se não há datas da API, e há horário de funcionamento, assume-se dias úteis (Seg-Sex) disponíveis
               for (int i = 0; i < 60; i++) {
                 final date = today.add(Duration(days: i));
-                // Adiciona a data apenas se for um dia da semana válido
-                if (availableWeekdays.contains(date.weekday)) {
+                // Adiciona a data apenas se for um dia útil (segunda a sexta)
+                if (date.weekday >= DateTime.monday && date.weekday <= DateTime.friday) {
                   generatedDates.add(date);
                 }
               }
