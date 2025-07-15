@@ -62,11 +62,10 @@ class RequestAppointmentController extends GetxController {
     // Verifica se há um token válido e atualiza o status do usuário
     final token = AuthToken.fromCache();
     if (token != null && AuthHelper.isGuest) {
-      // Se há um token válido mas o usuário ainda está marcado como visitante,
-      // atualiza o status antes de continuar
       AuthHelper.setLoggedIn();
-    } else if (AuthHelper.isGuest) {
-      // Se realmente é um visitante, redireciona para o login
+    }
+    // Só mostra flag de visitante se realmente for visitante
+    if (AuthHelper.isGuest) {
       Get.offAllNamed(Routes.login);
       return;
     }

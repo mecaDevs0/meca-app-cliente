@@ -44,6 +44,7 @@ class LoginView extends GetView<LoginController> {
                 // Rodapé no final da tela
                 SizedBox(
                   width: double.infinity,
+                  height: isTablet ? 100 : 66, // Define altura fixa para o rodapé
                   child: Stack(
                     alignment: Alignment.bottomCenter,
                     children: [
