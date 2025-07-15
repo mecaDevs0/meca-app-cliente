@@ -1351,7 +1351,7 @@ packages:
     source: hosted
     version: "2.1.0"
   onesignal_flutter:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: onesignal_flutter
       sha256: acb0e04ab9fe8dc7e8d7b507ce880907261f57309bca5f0ae44dda89125c46fd

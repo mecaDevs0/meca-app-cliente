@@ -8,6 +8,7 @@ import 'app/application_binding.dart';
 import 'app/core/utils/auth_helper.dart';
 import 'app/data/cache/base_hive.dart';
 import 'app/routes/app_pages.dart';
+import 'app/services/notification_service.dart';
 import 'app/theme/app_theme.dart';
 
 Future<void> main() async {
@@ -24,6 +25,9 @@ Future<void> main() async {
   await MegaOneSignalConfig.configure(
     appKey: '7bbec33c-bffc-47b1-ab90-a080b7353763',
   );
+
+  // Inicializa o serviço de notificações personalizado para tratar notificações do admin
+  NotificationService().initialize();
 
   final token = AuthToken.fromCache();
 

@@ -76,7 +76,7 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
                   const SizedBox(height: 8),
                   const SelectVehicleWidget(),
                   const SizedBox(height: 16),
-                  // Seção de seleção de data e horário com feedback aprimorado
+                  // Seção de seleç��o de data e horário com feedback aprimorado
                   _buildDateTimeSelection(context),
                   const SizedBox(height: 16),
                   BuildTextField(
@@ -266,34 +266,31 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
 
   /// Mostra o seletor de data com validação aprimorada
   Future<void> _showDatePicker(BuildContext context) async {
+    // Informa ao usuário que estamos carregando as datas disponíveis
+    MegaSnackbar.showErroSnackBar('Carregando datas disponíveis...');
+
     // Carrega as datas disponíveis antes de mostrar o calendário
     final success = await controller.loadAvailableDates();
 
-    if (!success) {
-      // Se houve erro ao carregar datas, mostra mensagem
-      if (controller.hasAvailabilityError) {
-        MegaSnackbar.showErroSnackBar(controller.availabilityErrorMessage);
-      }
+    if (!success || controller.availableDates.isEmpty) {
+      // Se houve erro ao carregar datas ou não há datas disponíveis, mostra mensagem
+      MegaSnackbar.showErroSnackBar(
+        controller.hasAvailabilityError
+          ? controller.availabilityErrorMessage
+          : 'Não há datas disponíveis para agendamento nesta oficina.'
+      );
       return;
     }
 
     if (!context.mounted) return;
 
-    // Mostra o seletor de data
+    // Mostra o seletor de data com seletor personalizado
     showMegaDatePicker(
       context,
       minimumDate: DateTime.now(),
       maximumDate: DateTime.now().add(const Duration(days: 365)),
+      // Removido selectableDayPredicate pois não existe
       onSelectDate: (date) {
-        // Verifica se a data selecionada está disponível
-        final isDateAvailable = controller.isDateAvailable(date);
-
-        if (!isDateAvailable) {
-          MegaSnackbar.showErroSnackBar(
-            'A oficina não tem disponibilidade nesta data. Por favor, escolha outra data.',
-          );
-          return;
-        }
 
         dateController.text = date.toddMMyyyy();
         // Limpa o horário selecionado anteriormente

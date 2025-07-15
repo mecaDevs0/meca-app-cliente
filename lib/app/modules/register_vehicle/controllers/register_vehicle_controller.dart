@@ -53,6 +53,14 @@ class RegisterVehicleController extends GetxController {
   Future<bool> registerVehicle(Vehicle newVehicle) async {
     _isLoadingNew.value = true;
     bool isSuccess = false;
+
+    // Tratar o caso em que a data da última revisão está vazia ou nula
+    if (newVehicle.lastRevisionDate == null || newVehicle.lastRevisionDate == 0) {
+      // Se o campo estiver vazio, definir a data atual como valor padrão
+      newVehicle.lastRevisionDate = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      print('Data da última revisão não fornecida. Usando data atual como padrão.');
+    }
+
     await MegaRequestUtils.load(
       action: () async {
         await _registerVehicleProvider.onRegisterVehicle(newVehicle);
@@ -69,6 +77,13 @@ class RegisterVehicleController extends GetxController {
 
   Future<bool> onEditVehicle(Vehicle editVehicle) async {
     bool isSuccess = false;
+
+    // Tratar o caso em que a data da última revisão está vazia ou nula
+    if (editVehicle.lastRevisionDate == null || editVehicle.lastRevisionDate == 0) {
+      // Se o campo estiver vazio, definir a data atual como valor padrão
+      editVehicle.lastRevisionDate = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      print('Data da última revisão não fornecida na edição. Usando data atual como padrão.');
+    }
 
     _isLoadingEdit.value = true;
     await MegaRequestUtils.load(

@@ -104,17 +104,19 @@ class RequestAppointmentProvider {
     log('Buscando horários disponíveis para oficina: $workshopId, data: ${date.toIso8601String()}');
 
     try {
-      // Simplificando a requisição para evitar problemas com parâmetros extras
+      // Formatando a data como yyyy-MM-dd para o padrão da API
+      final String formattedDate = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+
+      // Parâmetros simplificados para a requisição
       final Map<String, dynamic> params = {
         'workshopId': workshopId,
-        'date': date.toIso8601String(),
-        // Removemos outros parâmetros que podem estar causando o erro
+        'date': formattedDate,
       };
 
       log('Parâmetros da requisição de horários: $params');
 
       final response = await _restClientDio.get(
-        '${BaseUrls.scheduling}/available-hours',
+        '${BaseUrls.scheduling}/availability',
         queryParameters: params,
       );
 
@@ -144,18 +146,17 @@ class RequestAppointmentProvider {
     } catch (e) {
       log('Erro ao buscar horários disponíveis: $e');
 
-      // Adicionando tratamento especial para erro de Bad Request (400)
+      // Se ocorrer um erro 400, tentamos uma abordagem alternativa
       if (e.toString().contains('400 Bad Request')) {
         log('Erro 400 detectado, tentando requisição alternativa para horários');
 
-        // Tentativa alternativa com URL direta
         try {
           // Formatando a data como yyyy-MM-dd
           final String formattedDate = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
 
-          // Requisição simplificada com apenas os parâmetros essenciais
+          // Requisição alternativa usando URL direta
           final response = await _restClientDio.get(
-            '${BaseUrls.scheduling}/available-hours?workshopId=$workshopId&date=$formattedDate',
+            '${BaseUrls.scheduling}/workshop/$workshopId/availability?date=$formattedDate',
           );
 
           if (response.data == null) return [];
@@ -175,20 +176,13 @@ class RequestAppointmentProvider {
           return hours;
         } catch (fallbackError) {
           log('Erro também na requisição alternativa de horários: $fallbackError');
+          // Não criamos mais horários fictícios, pois queremos mostrar apenas horários realmente disponíveis
+          return [];
         }
       }
 
-      // Se não conseguimos carregar os horários, vamos criar horários fictícios
-      // para permitir que o usuário continue o fluxo
-      log('Gerando horários simulados para permitir que o usuário prossiga');
-      final List<String> fallbackHours = [];
-
-      // Adicionar horários fictícios comerciais (9h às 18h, de hora em hora)
-      for (int hour = 9; hour <= 18; hour++) {
-        fallbackHours.add('${hour.toString().padLeft(2, '0')}:00');
-      }
-
-      return fallbackHours;
+      // Se houver outros erros, retornamos uma lista vazia
+      return [];
     }
   }
 
@@ -250,56 +244,42 @@ class RequestAppointmentProvider {
     } catch (e) {
       log('Erro ao buscar datas disponíveis: $e');
 
-      // Adicionando tratamento especial para erro de Bad Request (400)
-      if (e.toString().contains('400 Bad Request')) {
-        log('Erro 400 detectado, tentando requisição alternativa');
+      // Tentativa alternativa com URL diferente
+      try {
+        // Requisição alternativa usando outra estrutura de URL
+        final response = await _restClientDio.get(
+          '${BaseUrls.scheduling}/workshop/$workshopId/available-dates',
+        );
 
-        // Tentativa alternativa sem nenhum parâmetro adicional
+        if (response.data == null) return [];
+
+        final List<DateTime> dates = [];
         try {
-          // Requisição simplificada com apenas o ID da oficina
-          final response = await _restClientDio.get(
-            '${BaseUrls.scheduling}/available-dates?workshopId=$workshopId',
-          );
-
-          if (response.data == null) return [];
-
-          final List<DateTime> dates = [];
-          try {
-            final List<dynamic> dateList = response.data as List;
-            for (final dynamic dateItem in dateList) {
-              try {
-                if (dateItem is String) {
-                  dates.add(DateTime.parse(dateItem));
-                } else if (dateItem is int) {
-                  dates.add(DateTime.fromMillisecondsSinceEpoch(dateItem));
-                }
-              } catch (parseError) {
-                log('Erro ao converter data específica: $parseError');
+          final List<dynamic> dateList = response.data as List;
+          for (final dynamic dateItem in dateList) {
+            try {
+              if (dateItem is String) {
+                dates.add(DateTime.parse(dateItem));
+              } else if (dateItem is int) {
+                dates.add(DateTime.fromMillisecondsSinceEpoch(dateItem));
               }
+            } catch (parseError) {
+              log('Erro ao converter data específica: $parseError');
             }
-          } catch (castError) {
-            log('Erro ao processar lista de datas: $castError');
           }
-
-          dates.sort((a, b) => a.compareTo(b));
-          return dates;
-        } catch (fallbackError) {
-          log('Erro também na requisição alternativa: $fallbackError');
+        } catch (castError) {
+          log('Erro ao processar lista de datas: $castError');
         }
+
+        dates.sort((a, b) => a.compareTo(b));
+        return dates;
+      } catch (fallbackError) {
+        log('Erro também na requisição alternativa: $fallbackError');
+
+        // Retornamos uma lista vazia em vez de gerar datas simuladas
+        log('Não foi possível obter datas disponíveis da API');
+        return [];
       }
-
-      // Se não conseguimos carregar as datas, vamos criar algumas datas fictícias
-      // para permitir que o usuário continue o fluxo
-      log('Gerando datas simuladas para permitir que o usuário prossiga');
-      final List<DateTime> fallbackDates = [];
-      final now = DateTime.now();
-
-      // Adicionar os próximos 30 dias como disponíveis
-      for (int i = 0; i < 30; i++) {
-        fallbackDates.add(now.add(Duration(days: i)));
-      }
-
-      return fallbackDates;
     }
   }
 }

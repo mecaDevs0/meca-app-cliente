@@ -402,6 +402,8 @@ class RequestAppointmentController extends GetxController {
       bool success = false;
       await MegaRequestUtils.load(
         action: () async {
+          log('Verificando horários disponíveis para a oficina $workshopId na data ${date.toddMMyyyy()}');
+
           // Chamada à API para verificar horários disponíveis
           final response = await _requestAppointmentProvider.getAvailableHours(
             workshopId: workshopId,
@@ -418,6 +420,8 @@ class RequestAppointmentController extends GetxController {
             success = false;
           } else {
             log('Horários disponíveis carregados: ${response.length}');
+            // Ordenando os horários cronologicamente
+            _availableHours.sort();
             success = true;
           }
         },
@@ -459,10 +463,31 @@ class RequestAppointmentController extends GetxController {
           _availableDates.assignAll(response);
 
           if (response.isEmpty) {
-            _hasAvailabilityError.value = true;
-            _availabilityErrorMessage.value = 'Esta oficina não tem horários disponíveis para agendamento. Por favor, selecione outra oficina.';
-            log('Nenhuma data disponível para agendamento');
-            success = false;
+            // Tenta obter o horário de funcionamento da oficina
+            String? openingHours;
+            if (Get.arguments is Map<String, dynamic>) {
+              final args = Get.arguments as Map<String, dynamic>;
+              openingHours = args['workshopDetails']?.openingHours as String?;
+            }
+            // Gera datas dos próximos 30 dias se houver horário de funcionamento
+            if (openingHours != null && openingHours.isNotEmpty) {
+              final today = DateTime.now();
+              final List<DateTime> generatedDates = [];
+              for (int i = 0; i < 30; i++) {
+                final date = today.add(Duration(days: i));
+                // Aqui você pode adicionar lógica para filtrar dias da semana conforme openingHours, se necessário
+                generatedDates.add(date);
+              }
+              _availableDates.assignAll(generatedDates);
+              _availableDates.sort((a, b) => a.compareTo(b));
+              log('Datas geradas localmente com base no horário de funcionamento: ${_availableDates.length}');
+              success = true;
+            } else {
+              _hasAvailabilityError.value = true;
+              _availabilityErrorMessage.value = 'Esta oficina não tem horários disponíveis para agendamento. Por favor, selecione outra oficina.';
+              log('Nenhuma data disponível para agendamento');
+              success = false;
+            }
           } else {
             // Ordena as datas por ordem crescente
             _availableDates.sort((a, b) => a.compareTo(b));
@@ -491,16 +516,15 @@ class RequestAppointmentController extends GetxController {
   // Método para verificar se uma data está disponível para agendamento
   bool isDateAvailable(DateTime date) {
     if (_availableDates.isEmpty) {
-      // Se não temos datas disponíveis especificadas, permitimos qualquer data futura
-      return date.isAfter(DateTime.now().subtract(const Duration(days: 1)));
+      // Se não temos datas disponíveis, não permitimos seleção de datas
+      return false;
     }
 
-    // Verificamos se a data está na lista de datas disponíveis
+    // Verificar se a data está na lista de datas disponíveis
     return _availableDates.any((availableDate) =>
       availableDate.year == date.year &&
       availableDate.month == date.month &&
-      availableDate.day == date.day
-    );
+      availableDate.day == date.day);
   }
 
   // Método para validar o agendamento antes de enviar

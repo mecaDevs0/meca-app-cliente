@@ -44,7 +44,7 @@ class LoginView extends GetView<LoginController> {
                       child: isTablet ? _buildTabletLayout(context) : _buildMobileLayout(context),
                     ),
 
-                    // Rodapé no final da tela
+                    // Rodapé no final da tela - ESPAÇAMENTO REDUZIDO
                     SizedBox(
                       width: double.infinity,
                       child: Stack(
@@ -60,9 +60,9 @@ class LoginView extends GetView<LoginController> {
                             ),
                           ),
 
-                          // Link "Cadastre-se"
+                          // Link "Cadastre-se" - Posicionado mais próximo dos elementos anteriores
                           Padding(
-                            padding: EdgeInsets.only(bottom: isTablet ? 40 : 25),
+                            padding: EdgeInsets.only(bottom: isTablet ? 25 : 15), // Reduzido de 25 para 15 em mobile
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                               decoration: BoxDecoration(
@@ -95,8 +95,8 @@ class LoginView extends GetView<LoginController> {
                         ],
                       ),
                     ),
-                    // Espaço adicional no final para garantir que os elementos não fiquem cortados
-                    SizedBox(height: isTablet ? 60 : 40),
+                    // Espaço adicional no final - REDUZIDO
+                    SizedBox(height: isTablet ? 40 : 20), // Reduzido de 40 para 20 em mobile
                   ],
                 ),
               ),
@@ -113,19 +113,17 @@ class LoginView extends GetView<LoginController> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(height: MediaQuery.of(context).size.height * 0.05),
+          SizedBox(height: MediaQuery.of(context).size.height * 0.03),
           _buildLogo(),
           const SizedBox(height: 24),
           _buildLoginForm(),
           const SizedBox(height: 16),
           _buildForgotPasswordLink(context),
           const SizedBox(height: 24),
-          _buildDivider(),
-          const SizedBox(height: 24),
           _buildSocialButtons(),
-          const SizedBox(height: 32),
-          // Link de cadastro removido daqui para evitar duplicação
-          const SizedBox(height: 24),
+          // Mantém apenas UM link de cadastro
+          const SizedBox(height: 8),
+          _buildSignUpLink(),
         ],
       ),
     );
@@ -138,7 +136,7 @@ class LoginView extends GetView<LoginController> {
 
     return Padding(
       padding: EdgeInsets.symmetric(
-        vertical: isLandscape ? 16.0 : 32.0,
+        vertical: isLandscape ? 12.0 : 24.0,
         horizontal: 16.0,
       ),
       child: Row(
@@ -150,15 +148,15 @@ class LoginView extends GetView<LoginController> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SizedBox(height: isLandscape ? 16.0 : 32.0),
+                SizedBox(height: isLandscape ? 12.0 : 24.0),
                 _buildLogo(),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
                 Text(
                   'Bem-vindo ao MECA',
                   style: context.textTheme.headlineMedium?.copyWith(
                     color: AppColors.primaryColor,
                     fontWeight: FontWeight.bold,
-                    fontSize: isLandscape ? 24.0 : 28.0, // Ajuste de tamanho para landscape
+                    fontSize: isLandscape ? 24.0 : 28.0,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -174,10 +172,10 @@ class LoginView extends GetView<LoginController> {
                 // Imagem ilustrativa apenas no modo landscape
                 if (isLandscape)
                   Padding(
-                    padding: const EdgeInsets.only(top: 24.0),
+                    padding: const EdgeInsets.only(top: 16.0),
                     child: SvgPicture.asset(
-                      AppImages.bottomUnion, // Considere usar uma imagem mais adequada
-                      height: 120,
+                      AppImages.bottomUnion,
+                      height: 100,
                     ),
                   ),
               ],
@@ -186,9 +184,9 @@ class LoginView extends GetView<LoginController> {
 
           // Separador vertical entre as seções
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 24.0),
+            margin: const EdgeInsets.symmetric(horizontal: 20.0),
             width: 1,
-            height: isLandscape ? 400 : 500,
+            height: isLandscape ? 380 : 480,
             color: AppColors.grayBorderColor.withOpacity(0.5),
           ),
 
@@ -198,14 +196,14 @@ class LoginView extends GetView<LoginController> {
             child: Container(
               constraints: BoxConstraints(
                 maxWidth: isLandscape ? 400 : 450,
-                minHeight: 500,
+                minHeight: 480,
               ),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(height: isLandscape ? 16.0 : 24.0),
+                    SizedBox(height: isLandscape ? 12.0 : 20.0),
                     Center(
                       child: Text(
                         'Acesse sua conta',
@@ -216,27 +214,29 @@ class LoginView extends GetView<LoginController> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
                     _buildLoginForm(),
                     const SizedBox(height: 16),
                     Center(child: _buildForgotPasswordLink(context)),
-                    const SizedBox(height: 32),
-                    _buildDivider(),
-                    const SizedBox(height: 32),
-                    Center(
-                      child: Text(
-                        'Ou continue com',
-                        style: TextStyle(
-                          color: AppColors.blackSecondaryColor,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
+                    const SizedBox(height: 24),
+                    // Removendo a faixa "ou" e texto relacionado
+                    // _buildDivider(),
+                    // const SizedBox(height: 24),
+                    // Center(
+                    //   child: Text(
+                    //     'Ou continue com',
+                    //     style: TextStyle(
+                    //       color: AppColors.blackSecondaryColor,
+                    //       fontSize: 14,
+                    //     ),
+                    //   ),
+                    // ),
                     const SizedBox(height: 16),
                     _buildSocialButtons(),
-                    const SizedBox(height: 24),
-                    // Link de cadastro removido daqui para evitar duplicação
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16), // Ajustado para dar espaço adequado
+                    // Adicionando o link de cadastro logo após os botões sociais
+                    Center(child: _buildSignUpLink()),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
@@ -248,23 +248,9 @@ class LoginView extends GetView<LoginController> {
   }
 
   Widget _buildLogo() {
-    return InkWell(
-      onTap: () {
-        controller.emailController.text = 'lucas.silva@megaleios.com';
-        controller.passwordController.text = '123456';
-      },
-      onDoubleTap: () {
-        MegaModal.callEnvironmentModal(
-          Get.context!,
-          devUrl: BaseUrls.baseUrlDev,
-          hmlUrl: BaseUrls.baseUrlHml,
-          prodUrl: BaseUrls.baseUrlProd,
-        );
-      },
-      child: SvgPicture.asset(
-        AppImages.loginLogo,
-        height: 66,
-      ),
+    return SvgPicture.asset(
+      AppImages.loginLogo,
+      height: 66,
     );
   }
 

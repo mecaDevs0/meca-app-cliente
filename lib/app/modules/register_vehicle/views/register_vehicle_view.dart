@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/core.dart';
 import '../../../data/models/vehicle.dart';
@@ -307,15 +308,28 @@ class _RegisterVehicleViewState
                             height: 16,
                           ),
                         ),
-                        isRequired: true,
+                        isRequired: false, // Agora o campo é opcional
+                        validator: (value) {
+                          if (value != null && value.isNotEmpty) {
+                            try {
+                              final selectedDate =
+                                  DateFormat('dd/MM/yyyy').parseStrict(value);
+                              if (selectedDate.isAfter(DateTime.now())) {
+                                return 'A data não pode ser no futuro';
+                              }
+                            } catch (_) {
+                              return 'Data inválida';
+                            }
+                          }
+                          return null;
+                        },
                         onTap: () {
                           showMegaDatePicker(
                             context,
                             minimumDate: DateTime.now().subtract(
-                              const Duration(days: 700),
+                              const Duration(days: 3650), // Permite até 10 anos atrás
                             ),
-                            maximumDate:
-                                DateTime.now().add(const Duration(days: 365)),
+                            maximumDate: DateTime.now(), // Permite apenas datas até hoje (não futuras)
                             onSelectDate: (date) {
                               dateController.text = date.toddMMyyyy();
                             },
@@ -348,7 +362,10 @@ class _RegisterVehicleViewState
                         km: int.parse(mileageController.text),
                         color: colorController.text,
                         year: yearController.text,
-                        lastRevisionDate: dateController.text.toTimeStamp,
+                        // Tratamento para quando a data não é preenchida
+                        lastRevisionDate: dateController.text.isEmpty
+                            ? DateTime.now().millisecondsSinceEpoch ~/ 1000 // Usa a data atual se vazio
+                            : dateController.text.toTimeStamp,
                       );
                       final hasResult =
                           await controller.registerVehicle(newVehicle);

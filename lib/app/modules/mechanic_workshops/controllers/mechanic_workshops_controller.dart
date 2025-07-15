@@ -1,3 +1,6 @@
+import 'dart:developer' as console;
+
+import 'package:flutter/foundation.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
@@ -36,6 +39,28 @@ class MechanicWorkshopsController extends GetxController {
   }
 
   Future<void> getAllWorkshops(int page) async {
+    // Garantir que temos a posição do usuário antes de fazer a chamada
+    Position? userPosition = homeController.userPosition;
+
+    // Se não temos a posição do usuário e temos permissão de localização,
+    // tentamos obtê-la novamente antes de buscar as oficinas
+    if (userPosition == null && homeController.hasRequestPermission.value) {
+      console.log('Tentando obter a localização antes de buscar oficinas', name: 'MechanicWorkshopsController');
+      try {
+        userPosition = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 5),
+        );
+        console.log('Posição obtida com sucesso: ${userPosition.latitude}, ${userPosition.longitude}',
+                    name: 'MechanicWorkshopsController');
+      } catch (e) {
+        console.log('Erro ao obter localização: $e', name: 'MechanicWorkshopsController');
+      }
+    }
+
+    // Log para debug
+    debugPrint('Buscando oficinas com coordenadas: Lat=${userPosition?.latitude}, Long=${userPosition?.longitude}');
+
     await MegaRequestUtils.load(
       action: () async {
         final response = await _mechanicWorkshopsProvider.onRequestWorkshops(
@@ -52,9 +77,38 @@ class MechanicWorkshopsController extends GetxController {
           rating:
               _filterController.rating > 0 ? _filterController.rating : null,
           distance: _filterController.distance.toInt(),
-          latUser: homeController.userPosition?.latitude,
-          longUser: homeController.userPosition?.longitude,
+          latUser: userPosition?.latitude,
+          longUser: userPosition?.longitude,
         );
+
+        // Verificar se todas as oficinas estão com distância zero
+        if (response.isNotEmpty && response.every((workshop) => workshop.distance == 0)) {
+          console.log('Todas as oficinas retornadas estão com distância zero', name: 'MechanicWorkshopsController');
+        }
+
+        // Recalcular a distância para todas as oficinas que possuem coordenadas
+        for (final workshop in response) {
+          debugPrint('Oficina ${workshop.fullName}: Distância do backend=${workshop.distance}km');
+
+          // Recalcula a distância localmente para todas as oficinas que possuem coordenadas
+          if (userPosition != null &&
+              workshop.latitude != null &&
+              workshop.longitude != null) {
+            // Recalcula a distância localmente usando a API do Geolocator
+            final distanceInMeters = Geolocator.distanceBetween(
+              userPosition.latitude,
+              userPosition.longitude,
+              workshop.latitude!,
+              workshop.longitude!
+            );
+
+            // Converte para quilômetros e arredonda
+            workshop.distance = (distanceInMeters / 1000).round();
+            debugPrint('Distância recalculada para ${workshop.fullName}: ${workshop.distance}km');
+          } else {
+            debugPrint('Não foi possível recalcular a distância: userPosition=$userPosition, latitude=${workshop.latitude}, longitude=${workshop.longitude}');
+          }
+        }
 
         final isLastPage = response.length < _limit;
         if (isLastPage) {

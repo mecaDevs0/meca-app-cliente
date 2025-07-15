@@ -22,6 +22,7 @@ dependencies:
   file_picker: ^8.1.7
   skeletonizer: ^2.0.1
   sign_in_with_apple: ^6.1.2
+  onesignal_flutter: ^5.3.2 # Atualizado para versão compatível com mega_commons_dependencies
 
 dependency_overrides:
   open_filex: ^4.7.0
