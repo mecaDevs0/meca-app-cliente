@@ -1,9 +1,9 @@
+
 import 'dart:developer';
+
 import 'package:mega_commons/mega_commons.dart';
 
 import '../../core/app_urls.dart';
-import '../../core/utils/auth_helper.dart';
-import '../models/profile.dart';
 import '../models/scheduling/scheduling.dart';
 
 class RequestAppointmentProvider {
@@ -11,13 +11,6 @@ class RequestAppointmentProvider {
       : _restClientDio = restClientDio;
 
   final RestClientDio _restClientDio;
-
-  // Verifica se uma string é um ID MongoDB válido (24 caracteres hexadecimais)
-  bool _isValidMongoId(String? id) {
-    if (id == null || id.isEmpty) return false;
-    // IDs MongoDB são strings hexadecimais de 24 caracteres
-    return id.length == 24 && RegExp(r'^[0-9a-fA-F]{24}$').hasMatch(id);
-  }
 
   Future<Scheduling> onRegisterScheduling(Scheduling scheduling) async {
     log('Iniciando registro de agendamento');
@@ -27,7 +20,7 @@ class RequestAppointmentProvider {
       if (scheduling.workshop?.id == null ||
           scheduling.vehicle?.id == null ||
           scheduling.workshopServices == null ||
-          scheduling.workshopServices!.isEmpty) {
+          (scheduling.workshopServices?.isEmpty ?? true)) {
         throw Exception('Dados de agendamento incompletos');
       }
 
@@ -99,89 +92,51 @@ class RequestAppointmentProvider {
   Future<List<String>> getAvailableHours({
     required String workshopId,
     required DateTime date,
+    required String profileId,
   }) async {
-    // Log para debug
     log('Buscando horários disponíveis para oficina: $workshopId, data: ${date.toIso8601String()}');
 
     try {
-      // Formatando a data como yyyy-MM-dd para o padrão da API
-      final String formattedDate = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+      // Validando o formato do workshopId antes de realizar a requisição
+      if (!RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(workshopId)) {
+        log('Formato de workshopId inválido: $workshopId');
+        return [];
+      }
 
-      // Parâmetros simplificados para a requisição
-      final Map<String, dynamic> params = {
+      // Validando o formato do profileId
+      if (!RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(profileId)) {
+        log('Formato de profileId inválido: $profileId');
+        return [];
+      }
+
+      // Formatando a data corretamente
+      final formattedDate = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+      final params = {
         'workshopId': workshopId,
         'date': formattedDate,
+        'profileId': profileId,
       };
 
-      log('Parâmetros da requisição de horários: $params');
+      log('Parâmetros da requisição: $params');
 
       final response = await _restClientDio.get(
         '${BaseUrls.scheduling}/availability',
         queryParameters: params,
       );
 
-      if (response.data == null) {
-        log('Resposta da API de horários disponíveis é null');
+      if (response.statusCode == 200 && response.data != null) {
+        log('Horários disponíveis recebidos: ${response.data}');
+        if (response.data is List) {
+          return List<String>.from(response.data);
+        }
+        return [];
+      } else {
+        log('Erro ao buscar horários: ${response.statusCode}');
         return [];
       }
-
-      log('Resposta da API recebida: ${response.data}');
-
-      // Convertendo a resposta para uma lista de strings
-      final List<String> hours = [];
-
-      try {
-        final List<dynamic> hoursList = response.data as List;
-        for (final dynamic hourItem in hoursList) {
-          if (hourItem != null) {
-            hours.add(hourItem.toString());
-          }
-        }
-      } catch (castError) {
-        log('Erro ao processar lista de horários: $castError');
-      }
-
-      log('Horários disponíveis processados: ${hours.length}');
-      return hours;
     } catch (e) {
       log('Erro ao buscar horários disponíveis: $e');
-
-      // Se ocorrer um erro 400, tentamos uma abordagem alternativa
-      if (e.toString().contains('400 Bad Request')) {
-        log('Erro 400 detectado, tentando requisição alternativa para horários');
-
-        try {
-          // Formatando a data como yyyy-MM-dd
-          final String formattedDate = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-
-          // Requisição alternativa usando URL direta
-          final response = await _restClientDio.get(
-            '${BaseUrls.scheduling}/workshop/$workshopId/availability?date=$formattedDate',
-          );
-
-          if (response.data == null) return [];
-
-          final List<String> hours = [];
-          try {
-            final List<dynamic> hoursList = response.data as List;
-            for (final dynamic hourItem in hoursList) {
-              if (hourItem != null) {
-                hours.add(hourItem.toString());
-              }
-            }
-          } catch (castError) {
-            log('Erro ao processar lista de horários: $castError');
-          }
-
-          return hours;
-        } catch (fallbackError) {
-          log('Erro também na requisição alternativa de horários: $fallbackError');
-          // Não criamos mais horários fictícios, pois queremos mostrar apenas horários realmente disponíveis
-          return [];
-        }
-      }
-
-      // Se houver outros erros, retornamos uma lista vazia
       return [];
     }
   }
@@ -189,15 +144,19 @@ class RequestAppointmentProvider {
   // Método para buscar datas disponíveis para agendamento
   Future<List<DateTime>> getAvailableDates({
     required String workshopId,
+    required List<String> workshopHours,
   }) async {
-    // Log para debug
     log('Buscando datas disponíveis para oficina: $workshopId');
 
     try {
-      // Simplificando a requisição para evitar problemas com parâmetros extras
-      final Map<String, dynamic> params = {
+      // Validando o formato do workshopId
+      if (!RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(workshopId)) {
+        log('Formato de workshopId inválido: $workshopId');
+        return _generateDatesFromHours(workshopHours);
+      }
+
+      final params = {
         'workshopId': workshopId,
-        // Removemos todos os outros parâmetros que podem estar causando o erro
       };
 
       log('Parâmetros da requisição: $params');
@@ -207,79 +166,87 @@ class RequestAppointmentProvider {
         queryParameters: params,
       );
 
-      if (response.data == null) {
-        log('Resposta da API de datas disponíveis é null');
-        return [];
-      }
-
-      log('Resposta da API recebida: ${response.data}');
-
-      // Convertendo a resposta para uma lista de objetos DateTime
-      final List<DateTime> dates = [];
-
-      try {
-        final List<dynamic> dateList = response.data as List;
-        for (final dynamic dateItem in dateList) {
-          try {
-            if (dateItem is String) {
-              dates.add(DateTime.parse(dateItem));
-            } else if (dateItem is int) {
-              dates.add(DateTime.fromMillisecondsSinceEpoch(dateItem));
-            } else {
-              log('Formato de data não reconhecido: $dateItem');
-            }
-          } catch (parseError) {
-            log('Erro ao converter data específica: $parseError');
-          }
-        }
-      } catch (castError) {
-        log('Erro ao processar lista de datas: $castError');
-      }
-
-      log('Datas disponíveis processadas: ${dates.length}');
-
-      // Ordenando as datas
-      dates.sort((a, b) => a.compareTo(b));
-      return dates;
-    } catch (e) {
-      log('Erro ao buscar datas disponíveis: $e');
-
-      // Tentativa alternativa com URL diferente
-      try {
-        // Requisição alternativa usando outra estrutura de URL
-        final response = await _restClientDio.get(
-          '${BaseUrls.scheduling}/workshop/$workshopId/available-dates',
-        );
-
-        if (response.data == null) return [];
-
+      if (response.statusCode == 200 && response.data != null) {
+        log('Datas disponíveis recebidas: ${response.data}');
+        
         final List<DateTime> dates = [];
-        try {
-          final List<dynamic> dateList = response.data as List;
-          for (final dynamic dateItem in dateList) {
+        if (response.data is List) {
+          for (final dynamic dateItem in response.data) {
             try {
               if (dateItem is String) {
                 dates.add(DateTime.parse(dateItem));
-              } else if (dateItem is int) {
-                dates.add(DateTime.fromMillisecondsSinceEpoch(dateItem));
               }
             } catch (parseError) {
-              log('Erro ao converter data específica: $parseError');
+              log('Erro ao converter data: $parseError');
             }
           }
-        } catch (castError) {
-          log('Erro ao processar lista de datas: $castError');
         }
 
-        dates.sort((a, b) => a.compareTo(b));
-        return dates;
-      } catch (fallbackError) {
-        log('Erro também na requisição alternativa: $fallbackError');
+        if (dates.isNotEmpty) {
+          dates.sort((a, b) => a.compareTo(b));
+          log('Datas disponíveis carregadas: ${dates.length}');
+          return dates;
+        }
+      }
 
-        // Retornamos uma lista vazia em vez de gerar datas simuladas
-        log('Não foi possível obter datas disponíveis da API');
-        return [];
+      log('Gerando datas a partir do horário de funcionamento como fallback.');
+      return _generateDatesFromHours(workshopHours);
+    } catch (e) {
+      log('Erro ao buscar datas disponíveis: $e');
+      return _generateDatesFromHours(workshopHours);
+    }
+  }
+
+  List<DateTime> _generateDatesFromHours(List<String>? workshopHours) {
+    if (workshopHours == null || workshopHours.isEmpty) {
+      log('Horários de funcionamento não fornecidos. Usando horários padrão.');
+      workshopHours = ['09:00-18:00']; // Horário padrão de funcionamento
+    }
+
+    final List<DateTime> generatedDates = [];
+    final now = DateTime.now();
+
+    for (int i = 0; i < 7; i++) {
+      final date = now.add(Duration(days: i));
+      for (final hour in workshopHours) {
+        try {
+          final timeRange = hour.split('-');
+          if (timeRange.length == 2) {
+            final startTime = timeRange[0].split(':');
+            final endTime = timeRange[1].split(':');
+
+            final startHour = int.parse(startTime[0]);
+            final startMinute = int.parse(startTime[1]);
+            final endHour = int.parse(endTime[0]);
+            final endMinute = int.parse(endTime[1]);
+
+            // Gerar horários dentro do intervalo
+            DateTime current = DateTime(date.year, date.month, date.day, startHour, startMinute);
+            final endDateTime = DateTime(date.year, date.month, date.day, endHour, endMinute);
+
+            while (current.isBefore(endDateTime) || current.isAtSameMomentAs(endDateTime)) {
+              generatedDates.add(current);
+              current = current.add(Duration(minutes: 30)); // Incrementa de 30 em 30 minutos
+            }
+          } else {
+            log('Formato de horário inválido: $hour');
+          }
+        } catch (e) {
+          log('Erro ao gerar data a partir do horário: $hour. Erro: $e');
+        }
       }
     }
+
+    return generatedDates;
+  }
+
+  List<String> _generateFallbackHours() {
+    log('Gerando horários de fallback padrão.');
+    final List<String> fallbackHours = [];
+    for (int hour = 9; hour < 18; hour++) {
+      fallbackHours.add('${hour.toString().padLeft(2, '0')}:00');
+      fallbackHours.add('${hour.toString().padLeft(2, '0')}:30');
+    }
+    return fallbackHours;
   }
 }

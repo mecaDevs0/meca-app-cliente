@@ -1,3 +1,4 @@
+
 import 'package:mega_commons/mega_commons.dart';
 
 import '../../core/app_urls.dart';
@@ -6,7 +7,7 @@ import '../models/workshopService/workshop_service.dart';
 
 class CoreProvider {
   CoreProvider({required RestClientDio restClientDio})
-      : _restClientDio = restClientDio;
+    : _restClientDio = restClientDio;
 
   final RestClientDio _restClientDio;
 
@@ -18,12 +19,11 @@ class CoreProvider {
     String? model,
   }) async {
     final queryParameters = <String, dynamic>{
-      'page': page,
-      'limit': limit,
-      'plate': plate,
-      'manufacturer': manufacturer,
-      'model': model,
-      'dataBlocked': 0,
+      if (page != null) 'page': page,
+      if (limit != null) 'limit': limit,
+      if (plate != null) 'plate': plate,
+      if (manufacturer != null) 'manufacturer': manufacturer,
+      if (model != null) 'model': model,
     };
 
     final response = await _restClientDio.get(
@@ -42,8 +42,7 @@ class CoreProvider {
   }) async {
     final queryParameters = <String, dynamic>{
       'workshopId': workshopId,
-      'limit': 0,
-      'dataBlocked': 0,
+      if (limit != null) 'limit': limit,
     };
 
     final response = await _restClientDio.get(

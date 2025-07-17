@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mega_commons/mega_commons.dart';
@@ -5,7 +6,6 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../../core/core.dart';
 import '../../../core/utils/auth_helper.dart';
-import '../../../core/widgets/body_modal_timer.dart';
 import '../../../data/models/scheduling/scheduling.dart';
 import '../../../data/models/scheduling/vehicle_scheduling.dart';
 import '../../../data/models/scheduling/workshop_scheduling.dart';
@@ -77,7 +77,7 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
                   const SizedBox(height: 8),
                   const SelectVehicleWidget(),
                   const SizedBox(height: 16),
-                  // Seção de seleç��o de data e horário com feedback aprimorado
+                  // Seção de seleção de data e horário com feedback aprimorado
                   _buildDateTimeSelection(context),
                   const SizedBox(height: 16),
                   BuildTextField(
@@ -114,11 +114,11 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
                         Scheduling(
                           workshopServices: controller.selectedServices,
                           vehicle: VehicleScheduling(
-                            id: controller.selectedVehicle?.id,
+                            id: controller.selectedVehicle?.id?.toString(),
                             plate: controller.selectedVehicle?.plate,
                           ),
                           workshop: WorkshopScheduling(
-                            id: controller.workshopId,
+                            id: controller.workshopId?.toString(),
                             fullName: controller.workshopName,
                           ),
                           observations: obsController.text,
@@ -175,9 +175,9 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
 
         // Mensagem de erro de disponibilidade de data
         Obx(() {
-          // Só mostra erro se for visitante E não estiver logado
           if (controller.hasAvailabilityError &&
-              controller.availabilityErrorMessage.contains('oficina não tem horários') && AuthHelper.isGuest) {
+              controller.availabilityErrorMessage.contains('oficina não tem horários') && 
+              AuthHelper.isGuest) {
             return Padding(
               padding: const EdgeInsets.only(top: 8.0),
               child: Row(
@@ -199,22 +199,37 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
 
         const SizedBox(height: 16),
 
-        // Seleção de horário
-        AppTextField(
-          controller: timeController,
-          label: 'Horário',
-          hintText: 'Selecione o horário',
-          suffixIcon: Padding(
-            padding: const EdgeInsets.all(2),
-            child: SvgPicture.asset(
-              AppImages.clockHour,
-              width: 16,
-              height: 16,
+        // Seleção de horário - Corrigida lógica de habilitação
+        Obx(() {
+          // Só observa variáveis Rx do controller
+          final isLoading = controller.isLoadingAvailability;
+          final availableHours = controller.availableHours;
+          // O campo só é habilitado se a data estiver preenchida (não Rx), não estiver carregando e houver horários disponíveis
+          final isEnabled = dateController.text.isNotEmpty &&
+              !isLoading &&
+              availableHours.isNotEmpty;
+          return AppTextField(
+            controller: timeController,
+            label: 'Horário',
+            hintText: dateController.text.isEmpty
+                ? 'Selecione uma data primeiro'
+                : isLoading
+                    ? 'Carregando horários...'
+                    : availableHours.isEmpty
+                        ? 'Nenhum horário disponível'
+                        : 'Selecione o horário',
+            suffixIcon: Padding(
+              padding: const EdgeInsets.all(2),
+              child: SvgPicture.asset(
+                AppImages.clockHour,
+                width: 16,
+                height: 16,
+              ),
             ),
-          ),
-          isRequired: true,
-          onTap: () => _showTimePicker(context),
-        ).unite,
+            isRequired: true,
+            onTap: isEnabled ? () => _showTimePicker(context) : null,
+          ).unite;
+        }),
 
         // Indicador de carregando ou mensagem de erro para horários
         Obx(() {
@@ -235,15 +250,15 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
                   Text(
                     'Carregando horários disponíveis...',
                     style: TextStyle(
-                      color: AppColors.fontDarkGrayColor,
-                      fontSize: 12
+                        color: AppColors.fontDarkGrayColor,
+                        fontSize: 12
                     ),
                   ),
                 ],
               ),
             );
           } else if (controller.hasAvailabilityError &&
-                     controller.availabilityErrorMessage.contains('horários disponíveis')) {
+              controller.availabilityErrorMessage.contains('horários disponíveis')) {
             return Padding(
               padding: const EdgeInsets.only(top: 8.0),
               child: Row(
@@ -259,6 +274,24 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
                 ],
               ),
             );
+          } else if (dateController.text.isNotEmpty &&
+              !controller.isLoadingAvailability &&
+              controller.availableHours.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.only(top: 8.0),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue, size: 16),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Nenhum horário disponível para esta data. Tente outra data.',
+                      style: TextStyle(color: Colors.blue, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            );
           }
           return const SizedBox.shrink();
         }),
@@ -269,7 +302,7 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
   /// Mostra o seletor de data com validação aprimorada
   Future<void> _showDatePicker(BuildContext context) async {
     // Informa ao usuário que estamos carregando as datas disponíveis
-    MegaSnackbar.showErroSnackBar('Carregando datas disponíveis...');
+    MegaSnackbar.showSuccessSnackBar('Carregando datas disponíveis...');
 
     // Carrega as datas disponíveis antes de mostrar o calendário
     final success = await controller.loadAvailableDates();
@@ -278,8 +311,8 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
       // Se houve erro ao carregar datas ou não há datas disponíveis, mostra mensagem
       MegaSnackbar.showErroSnackBar(
         controller.hasAvailabilityError
-          ? controller.availabilityErrorMessage
-          : 'Não há datas disponíveis para agendamento nesta oficina.'
+            ? controller.availabilityErrorMessage
+            : 'Não há datas disponíveis para agendamento nesta oficina.'
       );
       return;
     }
@@ -293,7 +326,6 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
       maximumDate: DateTime.now().add(const Duration(days: 365)),
       // Removido selectableDayPredicate pois não existe
       onSelectDate: (date) {
-
         dateController.text = date.toddMMyyyy();
         // Limpa o horário selecionado anteriormente
         timeController.clear();

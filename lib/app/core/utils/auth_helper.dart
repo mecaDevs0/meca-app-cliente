@@ -1,3 +1,4 @@
+
 import 'package:flutter/foundation.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mega_commons/shared/models/auth_token.dart';
@@ -21,6 +22,20 @@ class AuthHelper {
     }
 
     return loginFlag && token != null;
+  }
+
+  /// Método para obter o token de autenticação válido
+  static AuthToken? getValidToken() {
+    final token = AuthToken.fromCache();
+    if (token != null && (token.accessToken?.isNotEmpty ?? false)) {
+      return token;
+    }
+    return null;
+  }
+
+  /// Método para verificar se há um token válido disponível
+  static bool hasValidToken() {
+    return getValidToken() != null;
   }
 
   static Future<void> setGuest() async {

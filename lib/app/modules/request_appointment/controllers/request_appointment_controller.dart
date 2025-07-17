@@ -7,6 +7,7 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import '../../../core/app_colors.dart';
 import '../../../core/args/workshop_args.dart';
 import '../../../core/utils/auth_helper.dart';
+import '../../../data/models/profile.dart';
 import '../../../data/models/scheduling/scheduling.dart';
 import '../../../data/models/scheduling/vehicle_scheduling.dart';
 import '../../../data/models/service.dart';
@@ -394,172 +395,164 @@ class RequestAppointmentController extends GetxController {
 
   // Função para verificar disponibilidade de horários para a data selecionada
   Future<bool> checkAvailabilityForDate(DateTime date) async {
-    _isLoadingAvailability.value = true;
-    _availableHours.clear();
-    _hasAvailabilityError.value = false;
-    _availabilityErrorMessage.value = '';
-    _selectedDate.value = date;
+  _isLoadingAvailability.value = true;
+  _availableHours.clear();
+  _hasAvailabilityError.value = false;
+  _availabilityErrorMessage.value = '';
+  _selectedDate.value = date;
 
-    try {
-      bool success = false;
-      await MegaRequestUtils.load(
-        action: () async {
-          log('Verificando horários disponíveis para a oficina $workshopId na data ${date.toddMMyyyy()}');
+  try {
+    log('Verificando horários disponíveis para a oficina $workshopId na data ${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}');
 
-          // Chamada à API para verificar horários disponíveis
-          final response = await _requestAppointmentProvider.getAvailableHours(
-            workshopId: workshopId,
-            date: date,
-          );
-
-          // Atualiza a lista de horários disponíveis
-          _availableHours.assignAll(response);
-
-          if (response.isEmpty) {
-            // Se não veio nenhum horário da API, gera horários com base no horário de funcionamento
-            if (_openingHours != null && _openingHours!.isNotEmpty) {
-              final generatedHours = _generateHoursFromOpening(_openingHours!);
-              if (generatedHours.isNotEmpty) {
-                _availableHours.assignAll(generatedHours);
-                _hasAvailabilityError.value = false;
-                _availabilityErrorMessage.value = '';
-                log('Horários gerados localmente: ${generatedHours.length}');
-                success = true;
-              } else {
-                _hasAvailabilityError.value = true;
-                _availabilityErrorMessage.value = 'Não há horários disponíveis para esta data. Por favor, selecione outra data.';
-                log('Nenhum horário disponível para ${date.toddMMyyyy()}');
-                success = false;
-              }
-            } else {
-              _hasAvailabilityError.value = true;
-              _availabilityErrorMessage.value = 'Não há horários disponíveis para esta data. Por favor, selecione outra data.';
-              log('Nenhum horário disponível para ${date.toddMMyyyy()}');
-              success = false;
-            }
-          } else {
-            log('Horários disponíveis carregados: ${response.length}');
-            // Ordenando os horários cronologicamente
-            _availableHours.sort();
-            success = true;
-          }
-        },
-        onError: (error) {
-          _hasAvailabilityError.value = true;
-          _availabilityErrorMessage.value = 'Não foi possível carregar os horários disponíveis. Tente novamente.';
-          log('Erro ao carregar horários disponíveis: $error');
-          success = false;
-        },
-        onFinally: () => _isLoadingAvailability.value = false,
-      );
-      return success;
-    } catch (e) {
-      _isLoadingAvailability.value = false;
+    // Obtém o profileId do cache
+    final profile = Profile.fromCache();
+    if (profile.id == null || profile.id!.isEmpty) {
       _hasAvailabilityError.value = true;
-      _availabilityErrorMessage.value = 'Ocorreu um erro inesperado. Tente novamente.';
-      log('Erro crítico ao carregar horários disponíveis: $e');
+      _availabilityErrorMessage.value = 'Erro de autenticação. Faça login novamente.';
+      _isLoadingAvailability.value = false;
       return false;
     }
+
+    final response = await _requestAppointmentProvider.getAvailableHours(
+      workshopId: workshopId,
+      date: date,
+      profileId: profile.id!,
+    );
+
+    if (response.isNotEmpty) {
+      _availableHours.assignAll(response);
+      log('Horários disponíveis carregados: ${response.length}');
+      _availableHours.sort();
+      _isLoadingAvailability.value = false;
+      return true;
+    }
+
+    // Se não veio da API, tenta gerar localmente
+    List<String> generatedHours = [];
+    if (_openingHours != null && _openingHours!.isNotEmpty) {
+      generatedHours = _generateHoursFromOpening(_openingHours!);
+    }
+    // Se ainda não tem, usa um padrão das 08:00 às 18:00
+    if (generatedHours.isEmpty) {
+      generatedHours = _generateHoursFromOpening('08:00-18:00');
+    }
+    if (generatedHours.isNotEmpty) {
+      _availableHours.assignAll(generatedHours);
+      log('Horários gerados localmente: ${generatedHours.length}');
+      _isLoadingAvailability.value = false;
+      return true;
+    }
+
+    // Se chegou aqui, realmente não há horários
+    _hasAvailabilityError.value = true;
+    _availabilityErrorMessage.value = 'Não há horários disponíveis para esta data.';
+    log('Nenhum horário disponível para ${date.day}/${date.month}/${date.year}');
+    _isLoadingAvailability.value = false;
+    return false;
+  } catch (e) {
+    // Em caso de erro, tenta gerar localmente também
+    List<String> generatedHours = [];
+    if (_openingHours != null && _openingHours!.isNotEmpty) {
+      generatedHours = _generateHoursFromOpening(_openingHours!);
+    }
+    if (generatedHours.isEmpty) {
+      generatedHours = _generateHoursFromOpening('08:00-18:00');
+    }
+    if (generatedHours.isNotEmpty) {
+      _availableHours.assignAll(generatedHours);
+      log('Horários gerados localmente após erro: ${generatedHours.length}');
+      _isLoadingAvailability.value = false;
+      return true;
+    }
+    _hasAvailabilityError.value = true;
+    _availabilityErrorMessage.value = 'Erro ao carregar horários. Tente novamente.';
+    log('Erro ao carregar horários disponíveis: $e');
+    _isLoadingAvailability.value = false;
+    return false;
   }
+}
 
   // Função auxiliar para gerar horários a partir do horário de funcionamento
   List<String> _generateHoursFromOpening(String openingHours) {
-    // Exemplo: "Seg-Sex: 08:00-18:00" ou "08:00 às 18:00"
-    final regex = RegExp(r'(\d{2}:\d{2})\s*[aà]?\s*(\d{2}:\d{2})');
-    final match = regex.firstMatch(openingHours);
-    if (match != null && match.groupCount >= 2) {
-      final start = match.group(1)!;
-      final end = match.group(2)!;
+    // Aceita formatos como "Seg-Sex: 08:00-18:00", "08:00 às 18:00", "08:00-18:00", ou múltiplos separados por vírgula
+    final List<String> hours = [];
+    // Divide por vírgula caso venha múltiplos períodos
+    final parts = openingHours.split(',');
+    for (final part in parts) {
+      // Extrai apenas o trecho de horário (remove prefixos de dias, etc)
+      final timeMatch = RegExp(r'(\d{2}:\d{2})\s*[-aà]?\s*(\d{2}:\d{2})').firstMatch(part);
+      if (timeMatch != null && timeMatch.groupCount >= 2) {
+        final start = timeMatch.group(1)!;
+        final end = timeMatch.group(2)!;
 
-      final startParts = start.split(':');
-      final startHour = int.parse(startParts[0]);
-      final startMinute = int.parse(startParts[1]);
+        final startParts = start.split(':');
+        final startHour = int.parse(startParts[0]);
+        final startMinute = int.parse(startParts[1]);
 
-      final endParts = end.split(':');
-      final endHour = int.parse(endParts[0]);
-      final endMinute = int.parse(endParts[1]);
+        final endParts = end.split(':');
+        final endHour = int.parse(endParts[0]);
+        final endMinute = int.parse(endParts[1]);
 
-      final hours = <String>[];
-      DateTime current = DateTime(2000, 1, 1, startHour, startMinute);
-      final endDateTime = DateTime(2000, 1, 1, endHour, endMinute);
+        DateTime current = DateTime(2000, 1, 1, startHour, startMinute);
+        final endDateTime = DateTime(2000, 1, 1, endHour, endMinute);
 
-      while (current.isBefore(endDateTime) || current.isAtSameMomentAs(endDateTime)) {
-        hours.add('${current.hour.toString().padLeft(2, '0')}:${current.minute.toString().padLeft(2, '0')}');
-        current = current.add(const Duration(minutes: 30));
+        while (current.isBefore(endDateTime) || current.isAtSameMomentAs(endDateTime)) {
+          hours.add('${current.hour.toString().padLeft(2, '0')}:${current.minute.toString().padLeft(2, '0')}');
+          current = current.add(const Duration(minutes: 30));
+        }
       }
-      return hours;
     }
-    return [];
+    return hours;
   }
 
   // Função para carregar os dias disponíveis para agendamento
-  Future<bool> loadAvailableDates() async {
-    _isLoadingAvailability.value = true;
-    _availableDates.clear();
-    _hasAvailabilityError.value = false;
-    _availabilityErrorMessage.value = '';
+Future<bool> loadAvailableDates() async {
+  _isLoadingAvailability.value = true;
+  _availableDates.clear();
+  _hasAvailabilityError.value = false;
+  _availabilityErrorMessage.value = '';
 
-    try {
-      bool success = false;
-      await MegaRequestUtils.load(
-        action: () async {
-          // Chamada à API para verificar datas disponíveis
-          final response = await _requestAppointmentProvider.getAvailableDates(
-            workshopId: workshopId,
-          );
+  try {
+    log('Carregando datas disponíveis para oficina: $workshopId');
 
-          // Atualiza a lista de datas disponíveis
-          _availableDates.assignAll(response);
+    final response = await _requestAppointmentProvider.getAvailableDates(
+      workshopId: workshopId,
+      workshopHours: _openingHours?.split(',') ?? [],
+    );
 
-          if (response.isEmpty) {
-            // Gera datas dos próximos 60 dias se houver horário de funcionamento
-            if (_openingHours != null && _openingHours!.isNotEmpty) {
-              final now = DateTime.now();
-              final today = DateTime(now.year, now.month, now.day);
-              final List<DateTime> generatedDates = [];
+    _availableDates.assignAll(response);
 
-              // Se não há datas da API, e há horário de funcionamento, assume-se dias úteis (Seg-Sex) disponíveis
-              for (int i = 0; i < 60; i++) {
-                final date = today.add(Duration(days: i));
-                // Adiciona a data apenas se for um dia útil (segunda a sexta)
-                if (date.weekday >= DateTime.monday && date.weekday <= DateTime.friday) {
-                  generatedDates.add(date);
-                }
-              }
-              _availableDates.assignAll(generatedDates);
-              _availableDates.sort((a, b) => a.compareTo(b));
-              log('Datas geradas localmente com base no horário de funcionamento: ${_availableDates.length}');
-              success = true;
-            } else {
-              _hasAvailabilityError.value = true;
-              _availabilityErrorMessage.value = 'Esta oficina não tem horários disponíveis para agendamento. Por favor, selecione outra oficina.';
-              log('Nenhuma data disponível para agendamento');
-              success = false;
-            }
-          } else {
-            // Ordena as datas por ordem crescente
-            _availableDates.sort((a, b) => a.compareTo(b));
-            log('Datas disponíveis carregadas: ${response.length}');
-            success = true;
-          }
-        },
-        onError: (error) {
-          _hasAvailabilityError.value = true;
-          _availabilityErrorMessage.value = 'Não foi possível carregar as datas disponíveis. Tente novamente.';
-          log('Erro ao carregar datas disponíveis: $error');
-          success = false;
-        },
-        onFinally: () => _isLoadingAvailability.value = false,
-      );
-      return success;
-    } catch (e) {
-      _isLoadingAvailability.value = false;
-      _hasAvailabilityError.value = true;
-      _availabilityErrorMessage.value = 'Ocorreu um erro inesperado. Tente novamente.';
-      log('Erro crítico ao carregar datas disponíveis: $e');
-      return false;
+    if (response.isEmpty) {
+      // Gera datas dos próximos 60 dias úteis
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final List<DateTime> generatedDates = [];
+
+      for (int i = 1; i <= 60; i++) {
+        final date = today.add(Duration(days: i));
+        // Adiciona apenas dias úteis (segunda a sexta)
+        if (date.weekday >= DateTime.monday && date.weekday <= DateTime.friday) {
+          generatedDates.add(date);
+        }
+      }
+      
+      _availableDates.assignAll(generatedDates);
+      log('Datas geradas localmente: ${_availableDates.length}');
+    } else {
+      _availableDates.sort((a, b) => a.compareTo(b));
+      log('Datas disponíveis carregadas: ${response.length}');
     }
+
+    _isLoadingAvailability.value = false;
+    return true;
+  } catch (e) {
+    _hasAvailabilityError.value = true;
+    _availabilityErrorMessage.value = 'Erro ao carregar datas. Tente novamente.';
+    log('Erro ao carregar datas disponíveis: $e');
+    _isLoadingAvailability.value = false;
+    return false;
   }
+}
 
   // Método para verificar se uma data está disponível para agendamento
   bool isDateAvailable(DateTime date) {
