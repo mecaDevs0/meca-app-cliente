@@ -3,6 +3,7 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import '../../../data/models/service.dart';
 
 class FilterController extends GetxController {
+  static const double maxDistance = 50.0;
   final _distance = RxDouble(10.0);
   final _rating = RxInt(0);
   final _searchQuery = RxString('');
@@ -10,6 +11,7 @@ class FilterController extends GetxController {
   final _availableCategories = RxList<Service>();
 
   double get distance => _distance.value;
+  double get maxAllowedDistance => maxDistance;
   int get rating => _rating.value;
   String get searchQuery => _searchQuery.value;
   List<Service> get selectedCategories => _selectedCategories;
@@ -23,7 +25,10 @@ class FilterController extends GetxController {
   }) {
     _searchQuery.value = searchQuery ?? _searchQuery.value;
     _rating.value = rating ?? _rating.value;
-    _distance.value = distance ?? _distance.value;
+    double filteredDistance = distance ?? _distance.value;
+    if (filteredDistance > maxDistance) filteredDistance = maxDistance;
+    if (filteredDistance < 1) filteredDistance = 1;
+    _distance.value = filteredDistance;
 
     if (selectedCategories != null) {
       _selectedCategories.assignAll(selectedCategories);

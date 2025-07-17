@@ -174,12 +174,12 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             ),
             Slider(
               activeColor: AppColors.primaryColor,
-              value: _distance,
-              min: 0,
-              max: 100,
-              divisions: 100,
+              value: _distance > 50 ? 50 : _distance,
+              min: 1,
+              max: 50,
+              divisions: 49,
               label: '${_distance.toInt()}Km',
-              onChanged: (value) => setState(() => _distance = value),
+              onChanged: (value) => setState(() => _distance = value > 50 ? 50 : value),
             ),
             const SizedBox(height: 16),
             MegaBaseButton(
