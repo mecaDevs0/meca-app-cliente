@@ -21,6 +21,11 @@ class HomeProvider {
     double? longUser,
     String? workshopName,
   }) async {
+    // Limita a distância máxima a 50km
+    final int? limitedDistance = (distance != null && distance > 0)
+        ? (distance > 50 ? 50 : distance)
+        : 50; // padrão: 50km se não informado
+
     final queryParameters = <String, dynamic>{
       'page': page,
       'limit': limit,
@@ -28,7 +33,7 @@ class HomeProvider {
       if (search != null) 'search': search,
       if (serviceType != null && serviceType.isNotEmpty)
         'serviceTypes': serviceType,
-      if (distance != null && distance != 0) 'distance': distance,
+      if (limitedDistance != null) 'distance': limitedDistance,
       if (latUser != null) 'latUser': latUser,
       if (longUser != null) 'longUser': longUser,
       if (rating != null && rating != 0) 'rating': rating,

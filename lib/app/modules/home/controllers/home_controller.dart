@@ -197,7 +197,7 @@ class HomeController extends GetxController {
             page: page,
             limit: _workshopsLimit,
             rating: rating > 0 ? rating : null,
-            distance: distance.toInt(),
+            distance: distance > 50 ? 50 : distance.toInt(),
             serviceType: services.map((service) => service.id!).toList(),
             search: _filterController.searchQuery,
           );
@@ -243,12 +243,14 @@ class HomeController extends GetxController {
             }
           }
 
-          final isLastPage = response.length < _workshopsLimit;
+          // Filtra localmente para garantir que só oficinas até 50km sejam exibidas
+          final filtered = response.where((workshop) => workshop.distance != null && workshop.distance! <= 50).toList();
+          final isLastPage = filtered.length < _workshopsLimit;
           if (isLastPage) {
-            workshopsPagingController.appendLastPage(response);
+            workshopsPagingController.appendLastPage(filtered);
           } else {
             final nextPageKey = page + 1;
-            workshopsPagingController.appendPage(response, nextPageKey);
+            workshopsPagingController.appendPage(filtered, nextPageKey);
           }
         } catch (e) {
           workshopsPagingController.error = e;
