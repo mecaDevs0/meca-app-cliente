@@ -243,8 +243,9 @@ class HomeController extends GetxController {
             }
           }
 
-          // Filtra localmente para garantir que só oficinas até 50km sejam exibidas
-          final filtered = response.where((workshop) => workshop.distance != null && workshop.distance! <= 50).toList();
+          // Filtra localmente para garantir que só oficinas até a distância escolhida sejam exibidas
+          final maxDistance = distance > 50 ? 50 : distance;
+          final filtered = response.where((workshop) => workshop.distance != null && workshop.distance! <= maxDistance).toList();
           final isLastPage = filtered.length < _workshopsLimit;
           if (isLastPage) {
             workshopsPagingController.appendLastPage(filtered);
@@ -347,11 +348,15 @@ class HomeController extends GetxController {
     int? rating,
     double? distance,
   }) {
+    // Garante que a distância nunca seja menor que 1km nem maior que 50km
+    double filteredDistance = (distance ?? _filterController.distance);
+    if (filteredDistance < 1) filteredDistance = 1;
+    if (filteredDistance > 50) filteredDistance = 50;
     _filterController.updateFilters(
       searchQuery: searchQuery,
       selectedCategories: selectedCategories,
       rating: rating,
-      distance: distance,
+      distance: filteredDistance,
     );
     workshopsPagingController.refresh();
   }
