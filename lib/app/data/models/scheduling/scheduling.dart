@@ -30,25 +30,25 @@ class Scheduling {
 
   Map<String, dynamic> toJson() {
     final json = _$SchedulingToJson(this);
-    
-    // Garantir que IDs sejam strings
-    if (json['workshop'] != null && json['workshop']['id'] != null) {
+
+    // Garantir que IDs sejam strings apenas se for Map
+    if (json['workshop'] != null && json['workshop'] is Map && json['workshop']['id'] != null) {
       json['workshop']['id'] = json['workshop']['id'].toString();
     }
-    
-    if (json['vehicle'] != null && json['vehicle']['id'] != null) {
+
+    if (json['vehicle'] != null && json['vehicle'] is Map && json['vehicle']['id'] != null) {
       json['vehicle']['id'] = json['vehicle']['id'].toString();
     }
-    
+
     // Garantir que workshopServices tenham IDs como string
     if (json['workshopServices'] != null && json['workshopServices'] is List) {
       for (var service in json['workshopServices']) {
-        if (service is Map && service['service'] != null && service['service']['id'] != null) {
+        if (service is Map && service['service'] != null && service['service'] is Map && service['service']['id'] != null) {
           service['service']['id'] = service['service']['id'].toString();
         }
       }
     }
-    
+
     return json;
   }
 }
