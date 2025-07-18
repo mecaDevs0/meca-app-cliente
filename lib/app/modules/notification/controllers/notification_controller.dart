@@ -77,11 +77,21 @@ class NotificationsController extends GetxController {
   Future<void> clearAllNotifications() async {
     await MegaRequestUtils.load(
       action: () async {
-        // Implementação de mock: Limpa a lista localmente
-        pagingController.itemList?.clear();
-        pagingController.refresh();
-        MegaSnackbar.showSuccessSnackBar('Todas as notificações foram limpas.');
-        // TODO: Implementar a chamada real para o backend para limpar as notificações
+        final List<NotificationModel> notificationsToClear = List.from(pagingController.itemList ?? []);
+        final List<Future<void>> removalFutures = [];
+
+        for (final notification in notificationsToClear) {
+          if (notification.id != null) {
+            removalFutures.add(_notificationsProvider.removeNotification(notificationId: notification.id!));
+          }
+        }
+        await Future.wait(removalFutures.map((future) => future.catchError((e) {
+          // Log the error but don't rethrow, so other removals can complete
+          print('Error removing notification: $e');
+        }))).whenComplete(() {
+          pagingController.refresh();
+          MegaSnackbar.showSuccessSnackBar('Todas as notificações foram limpas.');
+        });
       },
     );
   }
