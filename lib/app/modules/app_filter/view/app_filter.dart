@@ -139,6 +139,13 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             const Divider(),
             const SizedBox(height: 16),
             const Text(
+              'Avaliação',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            _buildRatingStars(),
+            const SizedBox(height: 24),
+            const Text(
               'Serviços',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
@@ -162,18 +169,22 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             ),
             const SizedBox(height: 24),
             const Text(
-              'Avaliação',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            _buildRatingStars(),
-            const SizedBox(height: 24),
-            const Text(
               'Distância',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 8),
+            Text(
+              '${_distance.toInt()} Km',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primaryColor,
+              ),
+            ),
             Slider(
               activeColor: AppColors.primaryColor,
+              inactiveColor: AppColors.grayLineColor,
+              thumbColor: AppColors.primaryColor,
               value: _distance > 50 ? 50 : _distance,
               min: 1,
               max: 50,

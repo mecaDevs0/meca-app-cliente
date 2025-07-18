@@ -11,11 +11,13 @@ class MechanicWorkshopImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MegaCachedNetworkImage(
-      imageUrl: imageAsset,
-      width: 52,
-      height: 56,
-      radius: 64,
-    );
+    return imageAsset.isEmpty
+        ? const Icon(Icons.broken_image, size: 56) // Placeholder for broken image
+        : MegaCachedNetworkImage(
+            imageUrl: imageAsset,
+            width: 52,
+            height: 56,
+            radius: 64,
+          );
   }
 }

@@ -30,87 +30,19 @@ class HelpCenterView extends GetView<HelpCenterController> {
         child: Column(
           children: [
             const SizedBox(height: 32),
-            Form(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Título',
-                        style: TextStyle(
-                          color: AppColors.blackPrimaryColor,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(
-                        height: 2,
-                      ),
-                      MegaTextFieldWidget(
-                        titleController,
-                        hintText: 'Digite o título',
-                        isRequired: true,
-                        keyboardType: TextInputType.name,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(
-                    height: 32,
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Descrição',
-                        style: TextStyle(
-                          color: AppColors.blackPrimaryColor,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(
-                        height: 2,
-                      ),
-                      MegaTextFieldWidget(
-                        descriptionController,
-                        hintText: 'Digite a descrição',
-                        isRequired: true,
-                        maxLines: 10,
-                        minLines: 5,
-                        keyboardType: TextInputType.name,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-                  Obx(
-                    () => MegaBaseButton(
-                      'Enviar dúvida',
-                      buttonColor: AppColors.primaryColor,
-                      textColor: AppColors.whiteColor,
-                      onButtonPress: () async {
-                        final isSuccess = await controller.submitFaq(
-                          description: descriptionController.text,
-                          title: titleController.text,
-                        );
-
-                        if (isSuccess && context.mounted) {
-                          showInfoBottomSheet(
-                            context: context,
-                            imageAsset: AppImages.mecaCar,
-                            buttonText: 'Ver detalhes',
-                            title: 'Dúvida enviada!',
-                            subtitle:
-                                'em breve a equipe da Meca fará uma analise e entrará em contato o mais breve possível.',
-                            onTap: () {},
-                          );
-                        }
-                      },
-                      buttonHeight: 46,
-                      borderRadius: 4.0,
-                      isLoading: controller.isLoading,
-                    ),
-                  ),
-                ],
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: AppColors.lightGrayColor,
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: const Text(
+                'A função de envio de perguntas diretas está temporariamente indisponível. Estamos trabalhando para reativá-la o mais breve possível. Agradecemos a sua compreensão.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.blackPrimaryColor,
+                  fontSize: 16,
+                ),
               ),
             ),
           ],

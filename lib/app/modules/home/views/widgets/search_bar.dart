@@ -38,28 +38,6 @@ class SearchBarWidget extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.search,
-            color: Colors.grey.shade500,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              onChanged: onSearchChanged,
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                hintText: hintText,
-                hintStyle: TextStyle(
-                  color: Colors.grey.shade500,
-                  fontSize: 14,
-                ),
-              ),
-              style: textStyle, // Aplicando o estilo de texto personalizado
-            ),
-          ),
           if (hasFilter)
             IconButton(
               icon: Icon(
@@ -68,6 +46,42 @@ class SearchBarWidget extends StatelessWidget {
               ),
               onPressed: onFilterTap,
             ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, child) {
+                return TextField(
+                  controller: controller,
+                  onChanged: onSearchChanged,
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    hintText: hintText,
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 14,
+                    ),
+                    suffixIcon: value.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, color: Colors.grey),
+                            onPressed: () {
+                              controller.clear();
+                              onSearchChanged?.call('');
+                            },
+                          )
+                        : null,
+                  ),
+                  style: textStyle, // Aplicando o estilo de texto personalizado
+                );
+              },
+            ),
+          ),
+          Icon(
+            Icons.search,
+            color: Colors.grey.shade500,
+          ),
         ],
       ),
     );

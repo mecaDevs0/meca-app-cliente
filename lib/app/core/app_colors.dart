@@ -9,6 +9,7 @@ abstract class AppColors {
   static const grayLineColor = Color(0xFFDBDBDB);
   static const grayBorderColor = Color(0xFFEEEEEE);
   static const softBlackColor = Color(0xFF52535C);
+  static const grayDarkColor = Color(0xFF424242);
   static const weakGrayColor = Color(0xFFBEBEBE);
   static const neutralGrayColor = Color(0xFFBCBCBC);
   static const redAlertColor = Color(0xFFE8867C);

@@ -293,7 +293,10 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
           mechanicWorkshop: workshop,
           onTap: () => Get.toNamed(
             Routes.mechanicWorkshopDetails,
-            arguments: WorkshopArgs(workshop.id!, workshopName: workshop.fullName),
+            arguments: {
+              'workshopId': workshop.id!,
+              'workshopDetails': workshop,
+            },
           ),
           // Passar indicador de tablet para ajustar elementos internos
           isTablet: true,
@@ -438,7 +441,10 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                         if (GuestAccessHelper.checkGuestAccess(context)) {
                           Get.toNamed(
                             Routes.mechanicWorkshopDetails,
-                            arguments: WorkshopArgs(item.id!, workshopName: item.fullName),
+                            arguments: {
+                              'workshopId': item.id!,
+                              'workshopDetails': item,
+                            },
                           );
                         }
                       },
@@ -501,25 +507,16 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                       ),
                     ),
                   ),
-                  Positioned(
-                    top: 32,
-                    right: 8,
-                    child: GestureDetector(
-                      onTap: () => Navigator.of(context).pop(),
-                      child: SvgPicture.asset(
-                        AppImages.icCloseMenu,
-                        height: 24,
-                        width: 24,
-                      ),
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(height: 20),
               ListTile(
                 title: Row(
                   children: [
-                    SvgPicture.asset(AppImages.icHome),
+                    SvgPicture.asset(
+                      AppImages.icHome,
+                      colorFilter: ColorFilter.mode(AppColors.primaryColor, BlendMode.srcIn),
+                    ),
                     const SizedBox(width: 10),
                     const Text('Início'),
                   ],
@@ -530,7 +527,10 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
               ListTile(
                 title: Row(
                   children: [
-                    SvgPicture.asset(AppImages.icCarHome),
+                    SvgPicture.asset(
+                      AppImages.icCarHome,
+                      colorFilter: ColorFilter.mode(AppColors.primaryColor, BlendMode.srcIn),
+                    ),
                     const SizedBox(width: 10),
                     const Text('Meus veículos'),
                   ],
@@ -547,10 +547,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                   children: [
                     SvgPicture.asset(
                       AppImages.icOrders,
-                      colorFilter: const ColorFilter.mode(
-                        AppColors.softBlackColor,
-                        BlendMode.srcIn,
-                      ),
+                      colorFilter: ColorFilter.mode(AppColors.primaryColor, BlendMode.srcIn),
                     ),
                     const SizedBox(width: 10),
                     const Text('Pedidos'),
@@ -569,7 +566,10 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
               ListTile(
                 title: Row(
                   children: [
-                    SvgPicture.asset(AppImages.icUserHome),
+                    SvgPicture.asset(
+                      AppImages.icUserHome,
+                      colorFilter: ColorFilter.mode(AppColors.primaryColor, BlendMode.srcIn),
+                    ),
                     const SizedBox(width: 10),
                     const Text(
                       'Meu perfil',
@@ -594,7 +594,10 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
               ListTile(
                 title: Row(
                   children: [
-                    SvgPicture.asset(AppImages.icHelp),
+                    SvgPicture.asset(
+                      AppImages.icHelp,
+                      colorFilter: ColorFilter.mode(AppColors.primaryColor, BlendMode.srcIn),
+                    ),
                     const SizedBox(width: 10),
                     const Text(
                       'Central de ajuda',
@@ -609,7 +612,19 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                 onTap: () {
                   if (AuthHelper.isGuest) {
                     console.log('Usuário visitante tentando acessar central de ajuda');
-                    Get.offAllNamed(Routes.login);
+                    Get.defaultDialog(
+                      title: 'Acesso Restrito',
+                      middleText: 'A Central de Ajuda está disponível apenas para usuários logados. Por favor, faça login para acessar este recurso.',
+                      textConfirm: 'Fazer Login',
+                      confirmTextColor: Colors.white,
+                      buttonColor: AppColors.primaryColor,
+                      onConfirm: () {
+                        Get.back(); // Fecha o diálogo
+                        Get.offAllNamed(Routes.login); // Redireciona para a tela de login
+                      },
+                      textCancel: 'Cancelar',
+                      cancelTextColor: AppColors.primaryColor,
+                    );
                   } else {
                     Get.toNamed(Routes.helpCenter);
                   }
@@ -684,7 +699,10 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                     } else {
                       Get.toNamed(
                         Routes.mechanicWorkshopDetails,
-                        arguments: WorkshopArgs(workshop.id!, workshopName: workshop.fullName),
+                        arguments: {
+                          'workshopId': workshop.id!,
+                          'workshopDetails': workshop,
+                        },
                       );
                     }
                   },

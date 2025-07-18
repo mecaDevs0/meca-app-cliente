@@ -19,13 +19,24 @@ class MechanicWorkshopReviewsController extends GetxController {
 
   String get ratingQuery => _ratingQuery.value;
   late String workshopId;
+  String? workshopName;
 
   final _limit = 30;
 
   @override
   void onInit() {
-    final workshop = Get.arguments as WorkshopArgs;
-    workshopId = workshop.workshopId;
+    final args = Get.arguments;
+    if (args is Map<String, dynamic>) {
+      workshopId = args['workshopId'] as String;
+      workshopName = args['workshopName'] as String?;
+    } else if (args is WorkshopArgs) {
+      workshopId = args.workshopId;
+      workshopName = args.workshopName;
+    } else {
+      // Handle invalid arguments, e.g., navigate back or show an error
+      print('Invalid arguments passed to MechanicWorkshopReviewsController');
+      workshopId = ''; // Ensure it's initialized
+    }
     pagingController.addPageRequestListener(getWorkshopRating);
     super.onInit();
   }

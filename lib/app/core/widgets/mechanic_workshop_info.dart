@@ -42,14 +42,20 @@ class MechanicWorkshopInfo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        MegaCachedNetworkImage(
-          radius: 100,
-          width: 60,
-          height: 60,
-          borderWidth: 1.0,
-          borderColor: AppColors.grayBorderColor,
-          imageUrl: imageUrl,
-        ),
+        imageUrl != null && imageUrl!.isNotEmpty
+            ? MegaCachedNetworkImage(
+                radius: 100,
+                width: 60,
+                height: 60,
+                borderWidth: 1.0,
+                borderColor: AppColors.grayBorderColor,
+                imageUrl: imageUrl,
+              )
+            : const Icon(
+                Icons.broken_image,
+                size: 60,
+                color: AppColors.grayDarkColor, // Or any appropriate color
+              ),
         const SizedBox(
           height: 12,
         ),

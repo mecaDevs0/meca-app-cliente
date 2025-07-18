@@ -358,7 +358,10 @@ class HomeController extends GetxController {
       rating: rating,
       distance: filteredDistance,
     );
-    workshopsPagingController.refresh();
+    // Adiciona um pequeno atraso para garantir que o estado do filtro seja atualizado antes do refresh
+    Future.delayed(const Duration(milliseconds: 100), () {
+      workshopsPagingController.refresh();
+    });
   }
 
   @override

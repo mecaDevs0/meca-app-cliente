@@ -101,31 +101,31 @@ class RequestAppointmentController extends GetxController {
 
       log('Iniciando agendamento para oficina: $workshopId - $workshopName');
 
-      // Se recebeu ID e nome do serviço, vamos pré-selecionar esse serviço
-      String? serviceId;
-      String? serviceName;
+      // Se recebeu um serviço, vamos pré-selecionar esse serviço
+      Service? selectedService;
 
-      if (Get.arguments is WorkshopArgs) {
-        final workshop = Get.arguments as WorkshopArgs;
-        serviceId = workshop.serviceId;
-        serviceName = workshop.serviceName;
+      if (Get.arguments is Map<String, dynamic>) {
+        final args = Get.arguments as Map<String, dynamic>;
+        if (args.containsKey('selectedService')) {
+          selectedService = args['selectedService'] as Service?;
+        }
       }
 
       await initialize();
 
       // Pré-seleciona o serviço se foi recebido nos argumentos
-      if (serviceId != null && serviceName != null) {
+      if (selectedService != null) {
         // Busca o serviço pelo ID na lista de serviços disponíveis
         final preSelectedService = _services.firstWhereOrNull(
-          (service) => service.service?.id == serviceId,
+          (service) => service.service?.id == selectedService!.id,
         );
 
         // Se encontrou o serviço na lista, seleciona-o
         if (preSelectedService != null) {
           _selectedServices.add(preSelectedService);
-          log('Serviço pré-selecionado: $serviceName');
+          log('Serviço pré-selecionado: ${preSelectedService.service?.name}');
         } else {
-          log('Serviço não encontrado na lista de serviços disponíveis: $serviceName');
+          log('Serviço não encontrado na lista de serviços disponíveis: ${selectedService.name}');
         }
       }
     } catch (e) {

@@ -15,6 +15,7 @@ class NotificationModel {
     this.workshop,
     this.profile,
     this.created,
+    this.orderId,
   });
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) =>
@@ -27,6 +28,7 @@ class NotificationModel {
   MechanicWorkshop? workshop;
   Profile? profile;
   int? created;
+  String? orderId;
 
   Map<String, dynamic> toJson() => _$NotificationModelToJson(this);
 }

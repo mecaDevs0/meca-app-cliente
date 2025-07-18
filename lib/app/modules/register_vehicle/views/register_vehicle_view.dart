@@ -8,7 +8,8 @@ import 'package:intl/intl.dart';
 import '../../../core/core.dart';
 import '../../../data/models/vehicle.dart';
 import '../../../routes/app_pages.dart';
-import '../../request_appointment/controllers/request_appointment_controller.dart';
+import 'package:meca_cliente/app/modules/request_appointment/controllers/request_appointment_controller.dart';
+import '../../../data/models/scheduling/vehicle_scheduling.dart';
 import '../controllers/register_vehicle_controller.dart';
 
 class RegisterVehicleView extends StatefulWidget {
@@ -214,6 +215,7 @@ class _RegisterVehicleViewState
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
+                          ThousandsFormatter(), // Adicionado o formatador de milhares
                         ],
                       ),
                     ],
@@ -359,7 +361,7 @@ class _RegisterVehicleViewState
                         plate: plateController.text,
                         manufacturer: manufatureController.text,
                         model: modelController.text,
-                        km: int.parse(mileageController.text),
+                        km: int.parse(mileageController.text.replaceAll('.', '')), // Remove pontos antes de parsear
                         color: colorController.text,
                         year: yearController.text,
                         // Tratamento para quando a data não é preenchida
@@ -367,10 +369,10 @@ class _RegisterVehicleViewState
                             ? DateTime.now().millisecondsSinceEpoch ~/ 1000 // Usa a data atual se vazio
                             : dateController.text.toTimeStamp,
                       );
-                      final hasResult =
+                      final registeredVehicle =
                           await controller.registerVehicle(newVehicle);
 
-                      if (hasResult) {
+                      if (registeredVehicle != null) {
                         MegaSnackbar.showSuccessSnackBar(
                           'Veículo cadastrado com sucesso!',
                         );
@@ -379,6 +381,12 @@ class _RegisterVehicleViewState
                               requestAppointmentController = Get.find();
 
                           await requestAppointmentController.initialize();
+                          requestAppointmentController.selectVehicle(
+                            VehicleScheduling(
+                              id: registeredVehicle.id,
+                              plate: registeredVehicle.plate,
+                            ),
+                          );
                           Get.toNamed(Routes.requestAppointment);
                         }
                       }
@@ -394,5 +402,39 @@ class _RegisterVehicleViewState
         ),
       ),
     );
+  }
+}
+
+class ThousandsFormatter extends TextInputFormatter {
+  static final NumberFormat _formatter = NumberFormat('#,##0', 'pt_BR');
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) {
+      return newValue.copyWith(text: '');
+    }
+
+    // Remove todos os caracteres não numéricos
+    String newText = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+
+    // Se o texto for vazio após a remoção, retorna vazio
+    if (newText.isEmpty) {
+      return newValue.copyWith(text: '');
+    }
+
+    // Converte para número e formata
+    try {
+      final num parsedNumber = int.parse(newText);
+      final String formattedText = _formatter.format(parsedNumber);
+
+      return newValue.copyWith(
+        text: formattedText,
+        selection: TextSelection.collapsed(offset: formattedText.length),
+      );
+    } catch (e) {
+      // Em caso de erro na conversão (ex: número muito grande), retorna o valor antigo
+      return oldValue;
+    }
   }
 }

@@ -30,14 +30,21 @@ class MechanicWorkshopInfo extends GetView<OrderDetailsController> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        MegaCachedNetworkImage(
-          radius: 100,
-          width: 60,
-          height: 60,
-          borderWidth: 1.0,
-          borderColor: AppColors.grayBorderColor,
-          imageUrl: controller.orderDetails?.workshop?.photo,
-        ),
+        controller.orderDetails?.workshop?.photo != null &&
+                controller.orderDetails!.workshop!.photo!.isNotEmpty
+            ? MegaCachedNetworkImage(
+                radius: 100,
+                width: 60,
+                height: 60,
+                borderWidth: 1.0,
+                borderColor: AppColors.grayBorderColor,
+                imageUrl: controller.orderDetails?.workshop?.photo,
+              )
+            : const Icon(
+                Icons.broken_image,
+                size: 60,
+                color: AppColors.grayDarkColor,
+              ),
         const SizedBox(
           height: 12,
         ),

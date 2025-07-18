@@ -3,6 +3,7 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../../core/core.dart';
 import '../../../data/models/mechanic_workshop.dart';
+import '../../../data/models/service.dart';
 import '../../../data/models/workshopAgenda/agenda_model.dart';
 import '../../../data/models/workshopService/workshop_service.dart';
 import '../../../data/providers/mechanic_workshop_details_provider.dart';
@@ -22,6 +23,7 @@ class MechanicWorkshopDetailsController extends GetxController {
   final _isLoadingWorkshopSchedule = RxBool(false);
   final _workshopServices = RxList<WorkshopService>.empty();
   final Rx<BitmapDescriptor?> _markerIcon = Rx<BitmapDescriptor?>(null);
+  final _selectedService = Rx<Service?>(null); // Nova variável para o serviço selecionado
 
   bool get isLoading => _isLoading.value;
   bool get isLoadingWorkshopServices => _isLoadingWorkshopServices.value;
@@ -30,6 +32,7 @@ class MechanicWorkshopDetailsController extends GetxController {
   AgendaModel? get workshopSchedule => _workshopSchedule.value;
   List<WorkshopService> get workshopServices => _workshopServices;
   BitmapDescriptor? get markerIcon => _markerIcon.value;
+  Service? get selectedService => _selectedService.value; // Getter para o serviço selecionado
 
   late String workshopId;
 
@@ -37,11 +40,35 @@ class MechanicWorkshopDetailsController extends GetxController {
   Future<void> onInit() async {
     super.onInit();
 
-    final args = Get.arguments as WorkshopArgs;
-    workshopId = args.workshopId;
-    await getWorkshopDetails();
-    await getWorkshopServices();
-    await getWorkshopSchedule();
+    if (Get.arguments is Map<String, dynamic>) {
+      final args = Get.arguments as Map<String, dynamic>;
+      workshopId = args['workshopId'] as String;
+      _selectedService.value = args['selectedService'] as Service?;
+      final MechanicWorkshop? passedWorkshopDetails = args['workshopDetails'] as MechanicWorkshop?;
+
+      if (passedWorkshopDetails != null) {
+        _workshopDetails.value = passedWorkshopDetails;
+        _isLoading.value = false; // Set loading to false as details are already available
+      } else {
+        await getWorkshopDetails();
+      }
+    } else if (Get.arguments is WorkshopArgs) {
+      final args = Get.arguments as WorkshopArgs;
+      workshopId = args.workshopId;
+      await getWorkshopDetails();
+    } else {
+      // Handle case where arguments are not as expected, maybe navigate back or show an error
+      // For now, we'll just log and ensure workshopId is not null
+      print('Invalid arguments passed to MechanicWorkshopDetailsController');
+      // You might want to throw an error or navigate back here
+      workshopId = ''; // Initialize with an empty string to prevent LateInitializationError
+    }
+
+    // Only call these if workshopId is valid
+    if (workshopId.isNotEmpty) {
+      await getWorkshopServices();
+      await getWorkshopSchedule();
+    }
   }
 
   Future<void> getWorkshopDetails() async {

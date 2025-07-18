@@ -4,7 +4,7 @@ import '../../../data/models/service.dart';
 
 class FilterController extends GetxController {
   static const double maxDistance = 50.0;
-  final _distance = RxDouble(10.0);
+  final _distance = RxDouble(30.0);
   final _rating = RxInt(0);
   final _searchQuery = RxString('');
   final _selectedCategories = RxList<Service>();
@@ -36,7 +36,24 @@ class FilterController extends GetxController {
   }
 
   void updateAvailableCategories(List<Service> categories) {
-    _availableCategories.assignAll(categories);
+    final List<Service> sortedCategories = List.from(categories);
+    Service? servicesCategory;
+
+    // Encontra e remove a categoria 'Serviços' se ela existir
+    sortedCategories.removeWhere((category) {
+      if (category.name?.trim().toLowerCase() == 'serviços') {
+        servicesCategory = category;
+        return true;
+      }
+      return false;
+    });
+
+    // Adiciona a categoria 'Serviços' de volta ao final da lista, se encontrada
+    if (servicesCategory != null) {
+      sortedCategories.add(servicesCategory!);
+    }
+
+    _availableCategories.assignAll(sortedCategories);
   }
 
   void clearFilters() {

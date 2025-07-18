@@ -5,7 +5,7 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../../../core/core.dart';
 import '../../../../data/models/workshopService/workshop_service.dart';
-import '../../controllers/request_appointment_controller.dart';
+import 'package:meca_cliente/app/modules/request_appointment/controllers/request_appointment_controller.dart';
 
 class AppDropDown extends StatefulWidget {
   const AppDropDown({

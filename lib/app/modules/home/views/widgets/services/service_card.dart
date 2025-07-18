@@ -22,7 +22,9 @@ class ServiceCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            MegaCachedNetworkImage(imageUrl: service.photo),
+            service.photo != null && service.photo!.isNotEmpty
+                ? MegaCachedNetworkImage(imageUrl: service.photo)
+                : const Icon(Icons.broken_image, size: 50, color: AppColors.grayDarkColor),
             Align(
               alignment: Alignment.bottomCenter,
               child: Container(
@@ -44,7 +46,14 @@ class ServiceCard extends StatelessWidget {
                   style: const TextStyle(
                     color: AppColors.whiteColor,
                     fontWeight: FontWeight.bold,
-                    fontSize: 14, // Fonte diminuída para 14
+                    fontSize: 12, // Fonte reduzida para 12
+                    shadows: [
+                      Shadow(
+                        blurRadius: 2.0,
+                        color: Colors.black,
+                        offset: Offset(1.0, 1.0),
+                      ),
+                    ],
                   ),
                 ),
               ),

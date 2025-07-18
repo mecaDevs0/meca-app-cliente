@@ -10,7 +10,7 @@ import '../../../data/models/scheduling/scheduling.dart';
 import '../../../data/models/scheduling/vehicle_scheduling.dart';
 import '../../../data/models/scheduling/workshop_scheduling.dart';
 import '../../../routes/app_pages.dart';
-import '../controllers/request_appointment_controller.dart';
+import 'package:meca_cliente/app/modules/request_appointment/controllers/request_appointment_controller.dart';
 import 'widgets/app_drop_down.dart';
 import 'widgets/bottoms_sheets/order_confirmed.dart';
 import 'widgets/build_text_field.dart';

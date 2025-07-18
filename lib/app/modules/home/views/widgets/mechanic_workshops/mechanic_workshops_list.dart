@@ -71,7 +71,10 @@ class MechanicWorkshopsList extends GetView<HomeController> {
                           if (item.id.isNullOrEmpty == false) {
                             Get.toNamed(
                               Routes.mechanicWorkshopDetails,
-                              arguments: WorkshopArgs(item.id!),
+                              arguments: {
+                                'workshopId': item.id!,
+                                'workshopDetails': item,
+                              },
                             );
                           }
                         },

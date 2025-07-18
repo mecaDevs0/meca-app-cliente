@@ -195,7 +195,11 @@ class ServiceDetailsController extends GetxController {
     // Navega para a tela de detalhes com os argumentos da oficina selecionada
     Get.toNamed(
       Routes.mechanicWorkshopDetails,
-      arguments: WorkshopArgs(workshop.id!),  // Corrigido: usando parâmetro posicional
+      arguments: {
+        'workshopId': workshop.id!,
+        'workshopDetails': workshop,
+        'selectedService': serviceDetail ?? Service(),
+      },
     );
   }
 

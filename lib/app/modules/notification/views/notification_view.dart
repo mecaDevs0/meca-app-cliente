@@ -15,11 +15,29 @@ class NotificationView extends GetView<NotificationsController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const AppBarCustom(
+      appBar: AppBarCustom(
         title: 'Notificações',
         backgroundColor: AppColors.primaryColor,
         titleColor: AppColors.whiteColor,
         iconColor: AppColors.whiteColor,
+        actions: [
+          TextButton(
+            onPressed: () {
+              MegaModal.showConfirmCancel(
+                context,
+                title: 'Limpar Notificações',
+                message: 'Deseja realmente limpar todas as notificações?',
+                onSuccess: () {
+                  controller.clearAllNotifications();
+                },
+              );
+            },
+            child: const Text(
+              'Limpar todas',
+              style: TextStyle(color: AppColors.whiteColor),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
@@ -56,7 +74,7 @@ class NotificationView extends GetView<NotificationsController> {
                                 padding:
                                     const EdgeInsets.only(top: 16, bottom: 16),
                                 child: Text(
-                                  isToday ? 'Hoje' : 'Notificações Passadas',
+                                  isToday ? 'Hoje' : 'Notificações Antigas',
                                   style: const TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w500,

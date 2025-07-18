@@ -357,23 +357,33 @@ class MechanicWorkshopDetailsView
           buttonColor: AppColors.whiteColor,
           textColor: AppColors.primaryColor,
           onButtonPress: () {
-            Get.toNamed(Routes.mechanicWorkshopReviews);
+            Get.toNamed(
+              Routes.mechanicWorkshopReviews,
+              arguments: {
+                'workshopId': controller.workshopId,
+                'workshopName': controller.workshopDetails?.fullName,
+              },
+            );
           },
           buttonHeight: buttonHeight,
           borderRadius: borderRadius,
         ),
         SizedBox(height: spacing),
         MegaBaseButton(
-          'Continuar',
-          buttonColor: AppColors.primaryColor,
-          textColor: AppColors.whiteColor,
+          'Agendar',
+          buttonColor: AppColors.primaryColor, // Cor primária
+          textColor: AppColors.whiteColor, // Texto branco
           onButtonPress: () {
-            // Navegação direta para a tela de agendamento com os dados da oficina
+            log('Navigating to requestAppointment with:');
+            log('workshopId: ${controller.workshopId}');
+            log('workshopDetails: ${controller.workshopDetails}');
+            log('selectedService: ${controller.selectedService}');
             Get.toNamed(
               Routes.requestAppointment,
               arguments: {
                 'workshopId': controller.workshopId,
                 'workshopDetails': controller.workshopDetails,
+                'selectedService': controller.selectedService,
               },
             );
           },

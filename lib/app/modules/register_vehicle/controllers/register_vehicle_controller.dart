@@ -50,9 +50,9 @@ class RegisterVehicleController extends GetxController {
     }
   }
 
-  Future<bool> registerVehicle(Vehicle newVehicle) async {
+  Future<Vehicle?> registerVehicle(Vehicle newVehicle) async {
     _isLoadingNew.value = true;
-    bool isSuccess = false;
+    Vehicle? registeredVehicle; // Alterado para retornar Vehicle?
 
     // Tratar o caso em que a data da última revisão está vazia ou nula
     if (newVehicle.lastRevisionDate == null || newVehicle.lastRevisionDate == 0) {
@@ -63,8 +63,7 @@ class RegisterVehicleController extends GetxController {
 
     await MegaRequestUtils.load(
       action: () async {
-        await _registerVehicleProvider.onRegisterVehicle(newVehicle);
-        isSuccess = true;
+        registeredVehicle = await _registerVehicleProvider.onRegisterVehicle(newVehicle); // Atribuindo o veículo retornado
       },
       onFinally: () {
         _isLoadingNew.value = false;
@@ -72,7 +71,7 @@ class RegisterVehicleController extends GetxController {
         Get.back();
       },
     );
-    return isSuccess;
+    return registeredVehicle; // Retornando o veículo registrado
   }
 
   Future<bool> onEditVehicle(Vehicle editVehicle) async {

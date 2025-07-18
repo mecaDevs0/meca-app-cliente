@@ -62,7 +62,7 @@ class ScheduleWorking extends GetView<MechanicWorkshopDetailsController> {
                 final day = DaysOfWeek.values[index];
                 final schedule = _getScheduleForDay(day, controller.workshopSchedule);
                 return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -70,16 +70,21 @@ class ScheduleWorking extends GetView<MechanicWorkshopDetailsController> {
                         day.description,
                         style: const TextStyle(
                           color: AppColors.boldFontColor,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
                         ),
                       ),
-                      const Divider(
-                        thickness: 1.0,
-                        color: AppColors.boldFontColor,
-                      ),
+                      const Spacer(), // Usar Spacer para empurrar o texto para as extremidades
                       Text(
                         schedule,
-                        style: const TextStyle(
-                          color: AppColors.fontDarkGrayColor,
+                        style: TextStyle(
+                          color: schedule == 'Fechado'
+                              ? AppColors.redAlertColor // Cor para "Fechado"
+                              : AppColors.fontDarkGrayColor,
+                          fontWeight: schedule == 'Fechado'
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          fontSize: 14,
                         ),
                       ),
                     ],

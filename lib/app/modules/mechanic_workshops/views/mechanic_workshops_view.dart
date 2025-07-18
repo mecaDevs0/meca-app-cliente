@@ -94,7 +94,10 @@ class MechanicWorkshopsView extends GetView<MechanicWorkshopsController> {
           mechanicWorkshop: workshop,
           onTap: () => Get.toNamed(
             Routes.mechanicWorkshopDetails,
-            arguments: WorkshopArgs(workshop.id!, workshopName: workshop.fullName),
+            arguments: {
+              'workshopId': workshop.id!,
+              'workshopDetails': workshop,
+            },
           ),
         ),
         firstPageErrorIndicatorBuilder: (context) => ErrorIndicator(
@@ -118,7 +121,10 @@ class MechanicWorkshopsView extends GetView<MechanicWorkshopsController> {
             mechanicWorkshop: workshop,
             onTap: () => Get.toNamed(
               Routes.mechanicWorkshopDetails,
-              arguments: WorkshopArgs(workshop.id!, workshopName: workshop.fullName),
+              arguments: {
+                'workshopId': workshop.id!,
+                'workshopDetails': workshop,
+              },
             ),
           ),
         ),

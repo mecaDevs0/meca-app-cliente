@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:mega_commons/mega_commons.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
 
 import '../../../../core/app_colors.dart';
 
@@ -23,13 +24,25 @@ class OrderWorkshopRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        MegaCachedNetworkImage(
-          radius: 64,
-          width: 35,
-          height: 35,
-          borderWidth: 1.0,
-          borderColor: AppColors.grayBorderColor,
-          imageUrl: workshopImage,
+        ClipRRect(
+          borderRadius: BorderRadius.circular(64),
+          child: Container(
+            width: 35,
+            height: 35,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: AppColors.grayBorderColor,
+                width: 1.0,
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: CachedNetworkImage(
+              imageUrl: workshopImage ?? '',
+              fit: BoxFit.cover,
+              placeholder: (context, url) => const CircularProgressIndicator(),
+              errorWidget: (context, url, error) => const Icon(Icons.store, color: AppColors.gray500),
+            ),
+          ),
         ),
         const SizedBox(
           width: 10,

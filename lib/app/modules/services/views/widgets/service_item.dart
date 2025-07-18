@@ -82,7 +82,7 @@ class ServiceItem extends StatelessWidget {
                           color: AppColors.grayBorderColor,
                           child: const Center(
                             child: Icon(
-                              Icons.image_not_supported,
+                              Icons.broken_image,
                               color: AppColors.primaryColor,
                             ),
                           ),

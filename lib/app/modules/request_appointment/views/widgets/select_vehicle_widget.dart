@@ -5,7 +5,7 @@ import '../../../../core/app_colors.dart';
 import '../../../../core/app_images.dart';
 import '../../../../data/models/scheduling/vehicle_scheduling.dart';
 import '../../../../routes/app_pages.dart';
-import '../../controllers/request_appointment_controller.dart';
+import 'package:meca_cliente/app/modules/request_appointment/controllers/request_appointment_controller.dart';
 import 'vehicle_card.dart';
 
 class SelectVehicleWidget extends GetView<RequestAppointmentController> {

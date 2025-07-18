@@ -73,4 +73,16 @@ class NotificationsController extends GetxController {
       onFinally: () => _isLoading.value = false,
     );
   }
+
+  Future<void> clearAllNotifications() async {
+    await MegaRequestUtils.load(
+      action: () async {
+        // Implementação de mock: Limpa a lista localmente
+        pagingController.itemList?.clear();
+        pagingController.refresh();
+        MegaSnackbar.showSuccessSnackBar('Todas as notificações foram limpas.');
+        // TODO: Implementar a chamada real para o backend para limpar as notificações
+      },
+    );
+  }
 }

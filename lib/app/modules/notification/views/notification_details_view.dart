@@ -33,12 +33,19 @@ class NotificationDetailsView extends GetView<NotificationsController> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                MegaCachedNetworkImage(
-                  imageUrl: controller.notificationDetail?.workshop?.photo,
-                  width: 59,
-                  height: 60,
-                  radius: 100,
-                ),
+                controller.notificationDetail?.workshop?.photo != null &&
+                        controller.notificationDetail!.workshop!.photo!.isNotEmpty
+                    ? MegaCachedNetworkImage(
+                        imageUrl: controller.notificationDetail?.workshop?.photo,
+                        width: 59,
+                        height: 60,
+                        radius: 100,
+                      )
+                    : const Icon(
+                        Icons.broken_image,
+                        size: 60,
+                        color: AppColors.grayDarkColor,
+                      ),
                 const SizedBox(
                   height: 20,
                 ),

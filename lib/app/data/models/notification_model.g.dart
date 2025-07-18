@@ -19,6 +19,7 @@ NotificationModel _$NotificationModelFromJson(Map<String, dynamic> json) =>
           ? null
           : Profile.fromJson(json['profile'] as Map<String, dynamic>),
       created: (json['created'] as num?)?.toInt(),
+      orderId: json['orderId'] as String?,
     );
 
 Map<String, dynamic> _$NotificationModelToJson(NotificationModel instance) =>
@@ -30,4 +31,5 @@ Map<String, dynamic> _$NotificationModelToJson(NotificationModel instance) =>
       'workshop': instance.workshop,
       'profile': instance.profile,
       'created': instance.created,
+      'orderId': instance.orderId,
     };

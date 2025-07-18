@@ -39,7 +39,7 @@ class _EditVehicleView
         plateController.text = vehicle.plate ?? '';
         modelController.text = vehicle.model ?? '';
         manufatureController.text = vehicle.manufacturer ?? '';
-        mileageController.text = vehicle.km?.toString() ?? '';
+        mileageController.text = vehicle.km != null ? NumberFormat('#,##0', 'pt_BR').format(vehicle.km) : '';
         colorController.text = vehicle.color ?? '';
         yearController.text = vehicle.year ?? '';
       }
@@ -238,6 +238,7 @@ class _EditVehicleView
                             keyboardType: TextInputType.number,
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
+                              ThousandsFormatter(), // Adicionado o formatador de milhares
                             ],
                           ).unite,
                         ],
@@ -404,5 +405,39 @@ class _EditVehicleView
         ),
       ),
     );
+  }
+}
+
+class ThousandsFormatter extends TextInputFormatter {
+  static final NumberFormat _formatter = NumberFormat('#,##0', 'pt_BR');
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) {
+      return newValue.copyWith(text: '');
+    }
+
+    // Remove todos os caracteres não numéricos
+    String newText = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+
+    // Se o texto for vazio após a remoção, retorna vazio
+    if (newText.isEmpty) {
+      return newValue.copyWith(text: '');
+    }
+
+    // Converte para número e formata
+    try {
+      final num parsedNumber = int.parse(newText);
+      final String formattedText = _formatter.format(parsedNumber);
+
+      return newValue.copyWith(
+        text: formattedText,
+        selection: TextSelection.collapsed(offset: formattedText.length),
+      );
+    } catch (e) {
+      // Em caso de erro na conversão (ex: número muito grande), retorna o valor antigo
+      return oldValue;
+    }
   }
 }
