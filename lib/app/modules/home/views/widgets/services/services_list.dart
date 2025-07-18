@@ -31,23 +31,38 @@ class ServicesList extends GetView<HomeController> {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              InkWell(
-                onTap: () {
+              TextButton(
+                onPressed: () {
                   Get.toNamed(Routes.services);
                 },
-                child: const Text(
-                  'Ver todos',
-                  style: TextStyle(
-                    color: AppColors.primaryColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero, // Remover padding padrão
+                  minimumSize: Size.zero, // Remover tamanho mínimo
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap, // Ajustar área de toque
+                ),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Ver todos',
+                      style: TextStyle(
+                        color: AppColors.primaryColor,
+                        fontSize: 12, // Fonte menor
+                        fontWeight: FontWeight.w600, // Peso da fonte
+                      ),
+                    ),
+                    const SizedBox(width: 4), // Espaçamento entre texto e ícone
+                    Icon(
+                      Icons.arrow_forward_ios, // Ícone de seta
+                      color: AppColors.primaryColor,
+                      size: 12, // Tamanho do ícone
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
           const SizedBox(
-            height: 5,
+            height: 16, // Aumentado o espaçamento
           ),
           Expanded(
             child: RefreshIndicator(

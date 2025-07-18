@@ -24,12 +24,28 @@ class ServiceCard extends StatelessWidget {
           children: [
             MegaCachedNetworkImage(imageUrl: service.photo),
             Align(
-              alignment: Alignment.bottomLeft,
-              child: Text(
-                service.name ?? '',
-                style: const TextStyle(
-                  color: AppColors.whiteColor,
-                  fontWeight: FontWeight.w500,
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.7),
+                    ],
+                  ),
+                ),
+                child: Text(
+                  service.name ?? '',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.whiteColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14, // Fonte diminuída para 14
+                  ),
                 ),
               ),
             ),
