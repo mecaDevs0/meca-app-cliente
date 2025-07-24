@@ -224,7 +224,7 @@ class _RegisterView extends MegaState<RegisterView, RegisterController> {
                             controller.setHasAcceptTerms(value),
                         isSelected: controller.hasAcceptTerms,
                         policyTermsFileUrl:
-                            'https://api.megaleios.com/content/TermosMeca.html',
+                            'https://api.mecabr.com/content/TermosMeca.html',
                       ),
                     ),
                     const SizedBox(height: 32),

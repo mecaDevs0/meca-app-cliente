@@ -1,8 +1,8 @@
 class BaseUrls {
   BaseUrls._();
-  static String baseUrlDev = 'https://apidev.megaleios.com/ApiMecaDev/';
-  static String baseUrlHml = 'https://apihom.megaleios.com/ApiMecaHml/';
-  static String baseUrlProd = 'https://api-meca.megaleios.com/';
+  static String baseUrlDev = 'https://api.mecabr.com/';
+  static String baseUrlHml = 'https://api.mecabr.com/';
+  static String baseUrlProd = 'https://api.mecabr.com/';
 
   static String profile = 'api/v1/Profile';
   static String login = '$profile/Token';
