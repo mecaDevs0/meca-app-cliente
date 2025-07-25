@@ -1,13 +1,10 @@
 import 'dart:developer';
 
-import 'package:flutter/material.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
+import 'package:timezone/timezone.dart' as tz;
 
-import '../../../core/app_colors.dart';
 import '../../../core/args/workshop_args.dart';
-import '../../../core/utils/auth_helper.dart';
-import '../../../data/models/profile.dart';
 import '../../../data/models/scheduling/scheduling.dart';
 import '../../../data/models/scheduling/vehicle_scheduling.dart';
 import '../../../data/models/service.dart';
@@ -15,7 +12,6 @@ import '../../../data/models/vehicle.dart';
 import '../../../data/models/workshopService/workshop_service.dart';
 import '../../../data/providers/core_provider.dart';
 import '../../../data/providers/request_appointment_provider.dart';
-import '../../../routes/app_pages.dart';
 
 class RequestAppointmentController extends GetxController {
   RequestAppointmentController({
@@ -58,170 +54,53 @@ class RequestAppointmentController extends GetxController {
 
   @override
   Future<void> onInit() async {
+    final arg = Get.arguments;
+    late WorkshopArgs workshop;
+    if (arg is WorkshopArgs) {
+      workshop = arg;
+    } else if (arg is Map<String, dynamic>) {
+      workshop = WorkshopArgs.fromJson(arg);
+    } else if (arg is Map) {
+      workshop = WorkshopArgs.fromJson(Map<String, dynamic>.from(arg));
+    } else {
+      throw Exception('Argumento inválido para WorkshopArgs: ${arg.runtimeType}');
+    }
+    workshopId = workshop.workshopId;
+    workshopName = workshop.workshopName ?? '';
+    _openingHours = workshop.openingHours;
+    await initialize();
     super.onInit();
-
-    // Verifica se há um token válido e atualiza o status do usuário
-    final token = AuthToken.fromCache();
-    if (token != null && AuthHelper.isGuest) {
-      AuthHelper.setLoggedIn();
-    }
-    // Só mostra flag de visitante se realmente for visitante
-    if (AuthHelper.isGuest) {
-      Get.offAllNamed(Routes.login);
-      return;
-    }
-
-    try {
-      // Captura e valida os argumentos de navegação
-      if (Get.arguments == null) {
-        _setError('Informações da oficina não encontradas');
-        return;
-      }
-
-      // Extrai argumentos dependendo do tipo enviado
-      if (Get.arguments is WorkshopArgs) {
-        final workshop = Get.arguments as WorkshopArgs;
-        workshopId = workshop.workshopId;
-        workshopName = workshop.workshopName ?? 'Oficina';
-        _openingHours = workshop.openingHours;
-      } else if (Get.arguments is Map<String, dynamic>) {
-        final args = Get.arguments as Map<String, dynamic>;
-        workshopId = args['workshopId'] as String? ?? '';
-        workshopName = args['workshopDetails']?.fullName ?? 'Oficina';
-        _openingHours = args['workshopDetails']?.openingHours as String?;
-      } else {
-        _setError('Formato de dados inválido');
-        return;
-      }
-
-      if (workshopId.isEmpty) {
-        _setError('ID da oficina não encontrado');
-        return;
-      }
-
-      log('Iniciando agendamento para oficina: $workshopId - $workshopName');
-
-      // Se recebeu um serviço, vamos pré-selecionar esse serviço
-      Service? selectedService;
-
-      if (Get.arguments is Map<String, dynamic>) {
-        final args = Get.arguments as Map<String, dynamic>;
-        if (args.containsKey('selectedService')) {
-          selectedService = args['selectedService'] as Service?;
-        }
-      }
-
-      await initialize();
-
-      // Pré-seleciona o serviço se foi recebido nos argumentos
-      if (selectedService != null) {
-        // Busca o serviço pelo ID na lista de serviços disponíveis
-        final preSelectedService = _services.firstWhereOrNull(
-          (service) => service.service?.id == selectedService!.id,
-        );
-
-        // Se encontrou o serviço na lista, seleciona-o
-        if (preSelectedService != null) {
-          _selectedServices.add(preSelectedService);
-          log('Serviço pré-selecionado: ${preSelectedService.service?.name}');
-        } else {
-          log('Serviço não encontrado na lista de serviços disponíveis: ${selectedService.name}');
-        }
-      }
-    } catch (e) {
-      log('Erro ao inicializar tela de agendamento: $e');
-      _setError('Ocorreu um erro ao inicializar a tela de agendamento');
-    }
-  }
-
-  void _setError(String message) {
-    _hasError.value = true;
-    _errorMessage.value = message;
-    log('Erro: $message');
-    Get.snackbar(
-      'Erro',
-      message,
-      backgroundColor: Colors.red.withOpacity(0.8),
-      colorText: Colors.white,
-      snackPosition: SnackPosition.BOTTOM,
-    );
   }
 
   Future<void> initialize() async {
-    if (AuthHelper.isGuest) {
-      Get.defaultDialog(
-        title: 'Acesso restrito',
-        middleText: 'Para acessar esta funcionalidade, você precisa fazer login.',
-        textConfirm: 'Fazer login',
-        confirmTextColor: Colors.white,
-        buttonColor: AppColors.primaryColor,
-        onConfirm: () {
-          Get.back();
-          Get.offAllNamed(Routes.login);
-        },
-        textCancel: 'Cancelar',
-        cancelTextColor: AppColors.primaryColor,
-      );
-      return;
-    }
-
     _isLoading.value = true;
-    _hasError.value = false;
+    await MegaRequestUtils.load(
+      action: () async {
+        log('[AGENDAMENTO] Buscando veículos do usuário...');
+        final vehicles = await _coreProvider.onRequestVehicles(limit: 0);
+        log('[AGENDAMENTO] Veículos retornados: ${vehicles.length}');
+        _vehicles.assignAll(vehicles);
 
-    try {
-      await MegaRequestUtils.load(
-        action: () async {
-          // Carrega os veículos do usuário
-          final vehicles = await _coreProvider.onRequestVehicles(limit: 0);
-          _vehicles.assignAll(vehicles);
-          log('Veículos carregados: ${vehicles.length}');
-
-          // Carrega os serviços da oficina selecionada
-          final services = await _coreProvider.onRequestServices(
-            workshopId: workshopId,
-          );
-
-          if (services.isEmpty) {
-            log('Nenhum serviço disponível para a oficina $workshopId');
-          } else {
-            log('Serviços carregados: ${services.length}');
-          }
-
-          _services.assignAll(services);
-        },
-        onError: (error) {
-          log('Erro ao carregar dados iniciais: $error');
-          _setError('Não foi possível carregar os dados necessários');
-        },
-        onFinally: () => _isLoading.value = false,
-      );
-    } catch (e) {
-      _isLoading.value = false;
-      log('Erro crítico ao inicializar: $e');
-      _setError('Ocorreu um erro inesperado');
-    }
+        log('[AGENDAMENTO] Buscando serviços da oficina $workshopId...');
+        final services = await _coreProvider.onRequestServices(
+          workshopId: workshopId,
+        );
+        log('[AGENDAMENTO] Serviços retornados: ${services.length}');
+        _services.assignAll(services);
+      },
+      onFinally: () => _isLoading.value = false,
+    );
   }
 
   void selectVehicle(VehicleScheduling vehicle) {
     _selectedVehicle.value = vehicle;
-    // Corrigido para usar a propriedade plate que existe na classe VehicleScheduling
-    final vehicleDesc = vehicle.plate ?? 'Veículo selecionado';
-    log('Veículo selecionado: $vehicleDesc');
   }
 
   void selectService(WorkshopService service) {
-    try {
-      if (_selectedServices.contains(service)) {
-        _selectedServices.remove(service);
-        log('Serviço removido: ${service.service?.name}');
-      } else {
-        _selectedServices.add(service);
-        log('Serviço adicionado: ${service.service?.name}');
-      }
-      // Força atualização da UI
-      _selectedServices.refresh();
-    } catch (e) {
-      log('Erro ao selecionar serviço: $e');
+    if (_selectedServices.contains(service)) {
+      _selectedServices.remove(service);
+    } else {
+      _selectedServices.add(service);
     }
   }
 
@@ -232,145 +111,36 @@ class RequestAppointmentController extends GetxController {
   Future<bool> registerScheduling(Scheduling newScheduling) async {
     _isLoadingScheduling.value = true;
     bool isSuccess = false;
-
+    // LOGS DE TIMEZONE PARA PROVA
     try {
-      await MegaRequestUtils.load(
-        action: () async {
-          await _requestAppointmentProvider.onRegisterScheduling(newScheduling);
-          isSuccess = true;
-          log('Agendamento registrado com sucesso');
-        },
-        onError: (error) {
-          log('Erro ao registrar agendamento: $error');
-
-          // Extrai a mensagem de erro do backend
-          String errorMessage = 'Não foi possível registrar o agendamento. Tente novamente.';
-
-          try {
-            // Converte a resposta para string e extrai a mensagem de erro
-            final errorStr = error.toString();
-            if (errorStr.contains('message')) {
-              // Tenta extrair a mensagem de formatos diferentes de resposta
-              final regex = RegExp(r'message: ([^,}]+)');
-              final match = regex.firstMatch(errorStr);
-              if (match != null && match.groupCount >= 1) {
-                errorMessage = match.group(1)!.trim();
-              }
-            }
-          } catch (e) {
-            log('Erro ao extrair mensagem de erro: $e');
-          }
-
-          // Exibe um diálogo em vez de snackbar para maior visibilidade
-          Get.dialog(
-            Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      color: Colors.red,
-                      size: 48,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Erro no Agendamento',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      errorMessage,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Get.back(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text('Entendi'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            barrierDismissible: false,
-          );
-        },
-        onFinally: () {
-          _isLoadingScheduling.value = false;
-        },
-      );
+      final timestamp = newScheduling.date;
+      log('[DEBUG] Timestamp enviado para API: $timestamp');
+      if (timestamp != null) {
+        final dtUtc = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000, isUtc: true);
+        log('[DEBUG] Data/Hora UTC: \x1B[32m${dtUtc.toIso8601String()} (${dtUtc.toLocal()})\x1B[0m');
+        try {
+          final saoPaulo = tz.getLocation('America/Sao_Paulo');
+          final dtSp = tz.TZDateTime.fromMillisecondsSinceEpoch(saoPaulo, timestamp * 1000);
+          log('[DEBUG] Data/Hora America/Sao_Paulo: \x1B[34m${dtSp.toString()}\x1B[0m');
+        } catch (e) {
+          log('[DEBUG] Falha ao logar TZ: $e');
+        }
+      }
     } catch (e) {
-      _isLoadingScheduling.value = false;
-      log('Erro crítico ao registrar agendamento: $e');
-
-      Get.dialog(
-        Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.error_outline,
-                  color: Colors.red,
-                  size: 48,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Erro no Agendamento',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Ocorreu um erro inesperado ao processar o agendamento. Por favor, tente novamente mais tarde.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Get.back(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: const Text('Entendi'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        barrierDismissible: false,
-      );
+      log('[DEBUG] Falha ao logar timestamp: $e');
     }
-
+    await MegaRequestUtils.load(
+      action: () async {
+        await _requestAppointmentProvider.onRegisterScheduling(newScheduling);
+        isSuccess = true;
+      },
+      onFinally: () {
+        _isLoadingScheduling.value = false;
+      },
+    );
     return isSuccess;
   }
+
 
   // Método para tentar novamente o carregamento dos serviços
   Future<void> retryLoading() async {
@@ -395,82 +165,23 @@ class RequestAppointmentController extends GetxController {
 
   // Função para verificar disponibilidade de horários para a data selecionada
   Future<bool> checkAvailabilityForDate(DateTime date) async {
-  _isLoadingAvailability.value = true;
-  _availableHours.clear();
-  _hasAvailabilityError.value = false;
-  _availabilityErrorMessage.value = '';
-  _selectedDate.value = date;
-
-  try {
-    log('Verificando horários disponíveis para a oficina $workshopId na data ${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}');
-
-    // Obtém o profileId do cache
-    final profile = Profile.fromCache();
-    if (profile.id == null || profile.id!.isEmpty) {
+    _isLoadingAvailability.value = true;
+    _availableHours.clear();
+    _hasAvailabilityError.value = false;
+    _availabilityErrorMessage.value = '';
+    _selectedDate.value = date;
+    List<String> generatedHours = _generateHoursFromOpening(_openingHours ?? '08:00-18:00');
+    if (generatedHours.isNotEmpty) {
+      _availableHours.assignAll(generatedHours);
+      _isLoadingAvailability.value = false;
+      return true;
+    } else {
       _hasAvailabilityError.value = true;
-      _availabilityErrorMessage.value = 'Erro de autenticação. Faça login novamente.';
+      _availabilityErrorMessage.value = 'Não há horários disponíveis para esta data.';
       _isLoadingAvailability.value = false;
       return false;
     }
-
-    final response = await _requestAppointmentProvider.getAvailableHours(
-      workshopId: workshopId,
-      date: date,
-      profileId: profile.id!,
-    );
-
-    if (response.isNotEmpty) {
-      _availableHours.assignAll(response);
-      log('Horários disponíveis carregados: ${response.length}');
-      _availableHours.sort();
-      _isLoadingAvailability.value = false;
-      return true;
-    }
-
-    // Se não veio da API, tenta gerar localmente
-    List<String> generatedHours = [];
-    if (_openingHours != null && _openingHours!.isNotEmpty) {
-      generatedHours = _generateHoursFromOpening(_openingHours!);
-    }
-    // Se ainda não tem, usa um padrão das 08:00 às 18:00
-    if (generatedHours.isEmpty) {
-      generatedHours = _generateHoursFromOpening('08:00-18:00');
-    }
-    if (generatedHours.isNotEmpty) {
-      _availableHours.assignAll(generatedHours);
-      log('Horários gerados localmente: ${generatedHours.length}');
-      _isLoadingAvailability.value = false;
-      return true;
-    }
-
-    // Se chegou aqui, realmente não há horários
-    _hasAvailabilityError.value = true;
-    _availabilityErrorMessage.value = 'Não há horários disponíveis para esta data.';
-    log('Nenhum horário disponível para ${date.day}/${date.month}/${date.year}');
-    _isLoadingAvailability.value = false;
-    return false;
-  } catch (e) {
-    // Em caso de erro, tenta gerar localmente também
-    List<String> generatedHours = [];
-    if (_openingHours != null && _openingHours!.isNotEmpty) {
-      generatedHours = _generateHoursFromOpening(_openingHours!);
-    }
-    if (generatedHours.isEmpty) {
-      generatedHours = _generateHoursFromOpening('08:00-18:00');
-    }
-    if (generatedHours.isNotEmpty) {
-      _availableHours.assignAll(generatedHours);
-      log('Horários gerados localmente após erro: ${generatedHours.length}');
-      _isLoadingAvailability.value = false;
-      return true;
-    }
-    _hasAvailabilityError.value = true;
-    _availabilityErrorMessage.value = 'Erro ao carregar horários. Tente novamente.';
-    log('Erro ao carregar horários disponíveis: $e');
-    _isLoadingAvailability.value = false;
-    return false;
   }
-}
 
   // Função auxiliar para gerar horários a partir do horário de funcionamento
   List<String> _generateHoursFromOpening(String openingHours) {
@@ -506,53 +217,25 @@ class RequestAppointmentController extends GetxController {
   }
 
   // Função para carregar os dias disponíveis para agendamento
-Future<bool> loadAvailableDates() async {
-  _isLoadingAvailability.value = true;
-  _availableDates.clear();
-  _hasAvailabilityError.value = false;
-  _availabilityErrorMessage.value = '';
-
-  try {
-    log('Carregando datas disponíveis para oficina: $workshopId');
-
-    final response = await _requestAppointmentProvider.getAvailableDates(
-      workshopId: workshopId,
-      workshopHours: _openingHours?.split(',') ?? [],
-    );
-
-    _availableDates.assignAll(response);
-
-    if (response.isEmpty) {
-      // Gera datas dos próximos 60 dias úteis
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final List<DateTime> generatedDates = [];
-
-      for (int i = 1; i <= 60; i++) {
-        final date = today.add(Duration(days: i));
-        // Adiciona apenas dias úteis (segunda a sexta)
-        if (date.weekday >= DateTime.monday && date.weekday <= DateTime.friday) {
-          generatedDates.add(date);
-        }
+  Future<bool> loadAvailableDates() async {
+    _isLoadingAvailability.value = true;
+    _availableDates.clear();
+    _hasAvailabilityError.value = false;
+    _availabilityErrorMessage.value = '';
+    // Geração local de datas disponíveis (próximos 60 dias úteis)
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final List<DateTime> generatedDates = [];
+    for (int i = 1; i <= 60; i++) {
+      final date = today.add(Duration(days: i));
+      if (date.weekday >= DateTime.monday && date.weekday <= DateTime.friday) {
+        generatedDates.add(date);
       }
-      
-      _availableDates.assignAll(generatedDates);
-      log('Datas geradas localmente: ${_availableDates.length}');
-    } else {
-      _availableDates.sort((a, b) => a.compareTo(b));
-      log('Datas disponíveis carregadas: ${response.length}');
     }
-
+    _availableDates.assignAll(generatedDates);
     _isLoadingAvailability.value = false;
     return true;
-  } catch (e) {
-    _hasAvailabilityError.value = true;
-    _availabilityErrorMessage.value = 'Erro ao carregar datas. Tente novamente.';
-    log('Erro ao carregar datas disponíveis: $e');
-    _isLoadingAvailability.value = false;
-    return false;
   }
-}
 
   // Método para verificar se uma data está disponível para agendamento
   bool isDateAvailable(DateTime date) {
@@ -575,22 +258,24 @@ Future<bool> loadAvailableDates() async {
     required VehicleScheduling? vehicle,
     required List<WorkshopService> services,
   }) {
+    if (_vehicles.isEmpty) {
+      return 'Você não possui veículos cadastrados.';
+    }
+    if (_services.isEmpty) {
+      return 'A oficina não possui serviços disponíveis.';
+    }
     if (dateText.isEmpty) {
       return 'Selecione uma data para o agendamento';
     }
-
     if (timeText.isEmpty) {
       return 'Selecione um horário para o agendamento';
     }
-
     if (vehicle == null) {
       return 'Selecione um veículo para o agendamento';
     }
-
     if (services.isEmpty) {
       return 'Selecione pelo menos um serviço para o agendamento';
     }
-
     return null; // Sem erros de validação
   }
 }

@@ -1,8 +1,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:meca_cliente/app/modules/request_appointment/controllers/request_appointment_controller.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/core.dart';
 import '../../../core/utils/auth_helper.dart';
@@ -10,7 +12,6 @@ import '../../../data/models/scheduling/scheduling.dart';
 import '../../../data/models/scheduling/vehicle_scheduling.dart';
 import '../../../data/models/scheduling/workshop_scheduling.dart';
 import '../../../routes/app_pages.dart';
-import 'package:meca_cliente/app/modules/request_appointment/controllers/request_appointment_controller.dart';
 import 'widgets/app_drop_down.dart';
 import 'widgets/bottoms_sheets/order_confirmed.dart';
 import 'widgets/build_text_field.dart';
@@ -31,9 +32,20 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
     return time.isNullOrEmpty ? '00:00' : time;
   }
 
+  // Corrigido para timezone America/Sao_Paulo
   int _makeDateTime(String date, String time) {
-    final dateTime = '$date $time:00'.toDateTime;
-    return dateTime.millisecondsSinceEpoch ~/ 1000;
+    final parts = date.split('/'); // dd/MM/yyyy
+    final hourMinute = time.split(':');
+    final location = tz.getLocation('America/Sao_Paulo');
+    final dt = tz.TZDateTime(
+      location,
+      int.parse(parts[2]),
+      int.parse(parts[1]),
+      int.parse(parts[0]),
+      int.parse(hourMinute[0]),
+      int.parse(hourMinute[1]),
+    );
+    return dt.millisecondsSinceEpoch ~/ 1000;
   }
 
   @override

@@ -24,6 +24,8 @@ dependencies:
   sign_in_with_apple: ^6.1.2
   onesignal_flutter: ^5.3.2 # Atualizado para versão compatível com mega_commons_dependencies
 
+  timezone: ^0.9.2
+
 dependency_overrides:
   open_filex: ^4.7.0
   skeletonizer: ^2.0.1

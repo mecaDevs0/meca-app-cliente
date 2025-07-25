@@ -12,4 +12,14 @@ class WorkshopArgs {
   String? serviceId;
   String? serviceName;
   String? openingHours;
+
+  factory WorkshopArgs.fromJson(Map<String, dynamic> json) {
+    return WorkshopArgs(
+      json['workshopId'] as String,
+      workshopName: json['workshopName'] as String?,
+      serviceId: json['serviceId'] as String?,
+      serviceName: json['serviceName'] as String?,
+      openingHours: json['openingHours'] as String?,
+    );
+  }
 }

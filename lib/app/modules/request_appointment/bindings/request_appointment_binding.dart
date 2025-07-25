@@ -1,8 +1,8 @@
+import 'package:meca_cliente/app/modules/request_appointment/controllers/request_appointment_controller.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../../data/providers/core_provider.dart';
 import '../../../data/providers/request_appointment_provider.dart';
-import 'package:meca_cliente/app/modules/request_appointment/controllers/request_appointment_controller.dart';
 
 class RequestAppointmentBinding extends Bindings {
   @override
@@ -19,8 +19,8 @@ class RequestAppointmentBinding extends Bindings {
     );
     Get.lazyPut<RequestAppointmentController>(
       () => RequestAppointmentController(
-        requestAppointmentProvider: RequestAppointmentProvider(restClientDio: Get.find()),
-        coreProvider: CoreProvider(restClientDio: Get.find()),
+        requestAppointmentProvider: Get.find(),
+        coreProvider: Get.find(),
       ),
     );
   }
