@@ -26,45 +26,42 @@ class LoginView extends GetView<LoginController> {
           builder: (context, constraints) {
             final isTablet = constraints.maxWidth > 600;
 
-            return Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    child: Container(
-                      alignment: Alignment.center,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isTablet ? constraints.maxWidth * 0.1 : 16,
-                        vertical: isTablet ? 24 : 8,
-                      ),
-                      child: isTablet ? _buildTabletLayout(context) : _buildMobileLayout(context),
+            return SingleChildScrollView(
+              child: Column(
+                children: [
+                  Container(
+                    alignment: Alignment.center,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isTablet ? constraints.maxWidth * 0.1 : 16,
+                      vertical: isTablet ? 24 : 8,
+                    ),
+                    child: isTablet ? _buildTabletLayout(context) : _buildMobileLayout(context),
+                  ),
+                  // Rodapé no final da tela
+                  SizedBox(
+                    width: double.infinity,
+                    height: isTablet ? 100 : 66, // Define altura fixa para o rodapé
+                    child: Stack(
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: SvgPicture.asset(
+                            AppImages.bottomUnion,
+                            height: isTablet ? 100 : 66,
+                          ),
+                        ),
+                        const Positioned(
+                          bottom: 5,
+                          child: MegaVersionIndicator(),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                // Rodapé no final da tela
-                SizedBox(
-                  width: double.infinity,
-                  height: isTablet ? 100 : 66, // Define altura fixa para o rodapé
-                  child: Stack(
-                    alignment: Alignment.bottomCenter,
-                    children: [
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: SvgPicture.asset(
-                          AppImages.bottomUnion,
-                          height: isTablet ? 100 : 66,
-                        ),
-                      ),
-                      const Positioned(
-                        bottom: 5,
-                        child: MegaVersionIndicator(),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: isTablet ? 20 : 10),
-              ],
+                  SizedBox(height: isTablet ? 20 : 10),
+                ],
+              ),
             );
           },
         ),

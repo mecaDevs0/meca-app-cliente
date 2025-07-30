@@ -1,6 +1,5 @@
 import 'dart:developer' as console;
 
-import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../routes/app_pages.dart';
@@ -48,6 +47,13 @@ class NotificationService {
           name: 'NotificationService');
       console.log('Dados da notificação: $data', name: 'NotificationService');
 
+      // LOG DETALHADO DO PAYLOAD RAW
+      if (data.containsKey('rawPayload')) {
+        console.log('RAW PAYLOAD da notificação: \\n${data['rawPayload']}', name: 'NotificationService');
+      } else {
+        console.log('RAW PAYLOAD não encontrado no data. Data completo: $data', name: 'NotificationService');
+      }
+
       // Aqui poderíamos executar alguma ação específica quando a notificação chega
     } catch (e) {
       console.log('Erro no processamento da notificação recebida: $e',
@@ -64,6 +70,13 @@ class NotificationService {
           name: 'NotificationService');
       console.log('Dados da notificação aberta: $data',
           name: 'NotificationService');
+
+      // LOG DETALHADO DO PAYLOAD RAW
+      if (data.containsKey('rawPayload')) {
+        console.log('RAW PAYLOAD da notificação aberta: \\n${data['rawPayload']}', name: 'NotificationService');
+      } else {
+        console.log('RAW PAYLOAD não encontrado no data da notificação aberta. Data completo: $data', name: 'NotificationService');
+      }
 
       _handleNotificationNavigation(data);
     } catch (e) {
