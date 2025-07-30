@@ -59,7 +59,7 @@ class FilterController extends GetxController {
   void clearFilters() {
     _searchQuery.value = '';
     _rating.value = 0;
-    _distance.value = 0.0;
+    _distance.value = 30.0; // Reset to default 30km
     _selectedCategories.clear();
   }
 }

@@ -91,6 +91,7 @@ class NotificationsController extends GetxController {
         }))).whenComplete(() {
           pagingController.refresh();
           MegaSnackbar.showSuccessSnackBar('Todas as notificações foram limpas.');
+          Get.back(); // Fecha a modal de confirmação
         });
       },
     );

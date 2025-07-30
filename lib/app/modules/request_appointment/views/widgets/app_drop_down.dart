@@ -107,6 +107,7 @@ class _AppDropDownState
                     onTap: () {
                       widget.onSelected(service);
                       _updateServiceText(); // Atualiza o texto ao selecionar
+                      _hideDropdown(); // Fecha o dropdown imediatamente
                       setState(() {}); // Força atualização da UI
                     },
                     service: service,

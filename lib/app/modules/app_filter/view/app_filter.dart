@@ -33,7 +33,13 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     super.initState();
 
     _selectedRating = widget.initialParams.rating;
-    _distance = widget.initialParams.distance;
+    // Ensure _distance is within the valid range [1.0, 50.0]
+    // If initialParams.distance is 0.0, set to 30.0 as per requirement.
+    if (widget.initialParams.distance == 0.0) {
+      _distance = 30.0;
+    } else {
+      _distance = widget.initialParams.distance.clamp(1.0, 50.0);
+    }
     _selectedCategories = List.from(widget.initialParams.services);
   }
 
