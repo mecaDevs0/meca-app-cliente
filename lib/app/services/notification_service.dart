@@ -1,9 +1,9 @@
 import 'dart:developer' as console;
 
+import 'package:meca_cliente/app/data/providers/user_profile_provider.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
-import 'package:meca_cliente/app/data/providers/user_profile_provider.dart';
 import '../data/models/profile.dart';
 import '../routes/app_pages.dart';
 
