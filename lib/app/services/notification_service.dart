@@ -1,7 +1,10 @@
 import 'dart:developer' as console;
 
+import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
+import 'package:meca_cliente/app/data/providers/user_profile_provider.dart';
+import '../data/models/profile.dart';
 import '../routes/app_pages.dart';
 
 /// Serviço de gerenciamento de notificações.
@@ -22,18 +25,58 @@ class NotificationService {
       // Registra o serviço de notificações no Get para que possa ser acessado globalmente
       Get.put(this, permanent: true);
 
-      // Como temos problemas com a API do OneSignal, vamos apenas registrar que o serviço foi inicializado
-      // e deixar a configuração real do OneSignal para o MegaOneSignalConfig que já está funcionando
-
-      console.log('Serviço de notificações inicializado com sucesso. Os handlers serão configurados através do MegaOneSignalConfig.',
+      console.log('Serviço de notificações inicializado com sucesso.',
           name: 'NotificationService');
 
-      // Nota: A configuração das notificações está sendo feita no main.dart através do MegaOneSignalConfig.configure()
-      // Não precisamos duplicar essa configuração aqui, pois já está funcionando no nível da aplicação.
+      // Configurar handlers específicos para o app
+      _setupNotificationHandlers();
 
     } catch (e) {
       console.log('Erro ao inicializar o serviço de notificações: $e',
           name: 'NotificationService');
+    }
+  }
+
+  /// Configura os handlers específicos de notificação
+  void _setupNotificationHandlers() {
+    // Handler para quando o app recebe uma notificação em primeiro plano
+    OneSignal.Notifications.addForegroundWillDisplayListener((event) {
+      final payload = event.notification.rawPayload ?? <String, dynamic>{};
+      processReceivedNotification(payload);
+    });
+
+    // Handler para quando o usuário clica em uma notificação
+    OneSignal.Notifications.addClickListener((event) {
+      final payload = event.notification.rawPayload ?? <String, dynamic>{};
+      processOpenedNotification(payload);
+    });
+
+    console.log('Handlers de notificação configurados', name: 'NotificationService');
+  }
+
+  /// Registra o dispositivo no backend quando o usuário faz login
+  Future<void> registerDeviceOnLogin() async {
+    try {
+      final profile = Profile.fromCache();
+      final playerId = MegaOneSignalConfig.fromCache();
+
+      if (profile != null && profile.id != null && playerId != null) {
+        console.log('Registrando dispositivo OneSignal para usuário: ${profile.id}', 
+            name: 'NotificationService');
+
+        final restClient = Get.find<RestClientDio>();
+        final userProfileProvider = UserProfileProvider(restClientDio: restClient);
+
+        await userProfileProvider.onRegisterUnregister(
+          deviceId: playerId,
+          isRegister: true,
+        );
+        
+        console.log('Dispositivo registrado com sucesso: $playerId', 
+            name: 'NotificationService');
+      }
+    } catch (e) {
+      console.log('Erro ao registrar dispositivo: $e', name: 'NotificationService');
     }
   }
 
@@ -54,7 +97,9 @@ class NotificationService {
         console.log('RAW PAYLOAD não encontrado no data. Data completo: $data', name: 'NotificationService');
       }
 
-      // Aqui poderíamos executar alguma ação específica quando a notificação chega
+      // Mostrar notificação local se necessário
+      _showLocalNotification(title ?? 'Nova notificação', data['body'] as String? ?? '');
+
     } catch (e) {
       console.log('Erro no processamento da notificação recebida: $e',
           name: 'NotificationService');
@@ -85,6 +130,23 @@ class NotificationService {
     }
   }
 
+  /// Mostra uma notificação local quando o app está em primeiro plano
+  void _showLocalNotification(String title, String body) {
+    try {
+      // Implementar notificação local usando flutter_local_notifications
+      // ou outro método preferido para mostrar notificações
+      console.log('Exibindo notificação local: $title - $body', 
+          name: 'NotificationService');
+      
+      // Por enquanto, mostrar um snackbar
+      if (Get.context != null) {
+        MegaSnackbar.showToast('$title: $body');
+      }
+    } catch (e) {
+      console.log('Erro ao mostrar notificação local: $e', name: 'NotificationService');
+    }
+  }
+
   /// Trata a navegação com base nos dados da notificação.
   ///
   /// @param data Os dados adicionais da notificação.
@@ -97,6 +159,21 @@ class NotificationService {
 
       console.log('Tipo de notificação: $notificationType', name: 'NotificationService');
 
+      // Aguardar um pouco para garantir que o app está pronto para navegar
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _navigateBasedOnNotification(screen, appointmentId, notificationType);
+      });
+
+    } catch (e) {
+      console.log('Erro ao processar a navegação da notificação: $e', name: 'NotificationService');
+      // Em caso de erro, vá para a home
+      Get.toNamed(Routes.home);
+    }
+  }
+
+  /// Executa a navegação baseada nos dados da notificação
+  void _navigateBasedOnNotification(String? screen, String? appointmentId, String? notificationType) {
+    try {
       // Navegar com base no tipo de notificação ou rota especificada
       if (screen != null && screen.isNotEmpty) {
         // Se tiver uma rota específica definida no payload
@@ -121,20 +198,33 @@ class NotificationService {
             console.log('Navegando para a lista de notificações', name: 'NotificationService');
             Get.toNamed(Routes.notifications);
             break;
+          case 'promotion':
+            console.log('Navegando para promoções', name: 'NotificationService');
+            Get.toNamed(Routes.home);
+            break;
           default:
             console.log('Tipo de notificação desconhecido, redirecionando para home', name: 'NotificationService');
             Get.toNamed(Routes.home);
             break;
         }
       } else {
-        // Fallback para a home se não houver informações de navegação
-        console.log('Sem dados de navegação na notificação, indo para a home', name: 'NotificationService');
-        Get.toNamed(Routes.home);
+        // Fallback para a lista de notificações
+        console.log('Sem dados específicos de navegação, indo para notificações', name: 'NotificationService');
+        Get.toNamed(Routes.notifications);
       }
     } catch (e) {
-      console.log('Erro ao processar a navegação da notificação: $e', name: 'NotificationService');
-      // Em caso de erro, vá para a home
+      console.log('Erro na navegação da notificação: $e', name: 'NotificationService');
       Get.toNamed(Routes.home);
+    }
+  }
+
+  /// Limpa todas as notificações
+  void clearAllNotifications() {
+    try {
+      OneSignal.Notifications.clearAll();
+      console.log('Todas as notificações foram limpas', name: 'NotificationService');
+    } catch (e) {
+      console.log('Erro ao limpar notificações: $e', name: 'NotificationService');
     }
   }
 }

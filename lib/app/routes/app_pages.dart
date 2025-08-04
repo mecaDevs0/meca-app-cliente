@@ -1,5 +1,5 @@
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
-import 'package:mega_features/mega_features.dart';
+import 'package:mega_features/mega_features.dart' hide LoginBinding;
 import 'package:mega_payment/mega_payment.dart';
 
 
@@ -12,6 +12,7 @@ import '../modules/help_center/bindings/help_center_binding.dart';
 import '../modules/help_center/views/help_center_view.dart';
 import '../modules/home/bindings/home_binding.dart';
 import '../modules/home/views/home_view.dart';
+import '../modules/login/bindings/login_binding.dart';
 import '../modules/login/views/login_view.dart';
 import '../modules/mechanic_workshop_details/bindings/mechanic_workshop_details_binding.dart';
 import '../modules/mechanic_workshop_details/views/mechanic_workshop_details_view.dart';
@@ -58,9 +59,7 @@ class AppPages {
     GetPage(
       name: Routes.login,
       page: () => const LoginView(),
-      binding: LoginBinding(
-        homeRoute: Routes.home,
-      ),
+      binding: LoginBinding(),
     ),
     GetPage(
       name: Routes.home,

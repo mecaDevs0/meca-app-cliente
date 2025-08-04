@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mega_commons/shared/widgets/exception_indicators/empty_list_indicator.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../../../../core/app_colors.dart';
@@ -64,7 +63,8 @@ class ServicesList extends GetView<HomeController> {
           const SizedBox(
             height: 16, // Aumentado o espaçamento
           ),
-          Expanded(
+          SizedBox(
+            height: 120,
             child: RefreshIndicator(
               onRefresh: () => Future.sync(
                 () => controller.servicesPagingController.refresh(),
@@ -89,11 +89,18 @@ class ServicesList extends GetView<HomeController> {
                       ),
                     );
                   },
-                  noItemsFoundIndicatorBuilder: (context) =>
-                      const EmptyListIndicator(
-                    isShowIcon: false,
-                    message: 'Nenhum serviço encontrado',
-                  ),
+                  noItemsFoundIndicatorBuilder: (context) => 
+                      Container(
+                        height: 120,
+                        alignment: Alignment.center,
+                        child: const Text(
+                          'Nenhum serviço encontrado',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
                 ),
               ),
             ),

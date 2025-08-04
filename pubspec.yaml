@@ -13,6 +13,7 @@ dependencies:
   mega_commons_dependencies:
   mega_commons:
   mega_features:
+  google_sign_in: ^6.2.1
   mega_payment:
   pay: ^3.1.0
   validatorless: any

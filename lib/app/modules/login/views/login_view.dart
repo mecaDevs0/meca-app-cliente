@@ -1,21 +1,20 @@
 import 'dart:developer' as console;
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
-import 'package:mega_features/app/modules/login/controllers/login_controller.dart';
 
+import '../../../controllers/meca_login_controller.dart';
 import '../../../core/app_colors.dart';
 import '../../../core/app_images.dart';
-import '../../../core/app_urls.dart';
 import '../../../core/utils/auth_helper.dart';
 import '../../../routes/app_pages.dart';
 import 'widgets/circle_button_widget.dart';
 
-class LoginView extends GetView<LoginController> {
+class LoginView extends GetView<MecaLoginController> {
   const LoginView({super.key});
   @override
   Widget build(BuildContext context) {
@@ -342,7 +341,7 @@ class LoginView extends GetView<LoginController> {
         const SizedBox(width: 16),
         InkWell(
           borderRadius: BorderRadius.circular(50),
-          onTap: controller.loginWithGoogle,
+          onTap: () => controller.loginWithGoogleFixed(),
           child: const CircleButton(iconPath: AppImages.googleIcon),
         ),
         const SizedBox(width: 16),
@@ -449,7 +448,7 @@ class LoginView extends GetView<LoginController> {
   }
 }
 
-extension LoginControllerGuestExtension on LoginController {
+extension LoginControllerGuestExtension on MecaLoginController {
 Future<void> enterAsGuest() async {
   // Define o usuário como visitante
   await AuthHelper.setGuest();

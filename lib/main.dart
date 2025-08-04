@@ -28,7 +28,8 @@ Future<void> main() async {
   );
 
   // Inicializa o serviço de notificações personalizado para tratar notificações do admin
-  NotificationService().initialize();
+  final notificationService = NotificationService();
+  notificationService.initialize();
 
   final token = AuthToken.fromCache();
 
@@ -36,12 +37,17 @@ Future<void> main() async {
   if (token != null && AuthHelper.isGuest) {
     // Se há um token válido mas o usuário está marcado como visitante, corrige o status
     AuthHelper.setLoggedIn();
+    // Registra o dispositivo quando o usuário tem token válido
+    await notificationService.registerDeviceOnLogin();
     print('Token encontrado durante inicialização, mas usuário estava marcado como visitante. Status corrigido.');
   } else if (token == null && !AuthHelper.isGuest && !AuthHelper.isLoggedIn) {
     // Se não há token e o usuário não está marcado como visitante ou logado,
     // configura como visitante para evitar comportamentos inesperados
     await AuthHelper.setGuest();
     print('Nenhum token encontrado e usuário não marcado como visitante. Status definido como visitante.');
+  } else if (token != null && AuthHelper.isLoggedIn) {
+    // Se já está logado e tem token, garantir que o dispositivo está registrado
+    await notificationService.registerDeviceOnLogin();
   }
 
   final String initialRoute = (token == null && !AuthHelper.isGuest)

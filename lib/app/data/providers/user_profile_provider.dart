@@ -62,4 +62,11 @@ class UserProfileProvider {
       },
     );
   }
+
+  Future<void> updateSocialData(String userId, Map<String, dynamic> socialData) async {
+    await _restClientDio.patch(
+      '${BaseUrls.profile}/$userId',
+      data: socialData,
+    );
+  }
 }
