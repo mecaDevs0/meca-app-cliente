@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mega_commons/mega_commons.dart';
 
 import '../../../../../core/app_colors.dart';
+import '../../../../../core/utils/image_url_helper.dart';
 import '../../../../../data/models/service.dart';
 
 class ServiceCard extends StatelessWidget {
@@ -11,6 +12,15 @@ class ServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Usar o método seguro que retorna null quando não há imagem válida
+    final imageUrl = ImageUrlHelper.buildImageUrlSafe(service.photo);
+    
+    // Debug: Log da URL da imagem
+    print('🔍 ServiceCard Debug:');
+    print('  Service: ${service.name}');
+    print('  Photo: ${service.photo}');
+    print('  Safe URL: $imageUrl');
+    
     return Container(
       margin: const EdgeInsets.only(right: 12.0),
       width: MediaQuery.of(context).size.width * 0.33,
@@ -22,9 +32,22 @@ class ServiceCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            service.photo != null && service.photo!.isNotEmpty
-                ? MegaCachedNetworkImage(imageUrl: service.photo)
-                : const Icon(Icons.broken_image, size: 50, color: AppColors.grayDarkColor),
+            // Imagem ou ícone de fallback
+            imageUrl != null
+                ? MegaCachedNetworkImage(
+                    imageUrl: imageUrl,
+                    height: double.infinity,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  )
+                : Container(
+                    color: AppColors.grayDarkColor,
+                    child: const Icon(
+                      Icons.build,
+                      size: 50,
+                      color: Colors.white,
+                    ),
+                  ),
             Align(
               alignment: Alignment.bottomCenter,
               child: Container(

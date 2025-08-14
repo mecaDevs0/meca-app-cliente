@@ -25,16 +25,26 @@ class FilterQueryWorkshop {
 
   int? page;
   int? limit;
+  @JsonKey(includeIfNull: false)
   String? search;
+  @JsonKey(includeIfNull: false)
   List<String>? serviceTypes;
+  @JsonKey(includeIfNull: false)
   double? priceRangeInitial;
+  @JsonKey(includeIfNull: false)
   double? priceRangeFinal;
+  @JsonKey(includeIfNull: false)
   int? rating;
+  @JsonKey(includeIfNull: false)
   int? distance;
+  @JsonKey(includeIfNull: false)
   double? latUser;
+  @JsonKey(includeIfNull: false)
   double? longUser;
   int? dataBlocked;
+  @JsonKey(includeIfNull: false)
   int? created;
+  @JsonKey(includeIfNull: false)
   String? workshopName;
 
   Map<String, dynamic> toJson() => _$FilterQueryWorkshopToJson(this);

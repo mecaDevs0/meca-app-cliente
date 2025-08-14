@@ -7,6 +7,7 @@ import '../../../core/app_colors.dart';
 import '../../../core/widgets/app_bar_custom.dart';
 import '../controllers/service_details_controller.dart';
 import 'widgets/service_workshops_list.dart';
+import '../../../core/utils/image_url_helper.dart';
 
 class ServiceDetailsView extends GetView<ServiceDetailsController> {
   const ServiceDetailsView({super.key});
@@ -52,7 +53,7 @@ class ServiceDetailsView extends GetView<ServiceDetailsController> {
                       Center(
                         child: controller.serviceDetail?.photo != null
                             ? MegaCachedNetworkImage(
-                                imageUrl: controller.serviceDetail!.photo,
+                                imageUrl: ImageUrlHelper.buildImageUrl(controller.serviceDetail!.photo),
                                 width: imageWidth,
                                 height: imageHeight,
                               )

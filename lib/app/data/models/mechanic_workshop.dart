@@ -62,31 +62,83 @@ class MechanicWorkshop {
     reason = '';
   }
 
+  @JsonKey(name: '_id')
   String? id;
+  
+  @JsonKey(name: 'FullName')
   String? fullName;
+  
+  @JsonKey(name: 'CompanyName')
   String? companyName;
+  
+  @JsonKey(name: 'Phone')
   String? phone;
+  
+  @JsonKey(name: 'Cnpj')
   String? cnpj;
+  
+  @JsonKey(name: 'ZipCode')
   String? zipCode;
+  
+  @JsonKey(name: 'StreetAddress')
   String? streetAddress;
+  
+  @JsonKey(name: 'Number')
   String? number;
+  
+  @JsonKey(name: 'CityName')
   String? cityName;
+  
+  @JsonKey(name: 'CityId')
   String? cityId;
+  
+  @JsonKey(name: 'StateName')
   String? stateName;
+  
+  @JsonKey(name: 'StateUf')
   String? stateUf;
+  
+  @JsonKey(name: 'StateId')
   String? stateId;
+  
+  @JsonKey(name: 'Neighborhood')
   String? neighborhood;
+  
+  @JsonKey(name: 'Complement')
   String? complement;
+  
+  @JsonKey(name: 'Latitude')
   double? latitude;
+  
+  @JsonKey(name: 'Longitude')
   double? longitude;
+  
+  @JsonKey(name: 'OpeningHours')
   String? openingHours;
+  
+  @JsonKey(name: 'Photo')
   String? photo;
+  
+  @JsonKey(name: 'MeiCard')
   String? meiCard;
+  
+  @JsonKey(name: 'Email')
   String? email;
+  
+  @JsonKey(name: 'Password')
   String? password;
+  
+  @JsonKey(name: 'Rating')
   int? rating;
+  
+  @JsonKey(name: 'Distance')
   int? distance;
+  
+  @JsonKey(name: 'Reason')
   String? reason;
+
+  @JsonKey(name: 'AccountableName')
+  String? accountableName;
 
   Map<String, dynamic> toJson() => _$MechanicWorkshopToJson(this);
 }

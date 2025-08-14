@@ -7,6 +7,7 @@ import '../../../../core/app_colors.dart';
 import '../../../../core/app_images.dart';
 import '../../../../core/args/workshop_args.dart';
 import '../../../../core/widgets/app_rating_row.dart';
+import '../../../../core/utils/image_url_helper.dart';
 import '../../../../routes/app_pages.dart';
 import '../../controllers/mechanic_workshop_details_controller.dart';
 
@@ -30,7 +31,7 @@ class MechanicWorkshopInfo extends GetView<MechanicWorkshopDetailsController> {
                   width: 83,
                   height: 83,
                   radius: 100,
-                  imageUrl: controller.workshopDetails?.photo,
+                  imageUrl: ImageUrlHelper.buildImageUrl(controller.workshopDetails?.photo),
                 )
               : const Icon(
                   Icons.broken_image,
@@ -83,33 +84,14 @@ class MechanicWorkshopInfo extends GetView<MechanicWorkshopDetailsController> {
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            spacing: 4,
+            spacing: 8,
             children: [
-              SvgPicture.asset(
-                AppImages.icCar,
-                width: 16,
-                height: 16,
-              ),
+              SvgPicture.asset(AppImages.icLocation),
               Text(
-                controller.workshopDetails?.cityName ?? '',
+                '${controller.workshopDetails?.cityName ?? ''}, ${controller.workshopDetails?.stateUf ?? ''}',
                 style: const TextStyle(
-                  color: AppColors.neutralGrayColor,
-                  fontSize: 12,
-                ),
-              ),
-              Container(
-                width: 2,
-                height: 2,
-                decoration: const ShapeDecoration(
-                  color: AppColors.pointGrayColor,
-                  shape: OvalBorder(),
-                ),
-              ),
-              Text(
-                '${controller.workshopDetails?.distance ?? 0}km',
-                style: const TextStyle(
-                  color: AppColors.neutralGrayColor,
-                  fontSize: 12,
+                  color: AppColors.fontMediumGray,
+                  fontSize: 14,
                 ),
               ),
             ],

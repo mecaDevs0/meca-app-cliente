@@ -5,6 +5,7 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import '../../../core/app_colors.dart';
 import '../../../core/widgets/app_bar_custom.dart';
 import '../controllers/notification_controller.dart';
+import '../../../core/utils/image_url_helper.dart';
 
 class NotificationDetailsView extends GetView<NotificationsController> {
   const NotificationDetailsView({super.key});
@@ -36,7 +37,7 @@ class NotificationDetailsView extends GetView<NotificationsController> {
                 controller.notificationDetail?.workshop?.photo != null &&
                         controller.notificationDetail!.workshop!.photo!.isNotEmpty
                     ? MegaCachedNetworkImage(
-                        imageUrl: controller.notificationDetail?.workshop?.photo,
+                        imageUrl: ImageUrlHelper.buildImageUrl(controller.notificationDetail?.workshop?.photo),
                         width: 59,
                         height: 60,
                         radius: 100,

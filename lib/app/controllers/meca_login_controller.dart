@@ -6,6 +6,9 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import 'package:mega_features/mega_features.dart';
 
 import '../services/notification_service.dart';
+import '../core/utils/server_status_helper.dart';
+import '../core/utils/login_timeout_helper.dart';
+import '../core/utils/login_provider_wrapper.dart';
 
 // Helper class para gerenciar dados de vinculação Google
 class GoogleLinkData {
@@ -150,12 +153,31 @@ class MecaLoginController extends LoginController {
       await MegaRequestUtils.load(
         action: () async {
           final loginProvider = Get.find<LoginProvider>();
-          final token = await loginProvider.authenticateUserBySocial(profileToken);
+          final wrapper = LoginProviderWrapper(loginProvider);
+          final token = await wrapper.authenticateUserBySocial(profileToken);
           await _processSuccessfulLogin(token, profileToken);
         },
         onError: (error) async {
           console.log('Erro na autenticação social: ${error.message}', 
               name: 'MecaLoginController');
+          console.log('Status Code: ${error.statusCode}', name: 'MecaLoginController');
+          console.log('Tipo de erro: ${error.errors}', name: 'MecaLoginController');
+          
+          // Verificar se é erro de conectividade ou servidor
+          if (error.message?.contains('conexão') == true || 
+              error.message?.contains('internet') == true ||
+              error.message?.contains('rede') == true ||
+              error.message?.contains('indisponível') == true ||
+              ServerStatusHelper.isServerError(error.statusCode) ||
+              ServerStatusHelper.isConnectivityError(error.statusCode)) {
+            console.log('Erro de servidor/conectividade detectado no login', name: 'MecaLoginController');
+            
+            final errorMessage = ServerStatusHelper.getErrorMessage(error.statusCode);
+            final suggestion = ServerStatusHelper.getSolutionSuggestion(error.statusCode);
+            
+            MegaSnackbar.showErroSnackBar('$errorMessage\n$suggestion');
+            return;
+          }
           
           // Se o erro for "usuário não encontrado" mas "email em uso", 
           // significa que é um problema de sincronização
@@ -314,9 +336,10 @@ class MecaLoginController extends LoginController {
       await MegaRequestUtils.load(
         action: () async {
           final loginProvider = Get.find<LoginProvider>();
+          final wrapper = LoginProviderWrapper(loginProvider);
           
           // 1. Autenticar com email/senha
-          final token = await loginProvider.signInWithEmail(emailProfileToken);
+          final token = await wrapper.signInWithEmail(emailProfileToken);
           console.log('Autenticação por email bem-sucedida', 
               name: 'MecaLoginController');
           
@@ -347,15 +370,18 @@ class MecaLoginController extends LoginController {
           console.log('Erro na vinculação: ${error.message}', 
               name: 'MecaLoginController');
           
-          if (error.message?.toLowerCase().contains('senha') == true || 
-              error.message?.toLowerCase().contains('password') == true ||
-              error.message?.toLowerCase().contains('credencial') == true) {
-            MegaSnackbar.showErroSnackBar('Senha incorreta. Tente novamente.');
-          } else {
-            MegaSnackbar.showErroSnackBar(
-              error.message ?? 'Erro ao vincular conta. Verifique sua senha.',
-            );
-          }
+          // Usar o tratamento específico de erro da API
+          _handleApiError(error, () {
+            if (error.message?.toLowerCase().contains('senha') == true || 
+                error.message?.toLowerCase().contains('password') == true ||
+                error.message?.toLowerCase().contains('credencial') == true) {
+              MegaSnackbar.showErroSnackBar('Senha incorreta. Tente novamente.');
+            } else {
+              MegaSnackbar.showErroSnackBar(
+                error.message ?? 'Erro ao vincular conta. Verifique sua senha.',
+              );
+            }
+          });
         },
       );
       
@@ -406,20 +432,25 @@ class MecaLoginController extends LoginController {
       await MegaRequestUtils.load(
         action: () async {
           final loginProvider = Get.find<LoginProvider>();
-          final token = await loginProvider.signInWithEmail(emailProfileToken);
+          final wrapper = LoginProviderWrapper(loginProvider);
+          final token = await wrapper.signInWithEmail(emailProfileToken);
           await _processSuccessfulLogin(token, emailProfileToken);
           MegaSnackbar.showSuccessSnackBar('Login realizado com sucesso!');
         },
         onError: (error) {
+          console.log('🔍 CALLBACK onError CHAMADO!', name: 'MecaLoginController');
           console.log('Erro no login automático: ${error.message}', 
               name: 'MecaLoginController');
           
-          // Se o login automático falhar, limpar os dados salvos e tentar vinculação manual
-          GoogleLinkData.clearGoogleLinkData();
-          
-          MegaSnackbar.showErroSnackBar(
-            'Dados de login expiraram. Por favor, vincule sua conta novamente.',
-          );
+          // Usar o tratamento específico de erro da API
+          _handleApiError(error, () {
+            // Se o login automático falhar, limpar os dados salvos e tentar vinculação manual
+            GoogleLinkData.clearGoogleLinkData();
+            
+            MegaSnackbar.showErroSnackBar(
+              'Dados de login expiraram. Por favor, vincule sua conta novamente.',
+            );
+          });
         },
       );
       
@@ -447,5 +478,58 @@ class MecaLoginController extends LoginController {
       console.log('Erro ao registrar dispositivo para notificações: $e', 
           name: 'MecaLoginController');
     }
+  }
+
+  /// Trata erros específicos de API durante o login
+  void _handleApiError(dynamic error, VoidCallback onError) {
+    console.log('🔍 MÉTODO _handleApiError CHAMADO!', name: 'MecaLoginController');
+    console.log('🔍 Erro Dio detectado: ${error.runtimeType}', name: 'MecaLoginController');
+    
+    if (error is DioException) {
+      console.log('📊 Status Code: ${error.response?.statusCode}', name: 'MecaLoginController');
+      console.log('🔗 URL: ${error.requestOptions.uri}', name: 'MecaLoginController');
+      console.log('💬 Mensagem: ${error.message}', name: 'MecaLoginController');
+      
+      // Usar o helper para tratar erros de timeout do MongoDB
+      if (LoginTimeoutHelper.isMongoDbTimeout(error)) {
+        console.log('🔧 Timeout do MongoDB detectado no servidor', name: 'MecaLoginController');
+        MegaSnackbar.showErroSnackBar(LoginTimeoutHelper.getMongoDbTimeoutMessage());
+        return;
+      }
+      
+      // Tratamento específico para erro 500 (problema de servidor)
+      if (error.response?.statusCode == 500) {
+        console.log('🚨 Erro 500 detectado - Problema de configuração no servidor', name: 'MecaLoginController');
+        
+        final errorData = error.response?.data;
+        if (errorData != null && errorData is Map<String, dynamic>) {
+          final messageEx = errorData['messageEx'] as String?;
+          if (messageEx?.contains('connectionString') == true) {
+            console.log('🔧 Erro de connectionString detectado no servidor', name: 'MecaLoginController');
+            MegaSnackbar.showErroSnackBar(
+              'Servidor em manutenção. O problema está sendo resolvido. Tente novamente em alguns minutos.'
+            );
+            return;
+          }
+        }
+        
+        MegaSnackbar.showErroSnackBar(
+          'Servidor temporariamente indisponível. Tente novamente em alguns minutos.'
+        );
+        return;
+      }
+      
+      // Usar o helper para obter mensagem de erro apropriada
+      if (LoginTimeoutHelper.shouldShowErrorMessage(error)) {
+        MegaSnackbar.showErroSnackBar(LoginTimeoutHelper.getErrorMessage(error));
+        return;
+      }
+    }
+    
+    // Tratamento genérico para outros tipos de erro
+    console.log('❌ Erro não tratado: $error', name: 'MecaLoginController');
+    MegaSnackbar.showErroSnackBar(
+      'Erro inesperado. Tente novamente em alguns minutos.'
+    );
   }
 }

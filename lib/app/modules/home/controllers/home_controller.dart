@@ -157,16 +157,8 @@ class HomeController extends GetxController {
       _isGettingLocation.value = true;
     });
 
-    // Verifica se é usuário visitante
-    if (AuthHelper.isGuest) {
-      // Para visitantes, retorna uma lista vazia ou dados mockados
-      workshopsPagingController.appendLastPage([]);
-      // Utilizando SchedulerBinding para garantir que a atualização de estado ocorra após o build
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _isGettingLocation.value = false;
-      });
-      return;
-    }
+    // Removida a verificação de usuário visitante - agora todos podem acessar as APIs
+    // O token anônimo será usado automaticamente pelo AuthInterceptor
 
     // Se a localização não estiver disponível e a permissão for concedida, tenta obtê-la novamente
     // e AGUARDA que a operação seja concluída
@@ -224,22 +216,23 @@ class HomeController extends GetxController {
           for (final workshop in response) {
             debugPrint('Oficina ${workshop.fullName}: Lat=${workshop.latitude}, Long=${workshop.longitude}, Distância=${workshop.distance}km');
 
-            // Se a oficina tem coordenadas e o usuário também, mas a distância é 0, recalcula
-            if (userPosition != null &&
-                workshop.latitude != null &&
-                workshop.longitude != null &&
-                workshop.distance == 0) {
-              // Recalcula a distância localmente
+            // Calcular distância real baseada nas coordenadas do MongoDB Atlas
+            if (userPosition != null && 
+                workshop.latitude != null && workshop.longitude != null) {
+              
+              // Calcular distância real usando Geolocator
               final distanceInMeters = Geolocator.distanceBetween(
-                userPosition!.latitude,
-                userPosition!.longitude,
-                workshop.latitude!,
-                workshop.longitude!
+                userPosition!.latitude, userPosition!.longitude, 
+                workshop.latitude!, workshop.longitude!
               );
-
-              // Converte para km e atribui ao modelo
+              
+              // Converter para km e arredondar
               workshop.distance = (distanceInMeters / 1000).round();
-              debugPrint('Distância recalculada para ${workshop.fullName}: ${workshop.distance}km');
+              debugPrint('  Distância real calculada: ${workshop.distance}km');
+            } else {
+              // Se não tem localização do usuário, definir como 0
+              workshop.distance = 0;
+              debugPrint('  Sem localização do usuário, distância definida como 0km');
             }
           }
 
@@ -273,10 +266,8 @@ class HomeController extends GetxController {
   }
 
   Future<void> getServices(int page) async {
-    if (AuthHelper.isGuest) {
-      servicesPagingController.appendLastPage([]);
-      return;
-    }
+    // Removida a verificação de usuário visitante - agora todos podem acessar as APIs
+    // O token anônimo será usado automaticamente pelo AuthInterceptor
     await MegaRequestUtils.load(
       action: () async {
         final response = await _homeProvider.onRequestServices(

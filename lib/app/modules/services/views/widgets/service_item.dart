@@ -4,6 +4,7 @@ import 'package:mega_commons/shared/widgets/mega_cached_network_image.dart';
 
 import '../../../../core/app_colors.dart';
 import '../../../../core/app_images.dart';
+import '../../../../core/utils/image_url_helper.dart';
 import '../../../../data/models/service.dart';
 
 class ServiceItem extends StatelessWidget {
@@ -71,7 +72,7 @@ class ServiceItem extends StatelessWidget {
                   ),
                   child: service.photo != null && service.photo!.isNotEmpty
                       ? MegaCachedNetworkImage(
-                          imageUrl: service.photo,
+                          imageUrl: ImageUrlHelper.buildImageUrl(service.photo),
                           width: double.infinity,
                           height: imageHeight,
                           fit: BoxFit.cover,

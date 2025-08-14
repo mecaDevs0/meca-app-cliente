@@ -1,4 +1,5 @@
 import 'package:mega_commons/mega_commons.dart';
+import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../core/app_urls.dart';
 import '../models/filter_query_workshop.dart';
@@ -21,27 +22,71 @@ class MechanicWorkshopsProvider {
     double? longUser,
     String? workshopName,
   }) async {
-    final response = await _restClientDio.get(
-      BaseUrls.workshops,
-      queryParameters: FilterQueryWorkshop(
-        page: page,
-        limit: limit,
-        dataBlocked: 0,
-        search: search,
-        serviceTypes: serviceType,
-        latUser: latUser,
-        longUser: longUser,
-        distance: distance,
-        rating: rating,
-        workshopName: workshopName,
-      ).toJson(),
-    );
+    try {
+      // Limita a distância máxima a 50km
+      final int? limitedDistance = (distance != null && distance > 0)
+          ? (distance > 50 ? 50 : distance)
+          : 50; // padrão: 50km se não informado
 
-    return (response.data as List)
-        .map<MechanicWorkshop>(
-          (workshop) =>
-              MechanicWorkshop.fromJson(workshop as Map<String, dynamic>),
-        )
-        .toList();
+      // Construir queryParams manualmente para evitar parâmetros null
+      final queryParams = <String, dynamic>{
+        'page': page,
+        'limit': limit,
+        'dataBlocked': 0,
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (serviceType != null && serviceType.isNotEmpty) 'serviceTypes': serviceType,
+        if (limitedDistance != null) 'distance': limitedDistance,
+        if (rating != null && rating > 0) 'rating': rating,
+        if (latUser != null) 'latUser': latUser,
+        if (longUser != null) 'longUser': longUser,
+        if (workshopName != null && workshopName.isNotEmpty) 'workshopName': workshopName,
+      };
+
+      print('🔍 MechanicWorkshopsProvider: Fazendo requisição para workshops');
+      print('🔍 URL: ${BaseUrls.workshops}');
+      print('🔍 Parâmetros: $queryParams');
+
+      final response = await _restClientDio.get(
+        BaseUrls.workshops,
+        queryParameters: queryParams,
+      );
+
+      print('✅ MechanicWorkshopsProvider: Resposta recebida com sucesso');
+      print('✅ Status: ${response.statusCode}');
+
+      // Tratar a resposta de forma robusta
+      final responseData = response.data;
+      List workshopsList;
+      
+      if (responseData is Map<String, dynamic>) {
+        // API retorna objeto com propriedade 'data'
+        workshopsList = responseData['data'] as List;
+      } else if (responseData is List) {
+        // API retorna diretamente o array (fallback)
+        workshopsList = responseData;
+      } else {
+        print('❌ Formato de resposta inesperado: ${responseData.runtimeType}');
+        return [];
+      }
+
+      return workshopsList
+          .map<MechanicWorkshop>(
+            (workshop) =>
+                MechanicWorkshop.fromJson(workshop as Map<String, dynamic>),
+          )
+          .toList();
+    } on DioException catch (e) {
+      // Tratamento específico para erro 500 na API Workshop
+      if (e.response?.statusCode == 500) {
+        print('❌ Erro 500 na API Workshop (MechanicWorkshopsProvider): ${e.response?.data}');
+        print('❌ Detalhes do erro: ${e.message}');
+        return [];
+      }
+      print('❌ Erro DioException na API Workshop: ${e.message}');
+      rethrow;
+    } catch (e) {
+      print('❌ Erro inesperado na API Workshop (MechanicWorkshopsProvider): $e');
+      return [];
+    }
   }
 }

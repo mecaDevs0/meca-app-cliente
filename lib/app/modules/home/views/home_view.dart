@@ -260,12 +260,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
       itemCount: 6,
       itemBuilder: (context, index) => Skeletonizer(
         child: MechanicWorkshopCard(
-          mechanicWorkshop: MechanicWorkshop(
-            fullName: 'Oficina',
-            streetAddress: 'Endereço',
-            distance: 12,
-            rating: 5,
-          ),
+          mechanicWorkshop: MechanicWorkshop.empty(),
           onTap: null,
           // Aumentar tamanho dos elementos para iPad
           isTablet: true,
@@ -350,12 +345,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                     padding: const EdgeInsets.only(bottom: 16),
                     child: Skeletonizer(
                       child: MechanicWorkshopCard(
-                        mechanicWorkshop: MechanicWorkshop(
-                          fullName: 'Oficina',
-                          streetAddress: 'Endereço',
-                          distance: 12,
-                          rating: 5,
-                        ),
+                        mechanicWorkshop: MechanicWorkshop.empty(),
                         onTap: () {},
                       ),
                     ),

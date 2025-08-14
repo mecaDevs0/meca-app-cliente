@@ -15,12 +15,18 @@ class MechanicWorkshopNameRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Usar accountableName (nome fantasia) se disponível, senão usar fullName
+    // Garantir que nunca seja null
+    final displayName = mechanicWorkshop.accountableName?.isNotEmpty == true 
+        ? mechanicWorkshop.accountableName! 
+        : mechanicWorkshop.fullName ?? 'Oficina';
+    
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
           child: Text(
-            mechanicWorkshop.companyName ?? '',
+            displayName,
             style: TextStyle(
               color: AppColors.softBlackColor,
               fontWeight: FontWeight.w700,

@@ -7,6 +7,7 @@ import 'mechanic_workshop_image.dart';
 import 'mechanic_workshop_location_row.dart';
 import 'mechanic_workshop_name_row.dart';
 import 'mechanic_workshop_rating_row.dart';
+import 'mechanic_workshop_hours_row.dart';
 
 class MechanicWorkshopCard extends StatelessWidget {
   const MechanicWorkshopCard({
@@ -29,7 +30,7 @@ class MechanicWorkshopCard extends StatelessWidget {
     final double spacing = isTablet ? 20.0 : 15.0;
 
     // Evitar acesso ao MediaQuery durante a construção para melhorar performance
-    final double containerHeight = isTablet ? 140.0 : 100.0;
+    final double containerHeight = isTablet ? 160.0 : 120.0;
 
     // Estilo de borda calculado uma vez
     final border = Border.all(color: AppColors.grayDarkBorderColor, width: 1.0);
@@ -72,6 +73,13 @@ class MechanicWorkshopCard extends StatelessWidget {
                     child: MechanicWorkshopLocationRow(
                       mechanicWorkshop: mechanicWorkshop,
                       key: ValueKey('workshop-location-${mechanicWorkshop.id}'),
+                    ),
+                  ),
+                  Expanded(
+                    child: MechanicWorkshopHoursRow(
+                      openTime: mechanicWorkshop.openingHours,
+                      closeTime: null,
+                      isOpen: false,
                     ),
                   ),
                   Expanded(

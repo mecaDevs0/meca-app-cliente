@@ -1,5 +1,5 @@
-import 'dart:developer' as console;
 import 'dart:async'; // Adicionando importação para TimeoutException
+import 'dart:developer' as console;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';

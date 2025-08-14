@@ -1,8 +1,12 @@
 class BaseUrls {
   BaseUrls._();
-  static String baseUrlDev = 'https://api.mecabr.com';
-  static String baseUrlHml = 'https://api.mecabr.com';
-  static String baseUrlProd = 'https://api.mecabr.com';
+  static String baseUrlDev = 'https://api.mecabr.com/';
+  static String baseUrlHml = 'https://api.mecabr.com/';
+  static String baseUrlProd = 'https://api.mecabr.com/';
+
+  // URLs para imagens
+  static String get imagesBaseUrl => '${baseUrlProd}content/images/';
+  static String get contentBaseUrl => '${baseUrlProd}content/';
 
   static String profile = 'api/v1/Profile';
   static String login = '$profile/Token';

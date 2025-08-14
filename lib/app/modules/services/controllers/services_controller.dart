@@ -62,6 +62,8 @@ class ServicesController extends GetxController {
   }
 
   Future<void> getAllServices(int page) async {
+    // Removida a verificação de usuário visitante - agora todos podem acessar as APIs
+    // O token anônimo será usado automaticamente pelo AuthInterceptor
     try {
       await MegaRequestUtils.load(
         action: () async {
@@ -96,7 +98,7 @@ class ServicesController extends GetxController {
             }
           } catch (e) {
             // Captura específica para erros Dio
-            if (e is DioError && e.response?.statusCode == 400) {
+            if (e is DioException && e.response?.statusCode == 400) {
               // Caso específico de "Index was out of range"
               // Este é um indicador de que tentamos buscar uma página que não existe
               pagingController.appendLastPage([]);

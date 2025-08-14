@@ -6,6 +6,7 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import '../../../../core/app_colors.dart';
 import '../../../../core/app_images.dart';
 import '../../controllers/order_details_controller.dart';
+import '../../../../core/utils/image_url_helper.dart';
 
 class MechanicWorkshopInfo extends GetView<OrderDetailsController> {
   const MechanicWorkshopInfo({
@@ -38,7 +39,7 @@ class MechanicWorkshopInfo extends GetView<OrderDetailsController> {
                 height: 60,
                 borderWidth: 1.0,
                 borderColor: AppColors.grayBorderColor,
-                imageUrl: controller.orderDetails?.workshop?.photo,
+                imageUrl: ImageUrlHelper.buildImageUrl(controller.orderDetails?.workshop?.photo),
               )
             : const Icon(
                 Icons.broken_image,

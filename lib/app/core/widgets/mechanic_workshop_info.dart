@@ -6,6 +6,7 @@ import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import '../app_colors.dart';
 import '../app_images.dart';
 import '../extensions/string_extension.dart';
+import '../utils/image_url_helper.dart';
 
 class MechanicWorkshopInfo extends StatelessWidget {
   const MechanicWorkshopInfo({
@@ -49,7 +50,7 @@ class MechanicWorkshopInfo extends StatelessWidget {
                 height: 60,
                 borderWidth: 1.0,
                 borderColor: AppColors.grayBorderColor,
-                imageUrl: imageUrl,
+                imageUrl: ImageUrlHelper.buildImageUrl(imageUrl),
               )
             : const Icon(
                 Icons.broken_image,

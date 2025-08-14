@@ -6,6 +6,7 @@ import '../../../../core/app_colors.dart';
 import '../../../../data/models/notification_model.dart';
 import '../../controllers/notification_controller.dart';
 import '../../../../routes/app_pages.dart';
+import '../../../../core/utils/image_url_helper.dart';
 
 class ItemNotification extends GetView<NotificationsController> {
   const ItemNotification({
@@ -47,7 +48,7 @@ class ItemNotification extends GetView<NotificationsController> {
                 notification.workshop?.photo != null &&
                         notification.workshop!.photo!.isNotEmpty
                     ? MegaCachedNetworkImage(
-                        imageUrl: notification.workshop?.photo,
+                        imageUrl: ImageUrlHelper.buildImageUrl(notification.workshop?.photo),
                         width: 59,
                         height: 60,
                         radius: 100,

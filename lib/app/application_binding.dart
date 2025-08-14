@@ -8,13 +8,15 @@ class ApplicationBinding implements Bindings {
   void dependencies() {
     late final String baseUrl;
 
+    // Limpar cache do EnvironmentUrl para forçar uso da nova URL
     final EnvironmentUrl? environmentData = EnvironmentUrl.fromCache();
-    if (environmentData == null) {
-      baseUrl = BaseUrls.baseUrlProd;
-      EnvironmentUrl.toProduction(baseUrl);
-    } else {
-      baseUrl = environmentData.url;
+    if (environmentData != null) {
+      environmentData.remove();
     }
+    
+    // Sempre usar a URL corrigida
+    baseUrl = BaseUrls.baseUrlProd;
+    EnvironmentUrl.toProduction(baseUrl);
 
     Get.put<RestClientDio>(
       RestClientDio(

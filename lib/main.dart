@@ -16,6 +16,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Intl.defaultLocale = 'pt_BR';
 
+  // Inicializa timezone uma única vez durante a inicialização
+  tz.initializeTimeZones();
+
   await Future.wait([
     FirebaseConfig.initialize(),
     BaseHive.initHive(),
@@ -31,24 +34,33 @@ Future<void> main() async {
   final notificationService = NotificationService();
   notificationService.initialize();
 
+  // CORREÇÃO FORÇADA: Força a correção do estado de autenticação
+  await AuthHelper.forceFixAuthenticationState();
+
   final token = AuthToken.fromCache();
 
   // Corrige inconsistências entre o token e o status de visitante na inicialização
   if (token != null && AuthHelper.isGuest) {
     // Se há um token válido mas o usuário está marcado como visitante, corrige o status
-    AuthHelper.setLoggedIn();
+    await AuthHelper.setLoggedIn();
     // Registra o dispositivo quando o usuário tem token válido
     await notificationService.registerDeviceOnLogin();
-    print('Token encontrado durante inicialização, mas usuário estava marcado como visitante. Status corrigido.');
+    debugPrint('Token encontrado durante inicialização, mas usuário estava marcado como visitante. Status corrigido.');
   } else if (token == null && !AuthHelper.isGuest && !AuthHelper.isLoggedIn) {
     // Se não há token e o usuário não está marcado como visitante ou logado,
     // configura como visitante para evitar comportamentos inesperados
     await AuthHelper.setGuest();
-    print('Nenhum token encontrado e usuário não marcado como visitante. Status definido como visitante.');
+    debugPrint('Nenhum token encontrado e usuário não marcado como visitante. Status definido como visitante.');
   } else if (token != null && AuthHelper.isLoggedIn) {
     // Se já está logado e tem token, garantir que o dispositivo está registrado
     await notificationService.registerDeviceOnLogin();
   }
+
+  // Log final do estado de autenticação para debug
+  debugPrint('Estado final de autenticação:');
+  debugPrint('- Token: ${token != null ? "Presente" : "Ausente"}');
+  debugPrint('- isLoggedIn: ${AuthHelper.isLoggedIn}');
+  debugPrint('- isGuest: ${AuthHelper.isGuest}');
 
   final String initialRoute = (token == null && !AuthHelper.isGuest)
       ? AppPages.initial
@@ -65,7 +77,6 @@ Future<void> main() async {
       initialBinding: ApplicationBinding(),
       theme: AppTheme.theme,
       builder: (_, child) {
-  tz.initializeTimeZones();
         return MegaBannerEnv(
           location: BannerLocation.topStart,
           navigationKey: Get.key, // Use a navigationKey global do GetX

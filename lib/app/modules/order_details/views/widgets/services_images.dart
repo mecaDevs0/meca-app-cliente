@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mega_commons/mega_commons.dart';
 
 import '../../../../core/app_colors.dart';
+import '../../../../core/utils/image_url_helper.dart';
 
 class AppServiceImages extends StatelessWidget {
   const AppServiceImages({super.key, required this.images});
@@ -32,7 +33,7 @@ class AppServiceImages extends StatelessWidget {
                 return Stack(
                   children: [
                     MegaCachedNetworkImage(
-                      imageUrl: images[index],
+                      imageUrl: ImageUrlHelper.buildImageUrl(images[index]),
                       width: 100,
                       height: 100,
                       radius: 8,
@@ -63,7 +64,7 @@ class AppServiceImages extends StatelessWidget {
               return Padding(
                 padding: const EdgeInsets.only(right: 16),
                 child: MegaCachedNetworkImage(
-                  imageUrl: images[index],
+                  imageUrl: ImageUrlHelper.buildImageUrl(images[index]),
                   width: 100,
                   height: 100,
                   radius: 8,
