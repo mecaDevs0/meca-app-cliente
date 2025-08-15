@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../app_colors.dart';
-import '../app_images.dart';
 import '../utils/image_url_helper.dart';
-import 'force_download_image.dart';
 
 class MechanicWorkshopInfo extends StatelessWidget {
   const MechanicWorkshopInfo({
@@ -25,15 +21,6 @@ class MechanicWorkshopInfo extends StatelessWidget {
   final String? imageUrl;
   final VoidCallback? onTap;
 
-  Future<void> openWhatsApp(String phone) async {
-    final url = 'https://wa.me/$phone';
-
-    if (!await launchUrl(Uri.parse(url))) {
-      // Mostrar erro usando ScaffoldMessenger
-      debugPrint('Não foi possível abrir o WhatsApp');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -42,36 +29,63 @@ class MechanicWorkshopInfo extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.grayBorderColor),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.1),
+                spreadRadius: 1,
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(
             children: [
               // Imagem da oficina
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: imageUrl != null && imageUrl!.isNotEmpty
-                                         ? ForceDownloadImage(
-                         imageUrl: ImageUrlHelper.buildImageUrlWithValidation(imageUrl, context: 'MechanicWorkshopInfo') ?? '',
-                         width: 60,
-                         height: 60,
-                       )
-                    : Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(8),
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.grey[200],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: imageUrl != null && imageUrl!.isNotEmpty
+                      ? Image.network(
+                          ImageUrlHelper.buildImageUrlWithValidation(imageUrl, context: 'MechanicWorkshopInfo') ?? '',
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.business,
+                                  color: Colors.grey,
+                                  size: 24,
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      : const Center(
+                          child: Icon(
+                            Icons.business,
+                            color: Colors.grey,
+                            size: 24,
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.business,
-                          color: Colors.grey,
-                          size: 24,
-                        ),
-                      ),
+                ),
               ),
               const SizedBox(width: 12),
               // Informações da oficina
@@ -102,34 +116,42 @@ class MechanicWorkshopInfo extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
+                        Icon(
+                          Icons.location_on,
+                          size: 14,
+                          color: AppColors.primaryColor,
+                        ),
+                        const SizedBox(width: 4),
                         Text(
                           distance,
                           style: const TextStyle(
                             fontSize: 12,
-                            color: AppColors.primaryColor,
-                            fontWeight: FontWeight.w500,
+                            color: Colors.grey,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const Spacer(),
                         Row(
-                          children: List.generate(5, (index) {
-                            return Icon(
-                              index < rating.floor() ? Icons.star : Icons.star_border,
-                              size: 16,
+                          children: [
+                            Icon(
+                              Icons.star,
+                              size: 14,
                               color: Colors.amber,
-                            );
-                          }),
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              rating.toString(),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ],
                 ),
-              ),
-              // Seta indicativa
-              const Icon(
-                Icons.arrow_forward_ios,
-                color: AppColors.primaryColor,
-                size: 16,
               ),
             ],
           ),

@@ -1,4 +1,3 @@
-import '../app_urls.dart';
 import '../config/image_config.dart';
 
 class ImageUrlHelper {
@@ -32,23 +31,10 @@ class ImageUrlHelper {
   /// Valida e constrói a URL da imagem, retornando null se for inválida
   static String? buildImageUrlWithValidation(String? imageUrl, {String? context}) {
     if (ImageConfig.isEmptyOrInvalid(imageUrl)) {
-      print('🔍 ImageUrlHelper - URL vazia ou inválida para contexto: $context');
       return null;
     }
     final processedUrl = ImageConfig.buildImageUrl(imageUrl, context: context);
     final isValid = ImageConfig.isValidImageUrl(processedUrl);
-    print('🔍 ImageUrlHelper - Processed URL: "$processedUrl"');
-    print('  Is Valid: $isValid');
-    if (isValid) {
-      try {
-        final uri = Uri.parse(processedUrl);
-        print('  Host: ${uri.host}');
-        print('  Path: ${uri.path}');
-        print('  Scheme: ${uri.scheme}');
-      } catch (e) {
-        print('  Erro ao parsear URI: $e');
-      }
-    }
     return isValid ? processedUrl : null;
   }
   

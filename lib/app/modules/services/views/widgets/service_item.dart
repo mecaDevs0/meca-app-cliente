@@ -4,7 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../core/app_colors.dart';
 import '../../../../core/app_images.dart';
 import '../../../../core/utils/image_url_helper.dart';
-import '../../../../core/widgets/force_download_image.dart';
+
 import '../../../../data/models/service.dart';
 
 class ServiceItem extends StatelessWidget {
@@ -71,11 +71,25 @@ class ServiceItem extends StatelessWidget {
                     topRight: Radius.circular(borderRadius - 1),
                   ),
                   child: service.photo != null && service.photo!.isNotEmpty
-                      ? ForceDownloadImage(
-                          imageUrl: ImageUrlHelper.buildImageUrlWithValidation(service.photo, context: 'ServiceItem') ?? '',
+                      ? Image.network(
+                          ImageUrlHelper.buildImageUrlWithValidation(service.photo, context: 'ServiceItem') ?? '',
                           width: double.infinity,
                           height: imageHeight,
                           fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: double.infinity,
+                              height: imageHeight,
+                              color: Colors.grey[300],
+                              child: const Center(
+                                child: Icon(
+                                  Icons.image,
+                                  color: Colors.grey,
+                                  size: 24,
+                                ),
+                              ),
+                            );
+                          },
                         )
                       : Container(
                           width: double.infinity,

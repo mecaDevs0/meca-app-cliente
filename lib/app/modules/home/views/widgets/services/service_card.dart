@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/app_colors.dart';
 import '../../../../../core/utils/image_url_helper.dart';
-import '../../../../../core/widgets/force_download_image.dart';
 import '../../../../../data/models/service.dart';
 
 class ServiceCard extends StatelessWidget {
@@ -39,11 +38,25 @@ class ServiceCard extends StatelessWidget {
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               child: imageUrl != null
-                  ? ForceDownloadImage(
-                      imageUrl: imageUrl,
+                  ? Image.network(
+                      imageUrl,
                       width: double.infinity,
                       height: double.infinity,
                       fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          width: double.infinity,
+                          height: double.infinity,
+                          color: Colors.grey[300],
+                          child: const Center(
+                            child: Icon(
+                              Icons.image,
+                              color: Colors.grey,
+                              size: 24,
+                            ),
+                          ),
+                        );
+                      },
                     )
                   : Container(
                       width: double.infinity,
