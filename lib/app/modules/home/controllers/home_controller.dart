@@ -19,6 +19,7 @@ import '../../../data/providers/home_provider.dart';
 import '../../../data/providers/user_profile_provider.dart';
 import '../../../data/providers/core_provider.dart';
 import '../../app_filter/controllers/filter_controller.dart';
+import '../../../services/notification_service.dart';
 
 class HomeController extends GetxController {
   HomeController({
@@ -191,6 +192,11 @@ class HomeController extends GetxController {
       action: () async {
         try {
           // Garantimos que a localização foi obtida antes de chamar a API
+          // Só passar serviceType se houver serviços selecionados
+          final serviceTypes = services.isNotEmpty 
+              ? services.map((service) => service.id!).toList()
+              : null;
+              
           final response = await _homeProvider.onRequestWorkshops(
             latUser: userPosition?.latitude,
             longUser: userPosition?.longitude,
@@ -198,7 +204,7 @@ class HomeController extends GetxController {
             limit: _workshopsLimit,
             rating: rating > 0 ? rating : null,
             distance: distance > 50 ? 50 : distance.toInt(),
-            serviceType: services.map((service) => service.id!).toList(),
+            serviceType: serviceTypes,
             search: _filterController.searchQuery,
           );
 
@@ -308,13 +314,9 @@ class HomeController extends GetxController {
   Future<void> registerDeviceID() async {
     await MegaRequestUtils.load(
       action: () async {
-        final String? deviceId = MegaOneSignalConfig.fromCache();
-        if (deviceId != null) {
-          await _profileProvider.onRegisterUnregister(
-            deviceId: deviceId,
-            isRegister: true,
-          );
-        }
+        // Usar o NotificationService para registrar o dispositivo
+        final notificationService = Get.find<NotificationService>();
+        await notificationService.forceRegisterDevice();
       },
     );
   }

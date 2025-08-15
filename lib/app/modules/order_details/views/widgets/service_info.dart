@@ -90,6 +90,7 @@ class ServiceInfo extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+        
         const Text(
           'Serviços solicitados',
           style: TextStyle(

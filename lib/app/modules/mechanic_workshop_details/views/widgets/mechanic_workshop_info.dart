@@ -8,6 +8,7 @@ import '../../../../core/app_images.dart';
 import '../../../../core/args/workshop_args.dart';
 import '../../../../core/widgets/app_rating_row.dart';
 import '../../../../core/utils/image_url_helper.dart';
+import '../../../../core/utils/workshop_name_helper.dart';
 import '../../../../routes/app_pages.dart';
 import '../../controllers/mechanic_workshop_details_controller.dart';
 
@@ -42,7 +43,7 @@ class MechanicWorkshopInfo extends GetView<MechanicWorkshopDetailsController> {
             height: 16,
           ),
           Text(
-            controller.workshopDetails?.companyName ?? '',
+            WorkshopNameHelper.getDisplayName(controller.workshopDetails),
             style: const TextStyle(
               color: AppColors.softBlackColor,
               fontSize: 20,

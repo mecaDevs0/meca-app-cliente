@@ -44,6 +44,9 @@ class OrdersPlacedController extends GetxController {
           final nextPageKey = page + 1;
           pagingController.appendPage(response, nextPageKey);
         }
+        
+        // Forçar rebuild da UI após enriquecimento
+        update();
       },
     );
   }

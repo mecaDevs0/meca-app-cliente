@@ -6,6 +6,7 @@ class WorkshopArgs {
     this.serviceName,
     this.openingHours,
     this.selectedService,
+    this.workshopDetails,
   });
 
   String workshopId;
@@ -14,6 +15,7 @@ class WorkshopArgs {
   String? serviceName;
   String? openingHours;
   dynamic selectedService; // Pode ser Service ou WorkshopService
+  dynamic workshopDetails; // Pode ser MechanicWorkshop
 
   factory WorkshopArgs.fromJson(Map<String, dynamic> json) {
     return WorkshopArgs(
@@ -23,6 +25,7 @@ class WorkshopArgs {
       serviceName: json['serviceName'] as String?,
       openingHours: json['openingHours'] as String?,
       selectedService: json['selectedService'],
+      workshopDetails: json['workshopDetails'],
     );
   }
 }

@@ -51,23 +51,33 @@ class _OrderHistoricState
             final int statusTitle = entry.key;
             final data = entry.value;
             final List<OrderHistory> items = data['items'];
+            
+            // Encontrar o ServiceHistoryType correto baseado no statusTitle
+            ServiceHistoryType? serviceType;
+            try {
+              if (statusTitle >= 0 && statusTitle < ServiceHistoryType.values.length) {
+                serviceType = ServiceHistoryType.values[statusTitle];
+              } else {
+                // Fallback para um tipo padrão se o índice for inválido
+                serviceType = ServiceHistoryType.values.first;
+              }
+            } catch (e) {
+              serviceType = ServiceHistoryType.values.first;
+            }
+            
             return Column(
               children: [
                 TitleExpanded(
-                  key: keys[statusTitle],
+                  key: keys[statusTitle < keys.length ? statusTitle : 0],
                   quantity: data['count'],
-                  serviceType: ServiceHistoryType.values[statusTitle],
+                  serviceType: serviceType ?? ServiceHistoryType.values.first,
                   onTap: () {
-                    checkItemPosition(statusTitle);
-                    controller.toggleServiceType(
-                      ServiceHistoryType.values[statusTitle],
-                    );
+                    checkItemPosition(statusTitle < keys.length ? statusTitle : 0);
+                    controller.toggleServiceType(serviceType ?? ServiceHistoryType.values.first);
                   },
                 ),
                 ExpandedWidget(
-                  expand: controller.isExpanded(
-                    ServiceHistoryType.values[statusTitle],
-                  ),
+                  expand: controller.isExpanded(serviceType ?? ServiceHistoryType.values.first),
                   child: ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),

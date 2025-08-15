@@ -3,10 +3,11 @@ import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../../core/core.dart';
-import '../../../core/widgets/mechanic_workshop_info.dart';
+import '../../../core/utils/workshop_name_helper.dart';
 import '../../../routes/app_pages.dart';
 import '../controllers/order_details_controller.dart';
 import 'widgets/free_repair_bottomsheet.dart';
+import 'widgets/mechanic_workshop_info.dart';
 import 'widgets/order_historic.dart';
 import 'widgets/rating_order.dart';
 import 'widgets/rating_order_confirmation.dart';
@@ -55,6 +56,13 @@ class _OrderDetailsViewState
             ),
           );
         }
+        
+        if (controller.orderDetails == null) {
+          return const Center(
+            child: Text('Pedido não encontrado'),
+          );
+        }
+        
         return Column(
           children: [
             Expanded(
@@ -65,11 +73,7 @@ class _OrderDetailsViewState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     MechanicWorkshopInfo(
-                      imageUrl: controller.orderDetails?.workshop?.photo,
-                      name: controller.orderDetails?.workshop?.companyName ?? 'Estabelecimento',
-                      address: '${controller.orderDetails?.workshop?.streetAddress ?? ''}, ${controller.orderDetails?.workshop?.number ?? ''}, ${controller.orderDetails?.workshop?.neighborhood ?? ''}',
-                      distance: '0km',
-                      rating: 4.0,
+                      isShowWhatsApp: true,
                     ),
                     const SizedBox(height: 12),
                     ServiceInfo(
@@ -85,277 +89,71 @@ class _OrderDetailsViewState
                 ),
               ),
             ),
-            if (controller.orderDetails?.status == 26 &&
-                controller.orderDetails?.hasEvaluated == false) ...[
-              Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x3F000000),
-                      blurRadius: 4,
-                      offset: Offset.zero,
-                      spreadRadius: 0,
-                    ),
-                  ],
-                ),
-                padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MegaBaseButton(
-                      'Avaliar serviço',
-                      buttonColor: AppColors.primaryColor,
-                      textColor: AppColors.whiteColor,
-                      onButtonPress: () {
-                        showRatingOrderBottomSheet(
-                          context: context,
-                          onTap: (
-                            int attendanceQuality,
-                            int serviceQuality,
-                            int costBenefit,
-                            String obs,
-                          ) async {
-                            final isSuccess = await controller.ratingOrder(
-                              attendanceQuality,
-                              serviceQuality,
-                              costBenefit,
-                              obs,
-                            );
-                            if (isSuccess && context.mounted) {
-                              showRatingOrderConfirmationBottomSheet(
-                                context: context,
-                                onTap: () {
-                                  final workshop =
-                                      controller.orderDetails?.workshop;
-                                  if (workshop?.id.isNullOrEmpty == false) {
-                                    Get.toNamed(
-                                      Routes.mechanicWorkshopReviews,
-                                      arguments: WorkshopArgs(workshop!.id!),
-                                    );
-                                  }
-                                },
+            Obx(() {
+              if (controller.orderDetails?.status == 26 &&
+                  controller.orderDetails?.hasEvaluated == false) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0x3F000000),
+                        blurRadius: 4,
+                        offset: Offset.zero,
+                        spreadRadius: 0,
+                      ),
+                    ],
+                  ),
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      MegaBaseButton(
+                        'Avaliar serviço',
+                        buttonColor: AppColors.primaryColor,
+                        textColor: AppColors.whiteColor,
+                        onButtonPress: () {
+                          showRatingOrderBottomSheet(
+                            context: context,
+                            onTap: (
+                              int attendanceQuality,
+                              int serviceQuality,
+                              int costBenefit,
+                              String obs,
+                            ) async {
+                              final isSuccess = await controller.ratingOrder(
+                                attendanceQuality,
+                                serviceQuality,
+                                costBenefit,
+                                obs,
                               );
-                            }
-                          },
-                        );
-                      },
-                      buttonHeight: 46,
-                      borderRadius: 4.0,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if ((controller.orderDetails!.status! >= 7) &&
-                (controller.orderDetails!.status! <= 11)) ...[
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: MegaBaseButton(
-                  'ver orçamento',
-                  buttonColor: AppColors.primaryColor,
-                  textColor: AppColors.whiteColor,
-                  onButtonPress: () {
-                    Get.toNamed(Routes.budgetDetails);
-                  },
-                  buttonHeight: 46,
-                  borderRadius: 4.0,
-                ),
-              ),
-            ],
-            if (controller.orderDetails?.status == 1) ...[
-              Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x3F000000),
-                      blurRadius: 4,
-                      offset: Offset.zero,
-                      spreadRadius: 0,
-                    ),
-                  ],
-                ),
-                padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MegaBaseButton(
-                      'Aprovar horário sugerido',
-                      buttonColor: AppColors.primaryColor,
-                      textColor: AppColors.whiteColor,
-                      onButtonPress: () async {
-                        final hasResult = await controller.approveNewSchedule();
-                        if (hasResult) {
-                          await controller.getOrderDetails();
-
-                          MegaSnackbar.showSuccessSnackBar(
-                            'O horário sugerido foi aprovado',
+                              if (isSuccess && context.mounted) {
+                                showRatingOrderConfirmationBottomSheet(
+                                  context: context,
+                                  onTap: () {
+                                    final workshop =
+                                        controller.orderDetails?.workshop;
+                                    if (workshop?.id.isNullOrEmpty == false) {
+                                      Get.toNamed(
+                                        Routes.mechanicWorkshopReviews,
+                                        arguments: WorkshopArgs(workshop!.id!),
+                                      );
+                                    }
+                                  },
+                                );
+                              }
+                            },
                           );
-                        }
-                      },
-                      isLoading: controller.isLoadingApproveNewSchedule,
-                      buttonHeight: 46,
-                      borderRadius: 4.0,
-                    ),
-                    const SizedBox(height: 16),
-                    MegaBaseButton(
-                      'Reprovar horário sugerido',
-                      buttonColor: AppColors.redAlertColor,
-                      textColor: AppColors.whiteColor,
-                      borderRadius: 4,
-                      onButtonPress: () async {
-                        final hasResult = await controller.reproveNewSchedule();
-                        if (hasResult) {
-                          await controller.getOrderDetails();
-
-                          MegaSnackbar.showErroSnackBar(
-                            'O horário sugerido foi reprovado',
-                          );
-                        }
-                      },
-                      isLoading: controller.isLoadingReproveNewSchedule,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if ((controller.orderDetails!.status! >= 0) &&
-                (controller.orderDetails!.status! < 2) &&
-                (controller.orderDetails?.freeRepair == false)) ...[
-              Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x3F000000),
-                      blurRadius: 4,
-                      offset: Offset.zero,
-                      spreadRadius: 0,
-                    ),
-                  ],
-                ),
-                padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MegaBaseButton(
-                      'Cancelar pedido',
-                      buttonColor: AppColors.redAlertColor,
-                      textColor: AppColors.whiteColor,
-                      onButtonPress: () async {
-                        final hasResult = await controller.cancelOrder();
-                        if (hasResult) {
-                          Get.back();
-
-                          MegaSnackbar.showErroSnackBar(
-                            'O agendamento foi cancelado',
-                          );
-
-                          controller.ordersPlacedController.pagingController
-                              .refresh();
-                        }
-                      },
-                      buttonHeight: 46,
-                      borderRadius: 4.0,
-                      isLoading: controller.isLoadingCancelOrder,
-                    ),
-                  ],
-                ),
-              ),
-            ] else if (controller.orderDetails?.status == 19) ...[
-              Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x3F000000),
-                      blurRadius: 4,
-                      offset: Offset.zero,
-                      spreadRadius: 0,
-                    ),
-                  ],
-                ),
-                padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MegaBaseButton(
-                      'Aprovar',
-                      buttonColor: AppColors.primaryColor,
-                      textColor: AppColors.whiteColor,
-                      onButtonPress: () async {
-                        await controller.approveOrder();
-                        controller.ordersPlacedController.pagingController
-                            .refresh();
-                        Get.back();
-                      },
-                      buttonHeight: 46,
-                      borderRadius: 4.0,
-                    ),
-                    const SizedBox(height: 16),
-                    MegaBaseButton(
-                      'Reprovar',
-                      buttonColor: AppColors.redAlertColor,
-                      textColor: AppColors.whiteColor,
-                      borderRadius: 4,
-                      onButtonPress: () {
-                        Get.toNamed(
-                          Routes.serviceFailed,
-                          arguments: OrderArgs(controller.orderId),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if (controller.orderDetails?.freeRepair == true &&
-                controller.orderDetails?.status == 0) ...[
-              Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x3F000000),
-                      blurRadius: 4,
-                      offset: Offset.zero,
-                      spreadRadius: 0,
-                    ),
-                  ],
-                ),
-                padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MegaBaseButton(
-                      'Realizar agendamento',
-                      buttonColor: AppColors.primaryColor,
-                      textColor: AppColors.whiteColor,
-                      onButtonPress: () async {
-                        showFreeRepairBottomSheet(
-                          context: context,
-                          onTap: (int dateTime) async {
-                            final hasResult =
-                                await controller.scheduleFreeRepair(dateTime);
-                            if (hasResult) {
-                              MegaSnackbar.showSuccessSnackBar(
-                                'Agendamento de reparo gratuito realizado com sucesso',
-                              );
-                              controller.getOrderDetails();
-                              Get.back();
-                            }
-                          },
-                        );
-                      },
-                      buttonHeight: 46,
-                      borderRadius: 4.0,
-                      isLoading: controller.isLoadingCancelOrder,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+                        },
+                        buttonHeight: 46,
+                        borderRadius: 4.0,
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            }),
           ],
         );
       }),

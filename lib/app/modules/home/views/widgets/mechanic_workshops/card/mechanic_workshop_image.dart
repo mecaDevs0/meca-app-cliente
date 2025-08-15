@@ -12,8 +12,13 @@ class MechanicWorkshopImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Debug logs
+    print('🔧 [MechanicWorkshopImage] Image Asset: "$imageAsset"');
+    
     // Processar a URL da imagem
-    final imageUrl = ImageUrlHelper.buildImageUrlWithValidation(imageAsset, context: 'MechanicWorkshopImage');
+    final imageUrl = ImageUrlHelper.buildImageUrlWithValidation(imageAsset, context: 'Workshop');
+    
+    print('🔧 [MechanicWorkshopImage] Processed URL: "$imageUrl"');
 
     return imageUrl != null
         ? Image.network(

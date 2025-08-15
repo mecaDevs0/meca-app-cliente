@@ -79,3 +79,4 @@ class ErrorMessages {
     return 'Erro ao atualizar perfil. Verifique os dados e tente novamente.';
   }
 }
+

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../../core/app_colors.dart';
+import '../../../../../../core/utils/workshop_name_helper.dart';
 import '../../../../../../data/models/mechanic_workshop.dart';
 
 class MechanicWorkshopNameRow extends StatelessWidget {
@@ -15,11 +16,16 @@ class MechanicWorkshopNameRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Usar accountableName (nome fantasia) se disponível, senão usar fullName
-    // Garantir que nunca seja null
-    final displayName = mechanicWorkshop.accountableName?.isNotEmpty == true 
-        ? mechanicWorkshop.accountableName! 
-                    : mechanicWorkshop.fullName ?? 'Estabelecimento';
+    // Debug logs
+    print('🔧 [MechanicWorkshopNameRow] Workshop ID: ${mechanicWorkshop.id}');
+    print('🔧 [MechanicWorkshopNameRow] CompanyName: "${mechanicWorkshop.companyName}"');
+    print('🔧 [MechanicWorkshopNameRow] FullName: "${mechanicWorkshop.fullName}"');
+    print('🔧 [MechanicWorkshopNameRow] AccountableName: "${mechanicWorkshop.accountableName}"');
+    
+    // Usar o helper para obter o nome do estabelecimento
+    final displayName = WorkshopNameHelper.getDisplayName(mechanicWorkshop);
+    
+    print('🔧 [MechanicWorkshopNameRow] Display Name: "$displayName"');
     
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,

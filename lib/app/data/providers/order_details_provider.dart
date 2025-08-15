@@ -6,6 +6,7 @@ import '../models/order.dart';
 import '../models/order_history.dart';
 import '../models/rating.dart';
 import '../models/scheduling/scheduling.dart';
+import '../models/mechanic_workshop.dart';
 
 class OrderDetailsProvider {
   OrderDetailsProvider({required RestClientDio restClientDio})
@@ -15,7 +16,11 @@ class OrderDetailsProvider {
 
   Future<Order> onRequestOrderDetails({required String id}) async {
     final response = await _restClientDio.get('${BaseUrls.scheduling}/$id');
-    return Order.fromJson(response.data);
+    final order = Order.fromJson(response.data);
+    
+    // REMOVIDO: Enriquecimento complexo - vamos usar a foto diretamente como na Home
+    
+    return order;
   }
 
   Future<List<OrderHistory>> onRequestOrderHistory({required String id}) async {
@@ -137,6 +142,8 @@ class OrderDetailsProvider {
       },
     );
 
-    return Scheduling.fromJson(response.data);
-  }
-}
+         return Scheduling.fromJson(response.data);
+   }
+
+     // REMOVIDO: Método de enriquecimento complexo
+ }

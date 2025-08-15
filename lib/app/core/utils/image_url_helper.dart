@@ -30,11 +30,20 @@ class ImageUrlHelper {
 
   /// Valida e constrói a URL da imagem, retornando null se for inválida
   static String? buildImageUrlWithValidation(String? imageUrl, {String? context}) {
+    print('🔧 [ImageUrlHelper] Input imageUrl: "$imageUrl"');
+    print('🔧 [ImageUrlHelper] Context: "$context"');
+    
     if (ImageConfig.isEmptyOrInvalid(imageUrl)) {
+      print('🔧 [ImageUrlHelper] ❌ ImageUrl é vazia ou inválida');
       return null;
     }
+    
     final processedUrl = ImageConfig.buildImageUrl(imageUrl, context: context);
+    print('🔧 [ImageUrlHelper] Processed URL: "$processedUrl"');
+    
     final isValid = ImageConfig.isValidImageUrl(processedUrl);
+    print('🔧 [ImageUrlHelper] URL é válida: $isValid');
+    
     return isValid ? processedUrl : null;
   }
   

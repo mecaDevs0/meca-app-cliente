@@ -70,6 +70,14 @@ class RequestAppointmentController extends GetxController {
     workshopName = workshop.workshopName ?? '';
     _openingHours = workshop.openingHours;
     _selectedServiceFromArgs = workshop.selectedService;
+    
+    // Log para debug
+    log('[AGENDAMENTO] Argumentos recebidos:');
+    log('[AGENDAMENTO] workshopId: $workshopId');
+    log('[AGENDAMENTO] workshopName: $workshopName');
+    log('[AGENDAMENTO] selectedService: $_selectedServiceFromArgs');
+    log('[AGENDAMENTO] selectedService type: ${_selectedServiceFromArgs?.runtimeType}');
+    
     await initialize();
     super.onInit();
   }
@@ -116,32 +124,52 @@ class RequestAppointmentController extends GetxController {
   }
 
   void _preSelectServiceFromArgs() {
-    if (_selectedServiceFromArgs == null) return;
+    if (_selectedServiceFromArgs == null) {
+      log('[AGENDAMENTO] Nenhum serviço passado nos argumentos');
+      return;
+    }
+    
+    log('[AGENDAMENTO] Tentando pré-selecionar serviço...');
+    log('[AGENDAMENTO] Serviços disponíveis: ${_services.length}');
     
     // Se o serviço passado é um Service (da home), procura pelo WorkshopService correspondente
     if (_selectedServiceFromArgs is Service) {
       final service = _selectedServiceFromArgs as Service;
+      log('[AGENDAMENTO] Procurando WorkshopService para Service ID: ${service.id}');
+      
       final matchingWorkshopService = _services.firstWhereOrNull(
         (ws) => ws.service?.id == service.id,
       );
+      
       if (matchingWorkshopService != null) {
         _selectedServices.add(matchingWorkshopService);
         log('[AGENDAMENTO] Serviço pré-selecionado: ${matchingWorkshopService.service?.name}');
+      } else {
+        log('[AGENDAMENTO] WorkshopService não encontrado para Service ID: ${service.id}');
       }
     }
     // Se o serviço passado é um WorkshopService, adiciona diretamente
     else if (_selectedServiceFromArgs is WorkshopService) {
       final workshopService = _selectedServiceFromArgs as WorkshopService;
+      log('[AGENDAMENTO] Tentando adicionar WorkshopService diretamente: ${workshopService.service?.name}');
+      
       if (_services.contains(workshopService)) {
         _selectedServices.add(workshopService);
         log('[AGENDAMENTO] WorkshopService pré-selecionado: ${workshopService.service?.name}');
+      } else {
+        log('[AGENDAMENTO] WorkshopService não encontrado na lista de serviços disponíveis');
       }
+    } else {
+      log('[AGENDAMENTO] Tipo de serviço não reconhecido: ${_selectedServiceFromArgs.runtimeType}');
     }
+    
+    log('[AGENDAMENTO] Serviços selecionados: ${_selectedServices.length}');
   }
 
   Future<bool> registerScheduling(Scheduling newScheduling) async {
     _isLoadingScheduling.value = true;
     bool isSuccess = false;
+    
     // LOGS DE TIMEZONE PARA PROVA
     try {
       final timestamp = newScheduling.date;
@@ -160,10 +188,30 @@ class RequestAppointmentController extends GetxController {
     } catch (e) {
       log('[DEBUG] Falha ao logar timestamp: $e');
     }
+    
     await MegaRequestUtils.load(
       action: () async {
         await _requestAppointmentProvider.onRegisterScheduling(newScheduling);
         isSuccess = true;
+      },
+      onError: (error) {
+        // O erro já foi tratado no provider, apenas garantir que seja exibido
+        log('[DEBUG] Erro no agendamento: ${error.message}');
+        
+        // Exibir a mensagem de erro para o usuário com tratamento melhorado
+        if (error.message != null && error.message!.isNotEmpty) {
+          // Verificar se a mensagem já contém emojis (já foi formatada)
+          if (error.message!.contains('❌')) {
+            MegaSnackbar.showErroSnackBar(error.message!);
+          } else {
+            // Formatar mensagem genérica
+            MegaSnackbar.showErroSnackBar('❌ Erro no agendamento!\n\n${error.message}');
+          }
+        } else {
+          MegaSnackbar.showErroSnackBar('❌ Erro inesperado!\n\nTente novamente ou entre em contato com o suporte.');
+        }
+        
+        isSuccess = false;
       },
       onFinally: () {
         _isLoadingScheduling.value = false;
@@ -289,24 +337,54 @@ class RequestAppointmentController extends GetxController {
     required VehicleScheduling? vehicle,
     required List<WorkshopService> services,
   }) {
-    if (_vehicles.isEmpty) {
-      return 'Você não possui veículos cadastrados.';
-    }
-    if (_services.isEmpty) {
-              return 'O estabelecimento não possui serviços disponíveis.';
-    }
-    if (dateText.isEmpty) {
-      return 'Selecione uma data para o agendamento';
-    }
-    if (timeText.isEmpty) {
-      return 'Selecione um horário para o agendamento';
-    }
+    // Validar se um veículo foi selecionado
     if (vehicle == null) {
-      return 'Selecione um veículo para o agendamento';
+      return '❌ Veículo não selecionado!\n\nPor favor, selecione um veículo para o agendamento.';
     }
+
+    // Validar se pelo menos um serviço foi selecionado
     if (services.isEmpty) {
-      return 'Selecione pelo menos um serviço para o agendamento';
+      return '❌ Nenhum serviço selecionado!\n\nPor favor, selecione pelo menos um serviço para o agendamento.';
     }
-    return null; // Sem erros de validação
+
+    // Validar se a data foi preenchida
+    if (dateText.isEmpty) {
+      return '❌ Data não selecionada!\n\nPor favor, selecione uma data para o agendamento.';
+    }
+
+    // Validar se o horário foi preenchido
+    if (timeText.isEmpty) {
+      return '❌ Horário não selecionado!\n\nPor favor, selecione um horário para o agendamento.';
+    }
+
+    // Validar se a data e horário não são no passado
+    try {
+      final parts = dateText.split('/'); // dd/MM/yyyy
+      final hourMinute = timeText.split(':');
+      
+      final now = DateTime.now();
+      final selectedDateTime = DateTime(
+        int.parse(parts[2]), // ano
+        int.parse(parts[1]), // mês
+        int.parse(parts[0]), // dia
+        int.parse(hourMinute[0]), // hora
+        int.parse(hourMinute[1]), // minuto
+      );
+
+      // Verificar se a data/hora selecionada é no passado
+      if (selectedDateTime.isBefore(now)) {
+        return '❌ Data/hora no passado!\n\nPor favor, selecione uma data e horário futuros para o agendamento.';
+      }
+
+      // Verificar se é muito próximo (menos de 2 horas)
+      final difference = selectedDateTime.difference(now);
+      if (difference.inHours < 2) {
+        return '❌ Horário muito próximo!\n\nPor favor, agende com pelo menos 2 horas de antecedência.';
+      }
+    } catch (e) {
+      return '❌ Data ou horário inválido!\n\nPor favor, verifique o formato da data e horário.';
+    }
+
+    return null; // Sem erros
   }
 }

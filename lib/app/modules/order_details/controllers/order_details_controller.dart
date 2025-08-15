@@ -62,7 +62,15 @@ class OrderDetailsController extends GetxController {
 
   @override
   Future<void> onInit() async {
-    orderId = Get.arguments['orderId'] as String;
+    // Aceitar tanto string quanto Map como argumentos
+    if (Get.arguments is String) {
+      orderId = Get.arguments as String;
+    } else if (Get.arguments is Map<String, dynamic>) {
+      orderId = Get.arguments['orderId'] as String;
+    } else {
+      throw Exception('Argumento inválido para OrderDetailsController: ${Get.arguments.runtimeType}');
+    }
+    
     await getOrderDetails();
     _totalValue.value = orderDetails?.diagnosticValue ?? 0.0;
     if (orderDetails?.status == 8) {

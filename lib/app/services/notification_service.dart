@@ -5,6 +5,7 @@ import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../core/app_urls.dart';
+import '../core/args/workshop_args.dart';
 import '../data/models/profile.dart';
 import '../routes/app_pages.dart';
 
@@ -19,250 +20,183 @@ class NotificationService {
 
   NotificationService._internal();
 
-  /// Inicializa o serviço de notificações.
-  /// Este método deve ser chamado no início da aplicação.
-  void initialize() {
+  /// Inicializa o serviço de notificações
+  Future<void> initialize() async {
     try {
-      // Registra o serviço de notificações no Get para que possa ser acessado globalmente
-      Get.put(this, permanent: true);
-
-      console.log('Serviço de notificações inicializado com sucesso.',
-          name: 'NotificationService');
-
-      // Configurar handlers específicos para o app
-      _setupNotificationHandlers();
-
-    } catch (e) {
-      console.log('Erro ao inicializar o serviço de notificações: $e',
-          name: 'NotificationService');
-    }
-  }
-
-  /// Configura os handlers específicos de notificação
-  void _setupNotificationHandlers() {
-    // Handler para quando o app recebe uma notificação em primeiro plano
-    OneSignal.Notifications.addForegroundWillDisplayListener((event) {
-      final payload = event.notification.rawPayload ?? <String, dynamic>{};
-      processReceivedNotification(payload);
-    });
-
-    // Handler para quando o usuário clica em uma notificação
-    OneSignal.Notifications.addClickListener((event) {
-      final payload = event.notification.rawPayload ?? <String, dynamic>{};
-      processOpenedNotification(payload);
-    });
-
-    console.log('Handlers de notificação configurados', name: 'NotificationService');
-  }
-
-  /// Registra o dispositivo no backend quando o usuário faz login
-  Future<void> registerDeviceOnLogin() async {
-    try {
-      final profile = Profile.fromCache();
-      final playerId = MegaOneSignalConfig.fromCache();
-
-      console.log('=== REGISTRO DE DISPOSITIVO ===', name: 'NotificationService');
-      console.log('Profile: ${profile?.id}', name: 'NotificationService');
-      console.log('Player ID: $playerId', name: 'NotificationService');
-
-      if (profile != null && profile.id != null && playerId != null) {
-        console.log('Registrando dispositivo OneSignal para usuário: ${profile.id}', 
-            name: 'NotificationService');
-
-        final restClient = Get.find<RestClientDio>();
-        final userProfileProvider = UserProfileProvider(restClientDio: restClient);
-
-        console.log('Enviando requisição para: ${BaseUrls.registerDevice}', name: 'NotificationService');
-        console.log('Dados: deviceId=$playerId, isRegister=true', name: 'NotificationService');
-
-        await userProfileProvider.onRegisterUnregister(
-          deviceId: playerId,
-          isRegister: true,
-        );
-        
-        console.log('✅ Dispositivo registrado com sucesso: $playerId', 
-            name: 'NotificationService');
-      } else {
-        console.log('❌ Dados insuficientes para registro:', name: 'NotificationService');
-        console.log('- Profile válido: ${profile != null}', name: 'NotificationService');
-        console.log('- Profile ID: ${profile?.id}', name: 'NotificationService');
-        console.log('- Player ID válido: ${playerId != null}', name: 'NotificationService');
-      }
-    } catch (e) {
-      console.log('❌ Erro ao registrar dispositivo: $e', name: 'NotificationService');
-      console.log('Stack trace: ${StackTrace.current}', name: 'NotificationService');
-    }
-  }
-
-  /// Processa uma notificação recebida com o app em primeiro plano
-  void processReceivedNotification(Map<String, dynamic> data) {
-    try {
-      console.log('=== NOTIFICAÇÃO RECEBIDA EM PRIMEIRO PLANO ===', name: 'NotificationService');
-      console.log('Dados completos: $data', name: 'NotificationService');
-
-      final title = data['title'] as String?;
-      final body = data['body'] as String?;
-      final additionalData = data['additionalData'] as Map<String, dynamic>?;
-
-      console.log('Título: $title', name: 'NotificationService');
-      console.log('Corpo: $body', name: 'NotificationService');
-      console.log('Dados adicionais: $additionalData', name: 'NotificationService');
-
-      // LOG DETALHADO DO PAYLOAD RAW
-      if (data.containsKey('rawPayload')) {
-        console.log('RAW PAYLOAD da notificação: ${data['rawPayload']}', name: 'NotificationService');
-      } else {
-        console.log('RAW PAYLOAD não encontrado no data', name: 'NotificationService');
-      }
-
-      // Mostrar notificação local se necessário
-      _showLocalNotification(title ?? 'Nova notificação', body ?? '');
-
-    } catch (e) {
-      console.log('❌ Erro no processamento da notificação recebida: $e',
-          name: 'NotificationService');
-      console.log('Stack trace: ${StackTrace.current}', name: 'NotificationService');
-    }
-  }
-
-  /// Processa uma notificação quando aberta pelo usuário
-  void processOpenedNotification(Map<String, dynamic> data) {
-    try {
-      console.log('=== NOTIFICAÇÃO ABERTA PELO USUÁRIO ===', name: 'NotificationService');
-      console.log('Dados completos: $data', name: 'NotificationService');
-
-      final title = data['title'] as String?;
-      final body = data['body'] as String?;
-      final additionalData = data['additionalData'] as Map<String, dynamic>?;
-
-      console.log('Título: $title', name: 'NotificationService');
-      console.log('Corpo: $body', name: 'NotificationService');
-      console.log('Dados adicionais: $additionalData', name: 'NotificationService');
-
-      // LOG DETALHADO DO PAYLOAD RAW
-      if (data.containsKey('rawPayload')) {
-        console.log('RAW PAYLOAD da notificação aberta: ${data['rawPayload']}', name: 'NotificationService');
-      } else {
-        console.log('RAW PAYLOAD não encontrado no data da notificação aberta', name: 'NotificationService');
-      }
-
-      _handleNotificationNavigation(data);
-    } catch (e) {
-      console.log('❌ Erro no processamento da notificação aberta: $e',
-          name: 'NotificationService');
-      console.log('Stack trace: ${StackTrace.current}', name: 'NotificationService');
-    }
-  }
-
-  /// Mostra uma notificação local quando o app está em primeiro plano
-  void _showLocalNotification(String title, String body) {
-    try {
-      // Implementar notificação local usando flutter_local_notifications
-      // ou outro método preferido para mostrar notificações
-      console.log('Exibindo notificação local: $title - $body', 
-          name: 'NotificationService');
+      console.log('🔔 [NotificationService] Iniciando serviço de notificações...', name: 'NotificationService');
       
-      // Por enquanto, mostrar um snackbar
-      if (Get.context != null) {
-        MegaSnackbar.showToast('$title: $body');
-      }
-    } catch (e) {
-      console.log('Erro ao mostrar notificação local: $e', name: 'NotificationService');
-    }
-  }
-
-  /// Trata a navegação com base nos dados da notificação.
-  ///
-  /// @param data Os dados adicionais da notificação.
-  void _handleNotificationNavigation(Map<String, dynamic> data) {
-    try {
-      console.log('=== PROCESSANDO NAVEGAÇÃO DA NOTIFICAÇÃO ===', name: 'NotificationService');
-      console.log('Dados para navegação: $data', name: 'NotificationService');
-
-      // Extrair informações do payload
-      final String? screen = data['screen_route'] as String?;
-      final String? appointmentId = data['appointment_id'] as String?;
-      final String? notificationType = data['notification_type'] as String?;
-      final String? additionalData = data['additionalData'] as String?;
-
-      console.log('Screen route: $screen', name: 'NotificationService');
-      console.log('Appointment ID: $appointmentId', name: 'NotificationService');
-      console.log('Notification type: $notificationType', name: 'NotificationService');
-      console.log('Additional data: $additionalData', name: 'NotificationService');
-
-      // Aguardar um pouco para garantir que o app está pronto para navegar
-      Future.delayed(const Duration(milliseconds: 500), () {
-        _navigateBasedOnNotification(screen, appointmentId, notificationType);
+      // Configurar OneSignal com App ID correto para clientes
+      OneSignal.initialize("7bbec33c-bffc-47b1-ab90-a080b7353763");
+      
+      console.log('🔔 [NotificationService] OneSignal inicializado com App ID: 7bbec33c-bffc-47b1-ab90-a080b7353763');
+      
+      // Solicitar permissões
+      OneSignal.Notifications.requestPermission(true);
+      
+      console.log('🔔 [NotificationService] Permissões solicitadas');
+      
+      // Configurar handlers
+      OneSignal.Notifications.addForegroundWillDisplayListener((event) {
+        console.log('🔔 [NotificationService] Notificação recebida em foreground: ${event.notification.title}');
+        console.log('🔔 [NotificationService] Dados extras: ${event.notification.additionalData}');
+        event.notification.display();
       });
 
+      OneSignal.Notifications.addClickListener((event) {
+        console.log('🔔 [NotificationService] Notificação clicada: ${event.notification.title}');
+        console.log('🔔 [NotificationService] Dados extras: ${event.notification.additionalData}');
+        _handleNotificationNavigation(event.notification);
+      });
+
+      console.log('🔔 [NotificationService] Handlers configurados');
+      
+      // Aguardar um pouco para garantir que o OneSignal esteja inicializado
+      await Future.delayed(const Duration(seconds: 2));
+      
+      // Verificar se o OneSignal está funcionando
+      final deviceState = OneSignal.User.pushSubscription;
+      console.log('🔔 [NotificationService] Device State: ${deviceState.id}');
+      console.log('🔔 [NotificationService] Push Subscription: ${deviceState.optedIn}');
+      
     } catch (e) {
-      console.log('❌ Erro ao processar a navegação da notificação: $e', name: 'NotificationService');
-      console.log('Stack trace: ${StackTrace.current}', name: 'NotificationService');
-      // Em caso de erro, vá para a home
-      Get.toNamed(Routes.home);
+      console.log('🔔 [NotificationService] Erro na inicialização: $e', name: 'NotificationService');
     }
   }
 
-  /// Executa a navegação baseada nos dados da notificação
-  void _navigateBasedOnNotification(String? screen, String? appointmentId, String? notificationType) {
+  /// Registra o dispositivo no OneSignal e no backend
+  Future<void> registerDeviceOnLogin() async {
     try {
-      console.log('=== EXECUTANDO NAVEGAÇÃO ===', name: 'NotificationService');
-      console.log('Screen: $screen', name: 'NotificationService');
-      console.log('Appointment ID: $appointmentId', name: 'NotificationService');
-      console.log('Notification type: $notificationType', name: 'NotificationService');
-
-      // Navegar com base no tipo de notificação ou rota especificada
-      if (screen != null && screen.isNotEmpty) {
-        // Se tiver uma rota específica definida no payload
-        console.log('✅ Navegando para a rota: $screen', name: 'NotificationService');
-        Get.toNamed(screen);
-      } else if (appointmentId != null && appointmentId.isNotEmpty) {
-        // Se tiver um ID de agendamento, navegar para a tela de detalhes do agendamento
-        console.log('✅ Navegando para detalhes do agendamento: $appointmentId', name: 'NotificationService');
-        Get.toNamed('${Routes.orderDetails}/$appointmentId');
-      } else if (notificationType != null) {
-        // Casos específicos por tipo de notificação
-        switch (notificationType) {
-          case 'new_appointment':
-            console.log('✅ Navegando para a lista de agendamentos', name: 'NotificationService');
-            Get.toNamed(Routes.ordersPlaced);
-            break;
-          case 'appointment_status_changed':
-            console.log('✅ Navegando para a lista de agendamentos', name: 'NotificationService');
-            Get.toNamed(Routes.ordersPlaced);
-            break;
-          case 'message':
-            console.log('✅ Navegando para a lista de notificações', name: 'NotificationService');
-            Get.toNamed(Routes.notifications);
-            break;
-          case 'promotion':
-            console.log('✅ Navegando para promoções', name: 'NotificationService');
-            Get.toNamed(Routes.home);
-            break;
-          default:
-            console.log('⚠️ Tipo de notificação desconhecido: $notificationType, redirecionando para home', name: 'NotificationService');
-            Get.toNamed(Routes.home);
-            break;
-        }
-      } else {
-        // Fallback para a lista de notificações
-        console.log('⚠️ Sem dados específicos de navegação, indo para notificações', name: 'NotificationService');
-        Get.toNamed(Routes.notifications);
+      console.log('🔔 [NotificationService] Iniciando registro do dispositivo...', name: 'NotificationService');
+      
+      // Aguardar um pouco para garantir que o OneSignal esteja inicializado
+      await Future.delayed(const Duration(seconds: 2));
+      
+      // Verificar se o OneSignal está inicializado
+      final deviceState = OneSignal.User.pushSubscription;
+      console.log('🔔 [NotificationService] OneSignal device state: ${deviceState.id}');
+      
+      if (deviceState.id == null || deviceState.id!.isEmpty) {
+        console.log('🔔 [NotificationService] Device ID não disponível, aguardando...', name: 'NotificationService');
+        // Aguardar mais um pouco e tentar novamente
+        await Future.delayed(const Duration(seconds: 3));
       }
+      
+      final deviceId = deviceState.id;
+      console.log('🔔 [NotificationService] Device ID: $deviceId', name: 'NotificationService');
+      
+      if (deviceId != null && deviceId.isNotEmpty) {
+        await _registerDevice(deviceId);
+      } else {
+        console.log('🔔 [NotificationService] Device ID ainda não disponível', name: 'NotificationService');
+        // Tentar novamente em alguns segundos
+        Future.delayed(const Duration(seconds: 5), () async {
+          await registerDeviceOnLogin();
+        });
+      }
+      
     } catch (e) {
-      console.log('❌ Erro na navegação da notificação: $e', name: 'NotificationService');
-      console.log('Stack trace: ${StackTrace.current}', name: 'NotificationService');
-      Get.toNamed(Routes.home);
+      console.log('🔔 [NotificationService] Erro no registro do dispositivo: $e', name: 'NotificationService');
     }
   }
 
-  /// Limpa todas as notificações
-  void clearAllNotifications() {
+  /// Força o registro do dispositivo (usado quando o registro automático falha)
+  Future<void> forceRegisterDevice() async {
     try {
-      OneSignal.Notifications.clearAll();
-      console.log('Todas as notificações foram limpas', name: 'NotificationService');
+      console.log('🔔 [NotificationService] Forçando registro do dispositivo...', name: 'NotificationService');
+      
+      final deviceState = OneSignal.User.pushSubscription;
+      final deviceId = deviceState.id;
+      
+      console.log('🔔 [NotificationService] Device ID forçado: $deviceId', name: 'NotificationService');
+      
+      if (deviceId != null && deviceId.isNotEmpty) {
+        await _registerDevice(deviceId);
+      } else {
+        console.log('🔔 [NotificationService] Device ID não disponível para registro forçado', name: 'NotificationService');
+      }
+      
     } catch (e) {
-      console.log('Erro ao limpar notificações: $e', name: 'NotificationService');
+      console.log('🔔 [NotificationService] Erro no registro forçado: $e', name: 'NotificationService');
+    }
+  }
+
+  /// Registra o dispositivo na API
+  Future<void> _registerDevice(String deviceId) async {
+    try {
+      console.log('🔔 [NotificationService] Registrando dispositivo na API: $deviceId', name: 'NotificationService');
+      
+      final userProfileProvider = Get.find<UserProfileProvider>();
+      
+      await userProfileProvider.onRegisterUnregister(
+        deviceId: deviceId,
+        isRegister: true,
+      );
+      
+      console.log('🔔 [NotificationService] Dispositivo registrado com sucesso na API', name: 'NotificationService');
+      
+    } catch (e) {
+      console.log('🔔 [NotificationService] Erro ao registrar dispositivo na API: $e', name: 'NotificationService');
+    }
+  }
+
+  /// Remove o registro do dispositivo
+  Future<void> unregisterDevice() async {
+    try {
+      console.log('🔔 [NotificationService] Removendo registro do dispositivo...', name: 'NotificationService');
+      
+      final deviceState = OneSignal.User.pushSubscription;
+      final deviceId = deviceState.id;
+      
+      if (deviceId != null && deviceId.isNotEmpty) {
+        final userProfileProvider = Get.find<UserProfileProvider>();
+        
+        await userProfileProvider.onRegisterUnregister(
+          deviceId: deviceId,
+          isRegister: false,
+        );
+        
+        console.log('🔔 [NotificationService] Dispositivo removido com sucesso', name: 'NotificationService');
+      }
+      
+    } catch (e) {
+      console.log('🔔 [NotificationService] Erro ao remover dispositivo: $e', name: 'NotificationService');
+    }
+  }
+
+  /// Navega para a tela apropriada baseada na notificação
+  void _handleNotificationNavigation(OSNotification notification) {
+    try {
+      final additionalData = notification.additionalData;
+      
+      if (additionalData != null) {
+        // Verificar se é uma notificação de agendamento
+        if (additionalData['type'] == 'scheduling' || 
+            additionalData['schedulingId'] != null) {
+          final schedulingId = additionalData['schedulingId']?.toString();
+          if (schedulingId != null && schedulingId.isNotEmpty) {
+            Get.toNamed(Routes.orderDetails, arguments: schedulingId);
+            return;
+          }
+        }
+        
+        // Verificar se é uma notificação de workshop
+        if (additionalData['type'] == 'workshop' || 
+            additionalData['workshopId'] != null) {
+          final workshopId = additionalData['workshopId']?.toString();
+          if (workshopId != null && workshopId.isNotEmpty) {
+            Get.toNamed(Routes.mechanicWorkshopDetails, arguments: WorkshopArgs(workshopId));
+            return;
+          }
+        }
+      }
+      
+      // Se não há dados específicos, ir para a tela de notificações
+      Get.toNamed(Routes.notifications);
+      
+    } catch (e) {
+      console.log('🔔 [NotificationService] Erro ao navegar: $e', name: 'NotificationService');
+      // Fallback para a tela de notificações
+      Get.toNamed(Routes.notifications);
     }
   }
 }

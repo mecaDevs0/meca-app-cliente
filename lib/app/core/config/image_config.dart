@@ -30,39 +30,57 @@ class ImageConfig {
 
   /// Constrói a URL completa da imagem baseada no contexto
   static String buildImageUrl(String? imageUrl, {String? context}) {
+    print('🔧 [ImageConfig] Input imageUrl: "$imageUrl"');
+    print('🔧 [ImageConfig] Context: "$context"');
+    
     if (imageUrl == null || imageUrl.isEmpty || imageUrl.trim().isEmpty) {
+      print('🔧 [ImageConfig] ❌ ImageUrl é vazia');
       return '';
     }
     
     final cleanUrl = imageUrl.trim();
+    print('🔧 [ImageConfig] Clean URL: "$cleanUrl"');
     
     if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+      print('🔧 [ImageConfig] ✅ URL já é completa: "$cleanUrl"');
       return cleanUrl;
     }
     
     // Verificar se a URL já tem o caminho correto
     if (cleanUrl.startsWith('/$contentPath') || cleanUrl.startsWith(contentPath)) {
-      return '$baseUrl$cleanUrl';
+      final url = '$baseUrl$cleanUrl';
+      print('🔧 [ImageConfig] ✅ URL com caminho correto: "$url"');
+      return url;
     }
     
     // Determinar o caminho baseado no contexto
     if (context != null) {
       if (context.contains('Service') || context.contains('servico')) {
-        return '$servicosBaseUrl$cleanUrl';
-      } else if (context.contains('Workshop') || context.contains('oficina')) {
-        return '$oficinasBaseUrl$cleanUrl';
+        final url = '$servicosBaseUrl$cleanUrl';
+        print('🔧 [ImageConfig] ✅ URL de serviço: "$url"');
+        return url;
+      } else if (context.contains('Workshop') || context.contains('oficina') || context.contains('MechanicWorkshop')) {
+        final url = '$oficinasBaseUrl$cleanUrl';
+        print('🔧 [ImageConfig] ✅ URL de oficina: "$url"');
+        return url;
       }
     }
     
     // Fallback: tentar detectar pelo nome do arquivo
     if (_isServiceImage(cleanUrl)) {
-      return '$servicosBaseUrl$cleanUrl';
+      final url = '$servicosBaseUrl$cleanUrl';
+      print('🔧 [ImageConfig] ✅ URL de serviço (detectada): "$url"');
+      return url;
     } else if (_isWorkshopImage(cleanUrl)) {
-      return '$oficinasBaseUrl$cleanUrl';
+      final url = '$oficinasBaseUrl$cleanUrl';
+      print('🔧 [ImageConfig] ✅ URL de oficina (detectada): "$url"');
+      return url;
     }
     
     // Padrão: usar images
-    return '$imagesBaseUrl$cleanUrl';
+    final url = '$imagesBaseUrl$cleanUrl';
+    print('🔧 [ImageConfig] ✅ URL padrão (images): "$url"');
+    return url;
   }
 
   /// Verifica se é uma imagem de serviço baseado no nome
