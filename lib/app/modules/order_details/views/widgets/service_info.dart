@@ -85,7 +85,7 @@ class ServiceInfo extends StatelessWidget {
           visible: order.suggestedDate != null &&
               (order.status == 1 || order.status == 2),
           child: AppDescriptionTile(
-            title: 'Novo horário sugerido pela oficina',
+            title: 'Novo horário sugerido pelo estabelecimento',
             description: order.suggestedDate?.toddMMyyyyHHmm() ?? 'Sem data',
           ),
         ),

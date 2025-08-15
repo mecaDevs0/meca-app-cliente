@@ -11,9 +11,11 @@ import '../../../core/args/workshop_args.dart';
 import '../../../core/modals/app_bottom_sheet.dart';
 import '../../../core/utils/auth_helper.dart';
 import '../../../core/utils/guest_access_helper.dart';
+import '../../../core/utils/color_helper.dart';
 import '../../../core/widgets/app_bar_custom.dart';
 import '../../../core/widgets/app_filter_bottom_sheet.dart';
 import '../../../data/models/mechanic_workshop.dart';
+import '../../../data/models/vehicle.dart';
 import '../../../routes/app_pages.dart';
 import '../../app_filter/view/app_filter.dart';
 import '../controllers/home_controller.dart';
@@ -216,7 +218,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
             ],
           ),
         ),
-        // Área principal com lista de oficinas
+        // Área principal com lista de estabelecimentos
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -224,7 +226,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
               Padding(
                 padding: mainAreaPadding,
                 child: Text(
-                  'Oficinas próximas',
+                  'Estabelecimentos próximos',
                   style: mainTitleStyle,
                 ),
               ),
@@ -374,7 +376,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Oficinas',
+                'Estabelecimentos',
                 style: TextStyle(
                   color: AppColors.blackPrimaryColor,
                   fontSize: 14,
@@ -445,14 +447,14 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                       // Quando não tem permissão de localização
                       return EmptyListIndicator(
                         isShowIcon: true,
-                        title: 'Não foi possível encontrar oficinas próximas a você',
-                        message: 'Para ver oficinas próximas, permita o acesso à sua localização',
+                        title: 'Não foi possível encontrar estabelecimentos próximos a você',
+                        message: 'Para ver estabelecimentos próximos, permita o acesso à sua localização',
                       );
                     } else {
-                      // Quando tem permissão, mas não encontrou oficinas próximas
+                      // Quando tem permissão, mas não encontrou estabelecimentos próximos
                       return const EmptyListIndicator(
                         isShowIcon: true,
-                        title: 'Não encontramos oficinas próximas a você',
+                                                  title: 'Não encontramos estabelecimentos próximos a você',
                         message: 'Tente ajustar seus filtros de busca ou ampliar a distância máxima',
                       );
                     }
@@ -517,10 +519,23 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
               ListTile(
                 title: Row(
                   children: [
-                    SvgPicture.asset(
-                      AppImages.icCarHome,
-                      colorFilter: ColorFilter.mode(AppColors.primaryColor, BlendMode.srcIn),
-                    ),
+                    Obx(() {
+                      final vehicles = controller.vehicles;
+                      Color carIconColor = AppColors.primaryColor; // Cor padrão verde
+                      
+                      if (vehicles.length == 1) {
+                        // Se tem apenas um veículo, usa a cor dele
+                        final vehicleColor = vehicles.first.color;
+                        if (vehicleColor != null && vehicleColor.isNotEmpty) {
+                          carIconColor = ColorHelper.getColorFromName(vehicleColor);
+                        }
+                      }
+                      
+                      return SvgPicture.asset(
+                        AppImages.icCarHome,
+                        colorFilter: ColorFilter.mode(carIconColor, BlendMode.srcIn),
+                      );
+                    }),
                     const SizedBox(width: 10),
                     const Text('Meus veículos'),
                   ],
@@ -684,7 +699,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                   mechanicWorkshop: workshop,
                   onTap: () {
                     if (AuthHelper.isGuest) {
-                      console.log('Usuário visitante tentando acessar detalhes da oficina');
+                      console.log('Usuário visitante tentando acessar detalhes do estabelecimento');
                       Get.offAllNamed(Routes.login);
                     } else {
                       Get.toNamed(
@@ -709,7 +724,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      'Erro ao carregar oficinas',
+                      'Erro ao carregar estabelecimentos',
                       style: TextStyle(
                         fontSize: 16,
                         color: AppColors.blackSecondaryColor,
@@ -734,7 +749,7 @@ class _HomeViewState extends MegaState<HomeView, HomeController> {
                     ),
                     SizedBox(height: 16),
                     Text(
-                      'Nenhuma oficina encontrada',
+                      'Nenhum estabelecimento encontrado',
                       style: TextStyle(
                         fontSize: 16,
                         color: AppColors.blackSecondaryColor,

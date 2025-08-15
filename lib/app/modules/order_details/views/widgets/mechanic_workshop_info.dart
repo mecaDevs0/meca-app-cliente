@@ -26,6 +26,20 @@ class MechanicWorkshopInfo extends GetView<OrderDetailsController> {
     }
   }
 
+  String _formatWorkshopAddress() {
+    final workshop = controller.orderDetails?.workshop;
+    if (workshop == null) return 'Endereço do estabelecimento';
+    
+    final parts = <String>[];
+    if (workshop.streetAddress?.isNotEmpty == true) parts.add(workshop.streetAddress!);
+    if (workshop.number?.isNotEmpty == true) parts.add('n${workshop.number}');
+    if (workshop.neighborhood?.isNotEmpty == true) parts.add(workshop.neighborhood!);
+    if (workshop.cityName?.isNotEmpty == true) parts.add(workshop.cityName!);
+    if (workshop.stateUf?.isNotEmpty == true) parts.add(workshop.stateUf!);
+    
+    return parts.isEmpty ? 'Endereço do estabelecimento' : parts.join(', ');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -50,7 +64,9 @@ class MechanicWorkshopInfo extends GetView<OrderDetailsController> {
           height: 12,
         ),
         Text(
-          controller.orderDetails?.workshop?.companyName ?? 'Nome da oficina',
+          controller.orderDetails?.workshop?.companyName ?? 
+          controller.orderDetails?.workshop?.fullName ?? 
+          'Nome do estabelecimento',
           style: const TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 16,
@@ -68,8 +84,7 @@ class MechanicWorkshopInfo extends GetView<OrderDetailsController> {
             ),
             Expanded(
               child: Text(
-                controller.orderDetails?.formattedAddress ??
-                    'Endereço da oficina',
+                _formatWorkshopAddress(),
                 style: const TextStyle(
                   color: AppColors.fontMediumGray,
                   fontSize: 14,

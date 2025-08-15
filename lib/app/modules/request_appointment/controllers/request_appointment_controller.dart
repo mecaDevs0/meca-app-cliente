@@ -51,6 +51,7 @@ class RequestAppointmentController extends GetxController {
   late String workshopId;
   late String workshopName;
   String? _openingHours;
+  dynamic _selectedServiceFromArgs;
 
   @override
   Future<void> onInit() async {
@@ -68,6 +69,7 @@ class RequestAppointmentController extends GetxController {
     workshopId = workshop.workshopId;
     workshopName = workshop.workshopName ?? '';
     _openingHours = workshop.openingHours;
+    _selectedServiceFromArgs = workshop.selectedService;
     await initialize();
     super.onInit();
   }
@@ -81,12 +83,17 @@ class RequestAppointmentController extends GetxController {
         log('[AGENDAMENTO] Veículos retornados: ${vehicles.length}');
         _vehicles.assignAll(vehicles);
 
-        log('[AGENDAMENTO] Buscando serviços da oficina $workshopId...');
+        log('[AGENDAMENTO] Buscando serviços do estabelecimento $workshopId...');
         final services = await _coreProvider.onRequestServices(
           workshopId: workshopId,
         );
         log('[AGENDAMENTO] Serviços retornados: ${services.length}');
         _services.assignAll(services);
+        
+        // Pré-selecionar o serviço se foi passado nos argumentos
+        if (_selectedServiceFromArgs != null) {
+          _preSelectServiceFromArgs();
+        }
       },
       onFinally: () => _isLoading.value = false,
     );
@@ -106,6 +113,30 @@ class RequestAppointmentController extends GetxController {
 
   void togglePickupService() {
     _isPickupServiceEnabled.value = !_isPickupServiceEnabled.value;
+  }
+
+  void _preSelectServiceFromArgs() {
+    if (_selectedServiceFromArgs == null) return;
+    
+    // Se o serviço passado é um Service (da home), procura pelo WorkshopService correspondente
+    if (_selectedServiceFromArgs is Service) {
+      final service = _selectedServiceFromArgs as Service;
+      final matchingWorkshopService = _services.firstWhereOrNull(
+        (ws) => ws.service?.id == service.id,
+      );
+      if (matchingWorkshopService != null) {
+        _selectedServices.add(matchingWorkshopService);
+        log('[AGENDAMENTO] Serviço pré-selecionado: ${matchingWorkshopService.service?.name}');
+      }
+    }
+    // Se o serviço passado é um WorkshopService, adiciona diretamente
+    else if (_selectedServiceFromArgs is WorkshopService) {
+      final workshopService = _selectedServiceFromArgs as WorkshopService;
+      if (_services.contains(workshopService)) {
+        _selectedServices.add(workshopService);
+        log('[AGENDAMENTO] WorkshopService pré-selecionado: ${workshopService.service?.name}');
+      }
+    }
   }
 
   Future<bool> registerScheduling(Scheduling newScheduling) async {
@@ -262,7 +293,7 @@ class RequestAppointmentController extends GetxController {
       return 'Você não possui veículos cadastrados.';
     }
     if (_services.isEmpty) {
-      return 'A oficina não possui serviços disponíveis.';
+              return 'O estabelecimento não possui serviços disponíveis.';
     }
     if (dateText.isEmpty) {
       return 'Selecione uma data para o agendamento';

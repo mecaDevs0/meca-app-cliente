@@ -21,7 +21,7 @@ class ServicesController extends GetxController {
 
   final _isLoading = RxBool(false);
   final _serviceDetail = Rx<Service?>(null);
-  // Adicionando variáveis para armazenar informações da oficina selecionada
+      // Adicionando variáveis para armazenar informações do estabelecimento selecionado
   final _selectedWorkshopId = RxString('');
   final _selectedWorkshop = Rx<MechanicWorkshop?>(null);
 
@@ -34,7 +34,7 @@ class ServicesController extends GetxController {
       _filterController.availableCategories;
   String get selectedWorkshopId => _selectedWorkshopId.value;
   MechanicWorkshop? get selectedWorkshop => _selectedWorkshop.value;
-  // Flag para indicar se estamos filtrando por uma oficina específica
+      // Flag para indicar se estamos filtrando por um estabelecimento específico
   bool get hasSelectedWorkshop => _selectedWorkshopId.value.isNotEmpty;
 
   final PagingController<int, Service> pagingController =
@@ -45,12 +45,12 @@ class ServicesController extends GetxController {
   void onInit() {
     _filterController.clearFilters();
 
-    // Verificar se recebemos argumentos com o ID da oficina
+            // Verificar se recebemos argumentos com o ID do estabelecimento
     if (Get.arguments != null && Get.arguments is Map<String, dynamic>) {
       final args = Get.arguments as Map<String, dynamic>;
       if (args.containsKey('workshopId')) {
         _selectedWorkshopId.value = args['workshopId'] as String;
-        log('Filtrando serviços para oficina ID: ${_selectedWorkshopId.value}');
+        log('Filtrando serviços para estabelecimento ID: ${_selectedWorkshopId.value}');
       }
       if (args.containsKey('workshopDetails')) {
         _selectedWorkshop.value = args['workshopDetails'] as MechanicWorkshop?;
@@ -68,7 +68,7 @@ class ServicesController extends GetxController {
       await MegaRequestUtils.load(
         action: () async {
           try {
-            log('Buscando serviços - página: $page, oficina ID: ${_selectedWorkshopId.value}');
+            log('Buscando serviços - página: $page, estabelecimento ID: ${_selectedWorkshopId.value}');
             final response = await _servicesProvider.onRequestServices(
               page: page,
               limit: _limit,

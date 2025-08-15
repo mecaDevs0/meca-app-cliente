@@ -14,8 +14,10 @@ import '../../../core/core.dart';
 import '../../../core/utils/auth_helper.dart';
 import '../../../data/models/mechanic_workshop.dart';
 import '../../../data/models/service.dart';
+import '../../../data/models/vehicle.dart';
 import '../../../data/providers/home_provider.dart';
 import '../../../data/providers/user_profile_provider.dart';
+import '../../../data/providers/core_provider.dart';
 import '../../app_filter/controllers/filter_controller.dart';
 
 class HomeController extends GetxController {
@@ -23,16 +25,20 @@ class HomeController extends GetxController {
     required HomeProvider homeProvider,
     required UserProfileProvider profileProvider,
     required FilterController filterController,
+    required CoreProvider coreProvider,
   })  : _homeProvider = homeProvider,
         _profileProvider = profileProvider,
-        _filterController = filterController;
+        _filterController = filterController,
+        _coreProvider = coreProvider;
 
   final HomeProvider _homeProvider;
   final UserProfileProvider _profileProvider;
   final FilterController _filterController;
+  final CoreProvider _coreProvider;
 
   final hasRequestPermission = RxBool(false);
   final _isGettingLocation = RxBool(true);
+  final _vehicles = RxList<Vehicle>.empty();
 
   bool get isGettingLocation => _isGettingLocation.value;
   int get rating => _filterController.rating;
@@ -40,6 +46,7 @@ class HomeController extends GetxController {
   List<Service> get services => _filterController.selectedCategories;
   List<Service> get availableCategories =>
       _filterController.availableCategories;
+  List<Vehicle> get vehicles => _vehicles.toList();
 
   final PagingController<int, Service> servicesPagingController =
       PagingController(firstPageKey: 1);
@@ -63,6 +70,7 @@ class HomeController extends GetxController {
       console.log('User is logged in, fetching profile info and registering device ID');
       await getProfileInfo();
       await registerDeviceID();
+      await loadUserVehicles();
     }
 
     await _checkPermission();
@@ -140,7 +148,7 @@ class HomeController extends GetxController {
           console.log('Erro ao obter última localização conhecida: $e2', name: 'HomeController');
         }
       } finally {
-        // Sempre atualiza a lista de oficinas, mesmo sem localização
+        // Sempre atualiza a lista de estabelecimentos, mesmo sem localização
         workshopsPagingController.refresh();
         servicesPagingController.refresh();
       }
@@ -172,7 +180,7 @@ class HomeController extends GetxController {
         console.log('Localização obtida com sucesso durante getWorkshops: ${userPosition!.latitude}, ${userPosition!.longitude}', name: 'HomeController');
       } catch (e) {
         console.log('Erro ao obter localização durante getWorkshops: $e', name: 'HomeController');
-        // Continua com a execução para mostrar oficinas mesmo sem localização
+        // Continua com a execução para mostrar estabelecimentos mesmo sem localização
       }
     }
 
@@ -197,24 +205,24 @@ class HomeController extends GetxController {
           // Se a resposta está vazia, mas a posição do usuário é nula, isso pode indicar
           // que o backend não conseguiu calcular as distâncias
           if (response.isEmpty && page == 1 && userPosition == null) {
-            console.log('Lista de oficinas vazia. Posição do usuário é nula, o que pode ser a causa.', name: 'HomeController');
+            console.log('Lista de estabelecimentos vazia. Posição do usuário é nula, o que pode ser a causa.', name: 'HomeController');
           }
 
-          // Verifica se a lista de oficinas está vazia
+                      // Verifica se a lista de estabelecimentos está vazia
           if (response.isEmpty && page == 1) {
-            // Mesmo sem oficinas, precisa marcar a lista como vazia para mostrar a mensagem
+                          // Mesmo sem estabelecimentos, precisa marcar a lista como vazia para mostrar a mensagem
             workshopsPagingController.appendLastPage([]);
             return;
           }
 
-          // Verifica se as oficinas têm distância zero e alerta sobre o problema
+                      // Verifica se os estabelecimentos têm distância zero e alerta sobre o problema
           if (response.isNotEmpty && response.every((workshop) => workshop.distance == 0)) {
-            console.log('Todas as oficinas estão com distância zero. Posição do usuário: ${userPosition?.latitude}, ${userPosition?.longitude}', name: 'HomeController');
+                          console.log('Todos os estabelecimentos estão com distância zero. Posição do usuário: ${userPosition?.latitude}, ${userPosition?.longitude}', name: 'HomeController');
           }
 
-          // Adiciona logs para cada oficina para verificar o cálculo da distância
+                      // Adiciona logs para cada estabelecimento para verificar o cálculo da distância
           for (final workshop in response) {
-            debugPrint('Oficina ${workshop.fullName}: Lat=${workshop.latitude}, Long=${workshop.longitude}, Distância=${workshop.distance}km');
+                          debugPrint('Estabelecimento ${workshop.fullName}: Lat=${workshop.latitude}, Long=${workshop.longitude}, Distância=${workshop.distance}km');
 
             // Calcular distância real baseada nas coordenadas do MongoDB Atlas
             if (userPosition != null && 
@@ -236,7 +244,7 @@ class HomeController extends GetxController {
             }
           }
 
-          // Filtra localmente para garantir que só oficinas até a distância escolhida sejam exibidas
+                      // Filtra localmente para garantir que só estabelecimentos até a distância escolhida sejam exibidos
           final maxDistance = distance > 50 ? 50 : distance;
           final filtered = response.where((workshop) => workshop.distance != null && workshop.distance! <= maxDistance).toList();
           final isLastPage = filtered.length < _workshopsLimit;
@@ -248,7 +256,7 @@ class HomeController extends GetxController {
           }
         } catch (e) {
           workshopsPagingController.error = e;
-          console.log('Erro ao buscar oficinas: $e', name: 'HomeController');
+          console.log('Erro ao buscar estabelecimentos: $e', name: 'HomeController');
         }
       },
       onError: (_) {
@@ -309,6 +317,17 @@ class HomeController extends GetxController {
         }
       },
     );
+  }
+
+  Future<void> loadUserVehicles() async {
+    if (!AuthHelper.isGuest) {
+      await MegaRequestUtils.load(
+        action: () async {
+          final vehicles = await _coreProvider.onRequestVehicles(limit: 0);
+          _vehicles.assignAll(vehicles);
+        },
+      );
+    }
   }
 
   // Método para atualizar o status do usuário com base no token de autenticação

@@ -20,15 +20,28 @@ class OrderStatusRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Flexible(
-          child: Text(
-            'Pedido \n#$id',
-            style: const TextStyle(
-              color: AppColors.neutralGrayColor,
-              fontSize: 12,
-            ),
-            overflow: TextOverflow.ellipsis,
-            softWrap: true,
-            maxLines: 4,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Pedido',
+                style: TextStyle(
+                  color: AppColors.neutralGrayColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '#${id.length > 8 ? '${id.substring(0, 8)}...' : id}',
+                style: const TextStyle(
+                  color: AppColors.fontBoldBlackColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
         Flexible(child: AppStatusChip(status: status)),

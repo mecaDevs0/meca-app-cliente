@@ -29,7 +29,7 @@ class MechanicWorkshopsList extends GetView<HomeController> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Oficinas',
+                'Estabelecimentos',
                 style: TextStyle(
                   color: AppColors.blackPrimaryColor,
                   fontSize: 14,
@@ -84,7 +84,7 @@ class MechanicWorkshopsList extends GetView<HomeController> {
                   noItemsFoundIndicatorBuilder: (context) =>
                       const EmptyListIndicator(
                     isShowIcon: false,
-                    message: 'Nenhuma oficina encontrada',
+                    message: 'Nenhum estabelecimento encontrado',
                   ),
                 ),
               ),

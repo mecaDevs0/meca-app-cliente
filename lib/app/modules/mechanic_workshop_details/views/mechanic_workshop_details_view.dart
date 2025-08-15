@@ -138,7 +138,7 @@ class MechanicWorkshopDetailsView
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(height: verticalSpacing),
-                // Widget de informações da oficina com indicador de tablet
+                // Widget de informações do estabelecimento com indicador de tablet
                 const MechanicWorkshopInfo(isTablet: true),
                 SizedBox(height: verticalSpacing),
                 Divider(
@@ -149,7 +149,9 @@ class MechanicWorkshopDetailsView
                 DescriptionTile(
                   descriptionFontColor: AppColors.fontRegularBlackColor,
                   description:
-                      controller.workshopDetails?.reason ?? 'Sem descrição',
+                      controller.workshopDetails?.reason?.isNotEmpty == true 
+                          ? controller.workshopDetails!.reason!
+                          : 'Este estabelecimento ainda não possui uma descrição cadastrada.',
                   title: 'Descrição',
                   // Aumentar somente o tamanho do título para melhor legibilidade
                   titleFontSize: isLargeTablet ? 20.0 : 18.0,
@@ -235,7 +237,7 @@ class MechanicWorkshopDetailsView
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Endereço da Oficina',
+                              'Endereço do Estabelecimento',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
@@ -288,7 +290,9 @@ class MechanicWorkshopDetailsView
           DescriptionTile(
             descriptionFontColor: AppColors.fontRegularBlackColor,
             description:
-                controller.workshopDetails?.reason ?? 'Sem descrição',
+                controller.workshopDetails?.reason?.isNotEmpty == true 
+                    ? controller.workshopDetails!.reason!
+                    : 'Este estabelecimento ainda não possui uma descrição cadastrada.',
             title: 'Descrição',
           ),
           const SizedBox(height: 16),

@@ -191,7 +191,7 @@ class ServicesProvider {
         if (longUser != null) 'longUser': longUser,
       };
 
-      print('🏪 Fazendo requisição para oficinas...');
+              print('🏪 Fazendo requisição para estabelecimentos...');
       print('📡 URL: ${BaseUrls.workshops}');
       print('📋 Params: $queryParameters');
 
@@ -242,12 +242,12 @@ class ServicesProvider {
             );
           } else {
             MegaSnackbar.showErroSnackBar(
-              'Oficinas temporariamente indisponíveis. Tente novamente em alguns minutos.'
+              'Estabelecimentos temporariamente indisponíveis. Tente novamente em alguns minutos.'
             );
           }
         } else {
           MegaSnackbar.showErroSnackBar(
-            'Oficinas temporariamente indisponíveis. Tente novamente em alguns minutos.'
+            'Estabelecimentos temporariamente indisponíveis. Tente novamente em alguns minutos.'
           );
         }
         

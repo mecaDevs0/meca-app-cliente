@@ -56,7 +56,7 @@ class _AppDropDownState
       // Se não houver serviços disponíveis, mostra uma mensagem
       Get.snackbar(
         'Atenção',
-        'Não há serviços disponíveis para esta oficina.',
+                    'Não há serviços disponíveis para este estabelecimento.',
         backgroundColor: Colors.amber,
         colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,

@@ -75,6 +75,8 @@ class UserProfileView extends GetView<UserProfileController> {
                                     color: AppColors.weakGrayColor,
                                     fontSize: 14,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const SizedBox(

@@ -73,7 +73,7 @@ class _AppointmentRefusedBottomSheetState
                   height: 8,
                 ),
                 const Text(
-                  'A oficina não pôde aceitar o agendamento. Agende em outro local para garantir seu serviço.',
+                  'O estabelecimento não pôde aceitar o agendamento. Agende em outro local para garantir seu serviço.',
                   style: TextStyle(
                     color: AppColors.softBlackColor,
                     fontSize: 16,
@@ -85,7 +85,7 @@ class _AppointmentRefusedBottomSheetState
                 SizedBox(
                   width: double.infinity,
                   child: MegaBaseButton(
-                    'Escolher outra oficina',
+                    'Escolher outro estabelecimento',
                     onButtonPress: _applyFilters,
                     textColor: AppColors.whiteColor,
                     buttonColor: AppColors.primaryColor,

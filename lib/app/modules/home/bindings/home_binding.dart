@@ -32,6 +32,7 @@ class HomeBinding extends Bindings {
         homeProvider: Get.find(),
         profileProvider: Get.find(),
         filterController: Get.find(),
+        coreProvider: Get.find(),
       ),
     );
   }

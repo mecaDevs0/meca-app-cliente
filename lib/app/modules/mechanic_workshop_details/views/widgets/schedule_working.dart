@@ -52,39 +52,57 @@ class ScheduleWorking extends GetView<MechanicWorkshopDetailsController> {
           dev.log('Dados de agenda disponíveis: ${controller.workshopSchedule != null}',
               name: 'ScheduleWorking');
 
-          return SizedBox(
-            height: MediaQuery.of(context).size.height * 0.20,
+          return Container(
+            constraints: BoxConstraints(
+              minHeight: 200,
+              maxHeight: isTablet ? 400 : 350,
+            ),
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 5),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               physics: const NeverScrollableScrollPhysics(),
               itemCount: DaysOfWeek.values.length,
               itemBuilder: (context, index) {
                 final day = DaysOfWeek.values[index];
                 final schedule = _getScheduleForDay(day, controller.workshopSchedule);
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                return Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                  margin: const EdgeInsets.only(bottom: 4.0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: AppColors.grayBorderColor.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        day.description,
-                        style: const TextStyle(
-                          color: AppColors.boldFontColor,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 14,
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          day.description,
+                          style: TextStyle(
+                            color: AppColors.boldFontColor,
+                            fontWeight: FontWeight.w600,
+                            fontSize: isTablet ? 16 : 14,
+                          ),
                         ),
                       ),
-                      const Spacer(), // Usar Spacer para empurrar o texto para as extremidades
-                      Text(
-                        schedule,
-                        style: TextStyle(
-                          color: schedule == 'Fechado'
-                              ? AppColors.redAlertColor // Cor para "Fechado"
-                              : AppColors.fontDarkGrayColor,
-                          fontWeight: schedule == 'Fechado'
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          fontSize: 14,
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          schedule,
+                          textAlign: TextAlign.end,
+                          style: TextStyle(
+                            color: schedule == 'Fechado'
+                                ? AppColors.redAlertColor
+                                : AppColors.fontDarkGrayColor,
+                            fontWeight: schedule == 'Fechado'
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            fontSize: isTablet ? 16 : 14,
+                          ),
                         ),
                       ),
                     ],

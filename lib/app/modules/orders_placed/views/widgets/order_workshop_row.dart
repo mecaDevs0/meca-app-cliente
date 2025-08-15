@@ -12,6 +12,7 @@ class OrderWorkshopRow extends StatelessWidget {
     required this.carBrand,
     required this.vehiclePlate,
     required this.date,
+    this.workshopAddress,
   });
 
   final String? workshopImage;
@@ -19,34 +20,48 @@ class OrderWorkshopRow extends StatelessWidget {
   final String carBrand;
   final String vehiclePlate;
   final String date;
+  final String? workshopAddress;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(64),
+          borderRadius: BorderRadius.circular(8),
           child: Container(
-            width: 35,
-            height: 35,
+            width: 50,
+            height: 50,
             decoration: BoxDecoration(
               border: Border.all(
                 color: AppColors.grayBorderColor,
                 width: 1.0,
               ),
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(8),
             ),
             child: CachedNetworkImage(
               imageUrl: workshopImage ?? '',
               fit: BoxFit.cover,
-              placeholder: (context, url) => const CircularProgressIndicator(),
-              errorWidget: (context, url, error) => const Icon(Icons.store, color: AppColors.gray500),
+              placeholder: (context, url) => Container(
+                color: Colors.grey[200],
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primaryColor,
+                  ),
+                ),
+              ),
+              errorWidget: (context, url, error) => Container(
+                color: Colors.grey[200],
+                child: const Icon(
+                  Icons.store,
+                  color: AppColors.gray500,
+                  size: 24,
+                ),
+              ),
             ),
           ),
         ),
-        const SizedBox(
-          width: 10,
-        ),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -54,50 +69,87 @@ class OrderWorkshopRow extends StatelessWidget {
               Text(
                 workshopName,
                 style: const TextStyle(
-                  color: AppColors.softBlackColor,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
+                  color: AppColors.fontBoldBlackColor,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(
-                height: 5,
-              ),
+              const SizedBox(height: 8),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Text(
+                  if (carBrand.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
                         carBrand,
                         style: const TextStyle(
-                          color: AppColors.softBlackColor,
-                          fontWeight: FontWeight.w300,
-                          fontSize: 12,
+                          color: AppColors.primaryColor,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11,
                         ),
                       ),
-                      const SizedBox(
-                        width: 2.0,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (vehiclePlate.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.grayBorderColor.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      Container(
-                        width: 2,
-                        height: 2,
-                        decoration: const BoxDecoration(
-                          color: AppColors.pointGrayColor,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(
-                        width: 2.0,
-                      ),
-                      Text(
+                      child: Text(
                         vehiclePlate,
                         style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w300,
+                          color: AppColors.fontMediumGray,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11,
                         ),
                       ),
-                    ],
+                    ),
+                  ],
+                ],
+              ),
+              if (workshopAddress != null && workshopAddress!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on,
+                      size: 14,
+                      color: AppColors.neutralGrayColor,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        workshopAddress!,
+                        style: const TextStyle(
+                          color: AppColors.neutralGrayColor,
+                          fontWeight: FontWeight.w400,
+                          fontSize: 11,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_today,
+                    size: 14,
+                    color: AppColors.neutralGrayColor,
                   ),
+                  const SizedBox(width: 4),
                   Text(
                     date,
                     style: const TextStyle(

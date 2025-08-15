@@ -69,7 +69,7 @@ class _RegisterView extends MegaState<RegisterView, RegisterController> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'e vamos encontrar a oficina ideal para seu carro!',
+                    'e vamos encontrar o estabelecimento ideal para seu carro!',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w400,

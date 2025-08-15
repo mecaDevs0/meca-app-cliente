@@ -71,7 +71,7 @@ class _NewScheduleBottomSheetState extends State<NewScheduleBottomsheet> {
                   height: 8,
                 ),
                 const Text(
-                  'Não foi possivel confirmar o agendamento de troca de óleo na data 30/10/2024 horário 11:00, mas a oficina sugeriu um novo horário',
+                  'Não foi possivel confirmar o agendamento de troca de óleo na data 30/10/2024 horário 11:00, mas o estabelecimento sugeriu um novo horário',
                   style: TextStyle(
                     color: AppColors.softBlackColor,
                     fontSize: 16,

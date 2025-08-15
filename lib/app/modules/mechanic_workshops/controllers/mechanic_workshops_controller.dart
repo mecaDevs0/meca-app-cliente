@@ -43,9 +43,9 @@ class MechanicWorkshopsController extends GetxController {
     Position? userPosition = homeController.userPosition;
 
     // Se não temos a posição do usuário e temos permissão de localização,
-    // tentamos obtê-la novamente antes de buscar as oficinas
+            // tentamos obtê-la novamente antes de buscar os estabelecimentos
     if (userPosition == null && homeController.hasRequestPermission.value) {
-      console.log('Tentando obter a localização antes de buscar oficinas', name: 'MechanicWorkshopsController');
+              console.log('Tentando obter a localização antes de buscar estabelecimentos', name: 'MechanicWorkshopsController');
       try {
         userPosition = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
@@ -59,7 +59,7 @@ class MechanicWorkshopsController extends GetxController {
     }
 
     // Log para debug
-    debugPrint('Buscando oficinas com coordenadas: Lat=${userPosition?.latitude}, Long=${userPosition?.longitude}');
+            debugPrint('Buscando estabelecimentos com coordenadas: Lat=${userPosition?.latitude}, Long=${userPosition?.longitude}');
 
     await MegaRequestUtils.load(
       action: () async {
@@ -81,16 +81,16 @@ class MechanicWorkshopsController extends GetxController {
           longUser: userPosition?.longitude,
         );
 
-        // Verificar se todas as oficinas estão com distância zero
+        // Verificar se todos os estabelecimentos estão com distância zero
         if (response.isNotEmpty && response.every((workshop) => workshop.distance == 0)) {
-          console.log('Todas as oficinas retornadas estão com distância zero', name: 'MechanicWorkshopsController');
+          console.log('Todos os estabelecimentos retornados estão com distância zero', name: 'MechanicWorkshopsController');
         }
 
-        // Recalcular a distância para todas as oficinas que possuem coordenadas
+                  // Recalcular a distância para todos os estabelecimentos que possuem coordenadas
         for (final workshop in response) {
-          debugPrint('Oficina ${workshop.fullName}: Distância do backend=${workshop.distance}km');
+                      debugPrint('Estabelecimento ${workshop.fullName}: Distância do backend=${workshop.distance}km');
 
-          // Recalcula a distância localmente para todas as oficinas que possuem coordenadas
+                      // Recalcula a distância localmente para todos os estabelecimentos que possuem coordenadas
           if (userPosition != null &&
               workshop.latitude != null &&
               workshop.longitude != null) {

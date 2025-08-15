@@ -188,7 +188,7 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
         // Mensagem de erro de disponibilidade de data
         Obx(() {
           if (controller.hasAvailabilityError &&
-              controller.availabilityErrorMessage.contains('oficina não tem horários') && 
+              controller.availabilityErrorMessage.contains('estabelecimento não tem horários') && 
               AuthHelper.isGuest) {
             return Padding(
               padding: const EdgeInsets.only(top: 8.0),
@@ -324,7 +324,7 @@ class RequestAppointmentView extends GetView<RequestAppointmentController> {
       MegaSnackbar.showErroSnackBar(
         controller.hasAvailabilityError
             ? controller.availabilityErrorMessage
-            : 'Não há datas disponíveis para agendamento nesta oficina.'
+                          : 'Não há datas disponíveis para agendamento neste estabelecimento.'
       );
       return;
     }

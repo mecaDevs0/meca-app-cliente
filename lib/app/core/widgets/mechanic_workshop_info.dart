@@ -44,7 +44,7 @@ class MechanicWorkshopInfo extends StatelessWidget {
           ),
           child: Row(
             children: [
-              // Imagem da oficina
+              // Imagem do estabelecimento
               Container(
                 width: 60,
                 height: 60,
@@ -88,7 +88,7 @@ class MechanicWorkshopInfo extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              // Informações da oficina
+                              // Informações do estabelecimento
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

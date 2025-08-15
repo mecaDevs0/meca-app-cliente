@@ -19,7 +19,7 @@ class MechanicWorkshopNameRow extends StatelessWidget {
     // Garantir que nunca seja null
     final displayName = mechanicWorkshop.accountableName?.isNotEmpty == true 
         ? mechanicWorkshop.accountableName! 
-        : mechanicWorkshop.fullName ?? 'Oficina';
+                    : mechanicWorkshop.fullName ?? 'Estabelecimento';
     
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,

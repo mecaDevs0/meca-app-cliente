@@ -72,7 +72,7 @@ class _ApprovedRequestBottomSheetState
                   height: 8,
                 ),
                 const Text(
-                  'Aguarde a aprovação da oficina para mais detalhes.',
+                  'Aguarde a aprovação do estabelecimento para mais detalhes.',
                   style: TextStyle(
                     color: AppColors.softBlackColor,
                     fontSize: 16,

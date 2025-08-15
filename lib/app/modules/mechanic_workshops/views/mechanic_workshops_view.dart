@@ -65,7 +65,7 @@ class MechanicWorkshopsView extends GetView<MechanicWorkshopsController> {
                     onTap: _applyFilters,
                     availableCategories: controller.availableCategories,
                   ),
-                  hintText: 'Pesquisar oficinas...',
+                  hintText: 'Pesquisar estabelecimentos...',
                   hasFilter: true,
                 ),
                 const SizedBox(height: 16),
@@ -105,7 +105,7 @@ class MechanicWorkshopsView extends GetView<MechanicWorkshopsController> {
           onTryAgain: () => controller.pagingController.refresh(),
         ),
         noItemsFoundIndicatorBuilder: (context) => const EmptyListIndicator(
-          message: 'Nenhuma oficina encontrada',
+          message: 'Nenhum estabelecimento encontrado',
         ),
       ),
     );
@@ -132,10 +132,10 @@ class MechanicWorkshopsView extends GetView<MechanicWorkshopsController> {
           error: controller.pagingController.error,
           onTryAgain: () => controller.pagingController.refresh(),
         ),
-        noItemsFoundIndicatorBuilder: (context) => const EmptyListIndicator(
-          message: 'Nenhuma oficina encontrada',
+                noItemsFoundIndicatorBuilder: (context) => const EmptyListIndicator(
+          message: 'Nenhum estabelecimento encontrado',
         ),
       ),
     );
-  }
+}
 }

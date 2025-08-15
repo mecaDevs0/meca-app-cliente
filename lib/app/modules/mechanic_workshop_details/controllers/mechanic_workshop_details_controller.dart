@@ -114,7 +114,7 @@ class MechanicWorkshopDetailsController extends GetxController {
     );
   }
 
-  // Método para limpar o estado da oficina selecionada
+  // Método para limpar o estado do estabelecimento selecionado
   void clearWorkshopSelection() {
     _workshopDetails.value = null;
     _workshopServices.clear();
@@ -124,7 +124,7 @@ class MechanicWorkshopDetailsController extends GetxController {
   // Método para limpar todos os estados ao navegar para tela de serviços
   void resetStateForServicesNavigation() {
     clearWorkshopSelection();
-    // Deixa o ID da oficina, pois pode ser útil para histórico,
+    // Deixa o ID do estabelecimento, pois pode ser útil para histórico,
     // mas limpa os dados principais que causam o loop
   }
 

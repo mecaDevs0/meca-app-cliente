@@ -20,61 +20,61 @@ class OrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12.0),
+      padding: const EdgeInsets.all(16.0),
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
+        color: AppColors.whiteColor,
         border: Border.all(
-          color: AppColors.purpleCardBorderColor,
+          color: AppColors.grayBorderColor,
           width: 1.0,
         ),
-        borderRadius: BorderRadius.circular(8.0),
+        borderRadius: BorderRadius.circular(12.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           OrderStatusRow(
             id: order.id!,
             status: ScheduleStatus.values[order.status!],
           ),
-          const SizedBox(
-            height: 5,
-          ),
+          const SizedBox(height: 12),
           const Divider(
             color: AppColors.grayBorderColor,
             thickness: 1.0,
           ),
-          const SizedBox(
-            height: 5,
-          ),
+          const SizedBox(height: 12),
           OrderWorkshopRow(
-            workshopName: order.workshop?.companyName ?? '',
+            workshopName: order.workshop?.companyName ?? order.workshop?.fullName ?? 'Estabelecimento não informado',
             carBrand: order.vehicle?.manufacturer ?? '',
             vehiclePlate: order.vehicle?.plate ?? '',
             date: order.date != null ? order.date!.toddMMyyyy() : '',
             workshopImage: order.workshop?.photo,
+            workshopAddress: _formatAddress(),
           ),
-          const SizedBox(
-            height: 10,
-          ),
-          Row(
-            spacing: 8,
-            children: [
-              SvgPicture.asset(
-                AppImages.icLocation,
-              ),
-              Flexible(
-                child: Text(
-                  '${order.workshop?.streetAddress ?? ''}, n${order.workshop?.number ?? ''}, ${order.workshop?.neighborhood ?? ''}',
-                  style: const TextStyle(
-                    color: AppColors.fontMediumGray,
-                    fontSize: 14,
-                  ),
-                  maxLines: 2,
-                ),
-              ),
-            ],
-          ),
+          const SizedBox(height: 12),
         ],
       ),
     );
+  }
+
+  String _formatAddress() {
+    final workshop = order.workshop;
+    if (workshop == null) return 'Endereço não informado';
+    
+    final parts = <String>[];
+    if (workshop.streetAddress?.isNotEmpty == true) parts.add(workshop.streetAddress!);
+    if (workshop.number?.isNotEmpty == true) parts.add('n${workshop.number}');
+    if (workshop.neighborhood?.isNotEmpty == true) parts.add(workshop.neighborhood!);
+    if (workshop.cityName?.isNotEmpty == true) parts.add(workshop.cityName!);
+    if (workshop.stateUf?.isNotEmpty == true) parts.add(workshop.stateUf!);
+    
+    return parts.isEmpty ? 'Endereço não informado' : parts.join(', ');
   }
 }

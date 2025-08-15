@@ -39,7 +39,7 @@ class ServicesView extends GetView<ServicesController> {
         // Usando SchedulerBinding para garantir que a navegação ocorra após a construção do frame
         SchedulerBinding.instance.addPostFrameCallback((_) {
           try {
-            // Sempre navegamos para os detalhes do serviço, independente se há uma oficina selecionada
+            // Sempre navegamos para os detalhes do serviço, independente se há um estabelecimento selecionado
             Get.toNamed(
               Routes.serviceDetails,
               arguments: ServiceArgs(service.id!),

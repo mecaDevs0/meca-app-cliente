@@ -66,7 +66,7 @@ class _OrderDetailsViewState
                   children: [
                     MechanicWorkshopInfo(
                       imageUrl: controller.orderDetails?.workshop?.photo,
-                      name: controller.orderDetails?.workshop?.companyName ?? 'Oficina',
+                      name: controller.orderDetails?.workshop?.companyName ?? 'Estabelecimento',
                       address: '${controller.orderDetails?.workshop?.streetAddress ?? ''}, ${controller.orderDetails?.workshop?.number ?? ''}, ${controller.orderDetails?.workshop?.neighborhood ?? ''}',
                       distance: '0km',
                       rating: 4.0,

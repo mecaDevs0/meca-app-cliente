@@ -72,7 +72,7 @@ class MechanicWorkshopDetailsProvider {
 
       return AgendaModel.fromJson(data);
     } catch (e, stackTrace) {
-      print('Erro ao buscar horário da oficina: $e');
+              print('Erro ao buscar horário do estabelecimento: $e');
       print('Stack trace: $stackTrace');
 
       // Criar um modelo padrão com todos os dias abertos para facilitar os testes

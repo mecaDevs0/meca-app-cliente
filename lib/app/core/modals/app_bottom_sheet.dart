@@ -40,7 +40,7 @@ class AppBottomSheet {
                 const SizedBox(height: 8),
                 const Text(
                   'Vamos ativar sua localização para ver as melhores'
-                  ' oficinas ao seu redor?',
+                  ' estabelecimentos ao seu redor?',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.abbey,

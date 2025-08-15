@@ -24,7 +24,7 @@ enum ScheduleStatus {
   serviceCompleted('Serviço concluído'),
   waitingServiceApproval('Aguardando aprovação do serviço'),
   serviceRefusedByUser('Serviço reprovado pelo usuário'),
-  workshopDispute('Contestação da Oficina'),
+  workshopDispute('Contestação do Estabelecimento'),
   serviceApprovedByUser('Serviço aprovado pelo usuário'),
   serviceApprovedByAdmin('Serviço aprovado pelo admin'),
   servicePartiallyApprovedByAdmin('Serviço aprovado parcialmente pelo admin'),

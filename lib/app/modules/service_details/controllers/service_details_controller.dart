@@ -24,7 +24,7 @@ class ServiceDetailsController extends GetxController {
   final _hasError = RxBool(false);
   final _errorMessage = RxString('');
 
-  // Armazena a oficina selecionada na tela atual para evitar referências cruzadas
+      // Armazena o estabelecimento selecionado na tela atual para evitar referências cruzadas
   final _selectedWorkshop = Rx<MechanicWorkshop?>(null);
 
   bool get isLoading => _isLoading.value;
@@ -82,7 +82,7 @@ class ServiceDetailsController extends GetxController {
     try {
       await getWorkshops(page);
     } catch (e) {
-      debugPrint('Erro ao buscar oficinas: ${e.toString()}');
+              debugPrint('Erro ao buscar estabelecimentos: ${e.toString()}');
       if (!workshopsPagingController.error) {
         workshopsPagingController.error = e;
       }
@@ -127,7 +127,7 @@ class ServiceDetailsController extends GetxController {
       debugPrint('Exceção em getDetailedService: ${e.toString()}');
     }
 
-    // Atualiza a lista de oficinas de forma segura
+            // Atualiza a lista de estabelecimentos de forma segura
     SchedulerBinding.instance.addPostFrameCallback((_) {
       workshopsPagingController.refresh();
     });
@@ -178,7 +178,7 @@ class ServiceDetailsController extends GetxController {
     }
   }
 
-  // Método para lidar com a seleção de uma oficina na lista
+      // Método para lidar com a seleção de um estabelecimento na lista
   void selectWorkshop(MechanicWorkshop workshop) {
     _selectedWorkshop.value = workshop;
 
@@ -192,7 +192,7 @@ class ServiceDetailsController extends GetxController {
       debugPrint('Erro ao limpar controlador anterior: ${e.toString()}');
     }
 
-    // Navega para a tela de detalhes com os argumentos da oficina selecionada
+            // Navega para a tela de detalhes com os argumentos do estabelecimento selecionado
     Get.toNamed(
       Routes.mechanicWorkshopDetails,
       arguments: {

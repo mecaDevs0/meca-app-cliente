@@ -31,78 +31,114 @@ class OrdersPlacedView extends GetView<OrdersPlacedController> {
           // Usando o parâmetro correto onLeadingIconTap em vez de onLeadingTap
           onLeadingIconTap: () => Get.offAllNamed(Routes.home),
         ),
-        body: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(
-                height: 20,
-              ),
-              OrdersStatusFilter(
-                onTap: (int status) {
-                  controller.filterByStatus(status);
-                },
-              ),
-              const SizedBox(
-                height: 10,
-              ),
-              const Text(
-                'Aperte no pedido para ver os detalhes',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.softBlackColor,
-                ),
-              ),
-              const SizedBox(
-                height: 10,
-              ),
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () => Future.sync(
-                    () => controller.pagingController.refresh(),
+        body: Container(
+          color: Colors.grey[50],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.whiteColor,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  child: PagedListView<int, Order>(
-                    shrinkWrap: true,
-                    pagingController: controller.pagingController,
-                    builderDelegate: PagedChildBuilderDelegate(
-                      itemBuilder: (context, item, index) => GestureDetector(
-                        onTap: () => Get.toNamed(
-                          Routes.orderDetails,
-                          arguments: {'orderId': item.id!},
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Filtrar por status',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.fontBoldBlackColor,
                         ),
-                        child: OrderCard(order: item),
                       ),
-                      firstPageErrorIndicatorBuilder: (context) => ErrorIndicator(
-                        error: controller.pagingController.error,
-                        onTryAgain: () => controller.pagingController.refresh(),
+                      const SizedBox(height: 12),
+                      OrdersStatusFilter(
+                        onTap: (int status) {
+                          controller.filterByStatus(status);
+                        },
                       ),
-                      noItemsFoundIndicatorBuilder: (context) =>
-                          const EmptyListIndicator(
-                        iconColor: AppColors.primaryColor,
-                        message: 'Sem pedidos para exibir',
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: AppColors.primaryColor,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Toque no pedido para ver os detalhes',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.fontMediumGray,
+                        fontWeight: FontWeight.w500,
                       ),
-                      firstPageProgressIndicatorBuilder: (context) {
-                        return const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text(
-                              'Carregando pedidos...',
-                              style: TextStyle(
-                                color: AppColors.abbey,
-                                fontWeight: FontWeight.w300,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () => Future.sync(
+                      () => controller.pagingController.refresh(),
+                    ),
+                    child: PagedListView<int, Order>(
+                      shrinkWrap: true,
+                      pagingController: controller.pagingController,
+                      builderDelegate: PagedChildBuilderDelegate(
+                        itemBuilder: (context, item, index) => GestureDetector(
+                          onTap: () => Get.toNamed(
+                            Routes.orderDetails,
+                            arguments: {'orderId': item.id!},
+                          ),
+                          child: OrderCard(order: item),
+                        ),
+                        firstPageErrorIndicatorBuilder: (context) => ErrorIndicator(
+                          error: controller.pagingController.error,
+                          onTryAgain: () => controller.pagingController.refresh(),
+                        ),
+                        noItemsFoundIndicatorBuilder: (context) =>
+                            const EmptyListIndicator(
+                          iconColor: AppColors.primaryColor,
+                          message: 'Sem pedidos para exibir',
+                        ),
+                        firstPageProgressIndicatorBuilder: (context) {
+                          return const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 16),
+                              Text(
+                                'Carregando pedidos...',
+                                style: TextStyle(
+                                  color: AppColors.abbey,
+                                  fontWeight: FontWeight.w300,
+                                ),
                               ),
-                            ),
-                          ],
-                        );
-                      },
+                            ],
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

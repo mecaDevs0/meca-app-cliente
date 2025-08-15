@@ -29,7 +29,7 @@ class ServiceWorkshopsList extends GetView<ServiceDetailsController> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Oficinas',
+                    'Estabelecimentos',
                     style: TextStyle(
                       color: AppColors.blackPrimaryColor,
                       fontSize: isTablet ? 16 : 14,
@@ -81,7 +81,7 @@ class ServiceWorkshopsList extends GetView<ServiceDetailsController> {
                             noItemsFoundIndicatorBuilder: (context) =>
                                 const EmptyListIndicator(
                               isShowIcon: false,
-                              message: 'Nenhuma oficina encontrada',
+                              message: 'Nenhum estabelecimento encontrado',
                             ),
                             firstPageProgressIndicatorBuilder: (context) {
                               return const Center(
@@ -114,7 +114,7 @@ class ServiceWorkshopsList extends GetView<ServiceDetailsController> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Ocorreu um erro ao carregar as oficinas',
+            'Ocorreu um erro ao carregar os estabelecimentos',
             style: TextStyle(
               color: AppColors.fontRegularBlackColor,
               fontSize: 14,

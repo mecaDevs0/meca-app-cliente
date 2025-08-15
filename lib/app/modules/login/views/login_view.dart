@@ -120,7 +120,7 @@ class LoginView extends GetView<MecaLoginController> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Encontre as melhores oficinas próximas a você',
+                  'Encontre os melhores estabelecimentos próximos a você',
                   style: TextStyle(
                     color: AppColors.blackSecondaryColor,
                     fontSize: isLandscape ? 14.0 : 16.0,
