@@ -66,16 +66,10 @@ class _OrderDetailsViewState
                   children: [
                     MechanicWorkshopInfo(
                       imageUrl: controller.orderDetails?.workshop?.photo,
-                      phone: controller.orderDetails?.workshop?.phone,
-                      workshopName:
-                          controller.orderDetails?.workshop?.companyName,
-                      streetName:
-                          controller.orderDetails?.workshop?.streetAddress,
-                      number: controller.orderDetails?.workshop?.number,
-                      neighborhood:
-                          controller.orderDetails?.workshop?.neighborhood,
-                      isShowWhatsApp: controller.orderDetails != null &&
-                          controller.orderDetails!.status! >= 15,
+                      name: controller.orderDetails?.workshop?.companyName ?? 'Oficina',
+                      address: '${controller.orderDetails?.workshop?.streetAddress ?? ''}, ${controller.orderDetails?.workshop?.number ?? ''}, ${controller.orderDetails?.workshop?.neighborhood ?? ''}',
+                      distance: '0km',
+                      rating: 4.0,
                     ),
                     const SizedBox(height: 12),
                     ServiceInfo(

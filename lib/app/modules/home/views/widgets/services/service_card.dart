@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:mega_commons/mega_commons.dart';
 
 import '../../../../../core/app_colors.dart';
 import '../../../../../core/utils/image_url_helper.dart';
+import '../../../../../core/widgets/force_download_image.dart';
 import '../../../../../data/models/service.dart';
 
 class ServiceCard extends StatelessWidget {
@@ -12,77 +12,90 @@ class ServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Usar o método seguro que retorna null quando não há imagem válida
-    final imageUrl = ImageUrlHelper.buildImageUrlSafe(service.photo);
-    
-    // Debug: Log da URL da imagem
-    print('🔍 ServiceCard Debug:');
-    print('  Service: ${service.name}');
-    print('  Photo: ${service.photo}');
-    print('  Safe URL: $imageUrl');
-    
+    // Processar a URL da imagem
+    final imageUrl = ImageUrlHelper.buildImageUrlWithValidation(service.photo, context: 'ServiceCard');
+
     return Container(
-      margin: const EdgeInsets.only(right: 12.0),
-      width: MediaQuery.of(context).size.width * 0.33,
+      width: 120,
+      height: 120,
+      margin: const EdgeInsets.only(right: 12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(4),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 1,
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Imagem ou ícone de fallback
-            imageUrl != null
-                ? MegaCachedNetworkImage(
-                    imageUrl: imageUrl,
-                    height: double.infinity,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  )
-                : Container(
-                    color: AppColors.grayDarkColor,
-                    child: const Icon(
-                      Icons.build,
-                      size: 50,
-                      color: Colors.white,
-                    ),
-                  ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(8.0),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.7),
-                    ],
-                  ),
-                ),
-                child: Text(
-                  service.name ?? '',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.whiteColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12, // Fonte reduzida para 12
-                    shadows: [
-                      Shadow(
-                        blurRadius: 2.0,
-                        color: Colors.black,
-                        offset: Offset(1.0, 1.0),
+      child: Column(
+        children: [
+          // Área da imagem
+          Expanded(
+            flex: 3,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              child: imageUrl != null
+                  ? ForceDownloadImage(
+                      imageUrl: imageUrl,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                    )
+                  : Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ],
+                      child: const Center(
+                        child: Icon(
+                          Icons.image,
+                          color: Colors.grey,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+          // Área do texto
+          Expanded(
+            flex: 2,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    service.name ?? 'Serviço',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
+                  Text(
+                    service.description ?? 'Descrição não disponível',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

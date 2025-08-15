@@ -1,130 +1,140 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
-import 'package:mega_commons/mega_commons.dart';
-import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app_colors.dart';
 import '../app_images.dart';
-import '../extensions/string_extension.dart';
 import '../utils/image_url_helper.dart';
+import 'force_download_image.dart';
 
 class MechanicWorkshopInfo extends StatelessWidget {
   const MechanicWorkshopInfo({
     super.key,
-    this.isShowWhatsApp = true,
+    required this.name,
+    required this.address,
+    required this.distance,
+    required this.rating,
     this.imageUrl,
-    this.phone,
-    this.workshopName,
-    this.streetName,
-    this.number,
-    this.neighborhood,
+    this.onTap,
   });
 
-  final bool isShowWhatsApp;
+  final String name;
+  final String address;
+  final String distance;
+  final double rating;
   final String? imageUrl;
-  final String? phone;
-  final String? workshopName;
-  final String? streetName;
-  final String? number;
-  final String? neighborhood;
+  final VoidCallback? onTap;
 
   Future<void> openWhatsApp(String phone) async {
     final url = 'https://wa.me/$phone';
 
     if (!await launchUrl(Uri.parse(url))) {
-      MegaSnackbar.showErroSnackBar(
-        'Não foi possível abrir o WhatsApp',
-      );
+      // Mostrar erro usando ScaffoldMessenger
+      debugPrint('Não foi possível abrir o WhatsApp');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        imageUrl != null && imageUrl!.isNotEmpty
-            ? MegaCachedNetworkImage(
-                radius: 100,
-                width: 60,
-                height: 60,
-                borderWidth: 1.0,
-                borderColor: AppColors.grayBorderColor,
-                imageUrl: ImageUrlHelper.buildImageUrl(imageUrl),
-              )
-            : const Icon(
-                Icons.broken_image,
-                size: 60,
-                color: AppColors.grayDarkColor, // Or any appropriate color
-              ),
-        const SizedBox(
-          height: 12,
-        ),
-        Text(
-          workshopName ?? '',
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
-            color: AppColors.softBlackColor,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.grayBorderColor),
           ),
-        ),
-        const SizedBox(
-          height: 12,
-        ),
-        Row(
-          spacing: 8,
-          children: [
-            SvgPicture.asset(
-              AppImages.icLocation,
-            ),
-            Flexible(
-              child: Text(
-                '$streetName, n$number, $neighborhood',
-                style: const TextStyle(
-                  color: AppColors.fontMediumGray,
-                  fontSize: 14,
-                ),
-                maxLines: 2,
-              ),
-            ),
-          ],
-        ),
-        Visibility(
-          visible: isShowWhatsApp,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () => openWhatsApp(number.formattedPhone),
-                child: Row(
-                  spacing: 8,
+              // Imagem da oficina
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: imageUrl != null && imageUrl!.isNotEmpty
+                                         ? ForceDownloadImage(
+                         imageUrl: ImageUrlHelper.buildImageUrlWithValidation(imageUrl, context: 'MechanicWorkshopInfo') ?? '',
+                         width: 60,
+                         height: 60,
+                       )
+                    : Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.business,
+                          color: Colors.grey,
+                          size: 24,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              // Informações da oficina
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SvgPicture.asset(
-                      AppImages.icWhatsapp,
-                      colorFilter: const ColorFilter.mode(
-                        AppColors.softBlackColor,
-                        BlendMode.srcIn,
-                      ),
-                    ),
                     Text(
-                      phone?.formattedPhone ?? '',
+                      name,
                       style: const TextStyle(
-                        color: AppColors.primaryColor,
-                        fontSize: 14,
-                        decoration: TextDecoration.underline,
-                        decorationColor: AppColors.primaryColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      address,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Text(
+                          distance,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.primaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Row(
+                          children: List.generate(5, (index) {
+                            return Icon(
+                              index < rating.floor() ? Icons.star : Icons.star_border,
+                              size: 16,
+                              color: Colors.amber,
+                            );
+                          }),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
+              // Seta indicativa
+              const Icon(
+                Icons.arrow_forward_ios,
+                color: AppColors.primaryColor,
+                size: 16,
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 8),
-        const Divider(),
-      ],
+      ),
     );
   }
 }

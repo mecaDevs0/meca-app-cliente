@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:mega_commons/mega_commons.dart';
 
 import '../../../../../../core/utils/image_url_helper.dart';
+import '../../../../../../core/widgets/force_download_image.dart';
 
 class MechanicWorkshopImage extends StatelessWidget {
   const MechanicWorkshopImage({
@@ -13,32 +13,34 @@ class MechanicWorkshopImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Usar o método seguro que retorna null quando não há imagem válida
-    final imageUrl = ImageUrlHelper.buildImageUrlSafe(imageAsset);
+    // Processar a URL da imagem
+    final imageUrl = ImageUrlHelper.buildImageUrlWithValidation(imageAsset, context: 'MechanicWorkshopImage');
     
-    if (imageUrl != null) {
-      // Se há uma URL válida, usar a imagem
-      return MegaCachedNetworkImage(
-        imageUrl: imageUrl,
-        width: 52,
-        height: 56,
-        radius: 64,
-      );
-    } else {
-      // Se não há imagem válida, usar ícone local
-      return Container(
-        width: 52,
-        height: 56,
-        decoration: BoxDecoration(
-          color: Colors.grey[300],
-          borderRadius: BorderRadius.circular(32),
-        ),
-        child: const Icon(
-          Icons.business,
-          size: 32,
-          color: Colors.grey,
-        ),
-      );
-    }
+    print('🔍 MechanicWorkshopImage Debug:');
+    print('  Original URL: "$imageAsset"');
+    print('  Processed URL: "$imageUrl"');
+
+    return imageUrl != null
+        ? ForceDownloadImage(
+            imageUrl: imageUrl,
+            width: 52,
+            height: 56,
+            fit: BoxFit.cover,
+          )
+        : Container(
+            width: 52,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.business,
+                color: Colors.grey,
+                size: 24,
+              ),
+            ),
+          );
   }
 }
