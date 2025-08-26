@@ -82,31 +82,25 @@ class MechanicWorkshopsController extends GetxController {
         );
 
         // Verificar se todos os estabelecimentos estão com distância zero
-        if (response.isNotEmpty && response.every((workshop) => workshop.distance == 0)) {
-          console.log('Todos os estabelecimentos retornados estão com distância zero', name: 'MechanicWorkshopsController');
-        }
-
-                  // Recalcular a distância para todos os estabelecimentos que possuem coordenadas
-        for (final workshop in response) {
-                      debugPrint('Estabelecimento ${workshop.fullName}: Distância do backend=${workshop.distance}km');
-
-                      // Recalcula a distância localmente para todos os estabelecimentos que possuem coordenadas
-          if (userPosition != null &&
-              workshop.latitude != null &&
-              workshop.longitude != null) {
-            // Recalcula a distância localmente usando a API do Geolocator
-            final distanceInMeters = Geolocator.distanceBetween(
-              userPosition.latitude,
-              userPosition.longitude,
-              workshop.latitude!,
-              workshop.longitude!
-            );
-
-            // Converte para quilômetros e arredonda
-            workshop.distance = (distanceInMeters / 1000).round();
-            debugPrint('Distância recalculada para ${workshop.fullName}: ${workshop.distance}km');
-          } else {
-            debugPrint('Não foi possível recalcular a distância: userPosition=$userPosition, latitude=${workshop.latitude}, longitude=${workshop.longitude}');
+        if (response.isNotEmpty && response.every((workshop) => (workshop.distance ?? 0) == 0)) {
+          debugPrint('🔧 [MechanicWorkshopsController] Todos os workshops têm distância 0, recalculando...');
+          
+          for (final workshop in response) {
+            debugPrint('Estabelecimento ${workshop.fullName}: Distância do backend=${workshop.distance}km');
+            
+            if (userPosition != null &&
+                workshop.latitude != null &&
+                workshop.longitude != null) {
+              final distanceInMeters = Geolocator.distanceBetween(
+                userPosition.latitude,
+                userPosition.longitude,
+                workshop.latitude!,
+                workshop.longitude!,
+              );
+              
+              workshop.distance = distanceInMeters / 1000;
+              debugPrint('Distância recalculada para ${workshop.fullName}: ${workshop.distance}km');
+            }
           }
         }
 

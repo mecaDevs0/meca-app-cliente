@@ -37,7 +37,7 @@ class ReviewCard extends StatelessWidget {
           ),
           RatingColumn(
             service: review.workshopService?.name ?? '',
-            rating: review.ratingAverage ?? 0,
+            rating: (review.ratingAverage ?? 0).round(),
           ),
           const SizedBox(
             height: 5,

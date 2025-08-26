@@ -3,11 +3,13 @@ class ImageConfig {
   // URLs base
   static const String baseUrl = 'https://api.mecabr.com/';
   static const String contentPath = 'content/';
+  static const String uploadPath = 'content/upload/';
   static const String servicosPath = 'content/servicos/';
   static const String oficinasPath = 'content/oficinas/';
   static const String imagesPath = 'content/images/';
   
   // URLs completas
+  static const String uploadBaseUrl = '$baseUrl$uploadPath';
   static const String servicosBaseUrl = '$baseUrl$servicosPath';
   static const String oficinasBaseUrl = '$baseUrl$oficinasPath';
   static const String imagesBaseUrl = '$baseUrl$imagesPath';
@@ -41,6 +43,7 @@ class ImageConfig {
     final cleanUrl = imageUrl.trim();
     print('🔧 [ImageConfig] Clean URL: "$cleanUrl"');
     
+    // Se já é uma URL completa, retornar como está
     if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
       print('🔧 [ImageConfig] ✅ URL já é completa: "$cleanUrl"');
       return cleanUrl;
@@ -60,8 +63,9 @@ class ImageConfig {
         print('🔧 [ImageConfig] ✅ URL de serviço: "$url"');
         return url;
       } else if (context.contains('Workshop') || context.contains('oficina') || context.contains('MechanicWorkshop')) {
-        final url = '$oficinasBaseUrl$cleanUrl';
-        print('🔧 [ImageConfig] ✅ URL de oficina: "$url"');
+        // Para workshops, usar o diretório upload
+        final url = '$uploadBaseUrl$cleanUrl';
+        print('🔧 [ImageConfig] ✅ URL de oficina (upload): "$url"');
         return url;
       }
     }
@@ -72,14 +76,15 @@ class ImageConfig {
       print('🔧 [ImageConfig] ✅ URL de serviço (detectada): "$url"');
       return url;
     } else if (_isWorkshopImage(cleanUrl)) {
-      final url = '$oficinasBaseUrl$cleanUrl';
-      print('🔧 [ImageConfig] ✅ URL de oficina (detectada): "$url"');
+      // Para workshops, usar o diretório upload
+      final url = '$uploadBaseUrl$cleanUrl';
+      print('🔧 [ImageConfig] ✅ URL de oficina (upload, detectada): "$url"');
       return url;
     }
     
-    // Padrão: usar images
-    final url = '$imagesBaseUrl$cleanUrl';
-    print('🔧 [ImageConfig] ✅ URL padrão (images): "$url"');
+    // Padrão: usar upload para imagens de workshops
+    final url = '$uploadBaseUrl$cleanUrl';
+    print('🔧 [ImageConfig] ✅ URL padrão (upload): "$url"');
     return url;
   }
 
@@ -93,6 +98,28 @@ class ImageConfig {
       'sistema-freios.png',
       'alinhamento-balanceamento.png',
       'troca-filtros.png',
+      'funilaria-pintura.png',
+      'performance-tuning.png',
+      'carros-antigos.png',
+      'carros-nacionais.png',
+      'sistema-arrefecimento.png',
+      'sistema-direcao.png',
+      'sistema-limpeza.png',
+      'carros-premium.png',
+      'sistema-escape.png',
+      'suvs-4x4.png',
+      'blindagem.png',
+      'sistema-embreagem.png',
+      'revisao-preventiva.png',
+      'pickups-utilitarios.png',
+      'sistema-motor.png',
+      'acessorios.png',
+      'revisao-venda.png',
+      'diagnostico-eletronico.png',
+      'martelinho-ouro.png',
+      'carros-importados.png',
+      'lava-rapido.png',
+      'correias.png',
     ];
     return serviceNames.any((name) => fileName.contains(name));
   }
@@ -102,7 +129,8 @@ class ImageConfig {
     // Imagens de oficinas geralmente têm timestamps como prefixo
     return RegExp(r'^\d{13}\.(png|jpg|jpeg)$').hasMatch(fileName) ||
            fileName.startsWith('174') || // Timestamps específicos vistos nos logs
-           fileName.startsWith('175');
+           fileName.startsWith('175') ||
+           fileName.startsWith('upload'); // URLs que começam com "upload"
   }
 
   /// Valida se uma URL de imagem é válida

@@ -222,37 +222,33 @@ class HomeController extends GetxController {
           }
 
                       // Verifica se os estabelecimentos têm distância zero e alerta sobre o problema
-          if (response.isNotEmpty && response.every((workshop) => workshop.distance == 0)) {
-                          console.log('Todos os estabelecimentos estão com distância zero. Posição do usuário: ${userPosition?.latitude}, ${userPosition?.longitude}', name: 'HomeController');
-          }
-
-                      // Adiciona logs para cada estabelecimento para verificar o cálculo da distância
-          for (final workshop in response) {
-                          debugPrint('Estabelecimento ${workshop.fullName}: Lat=${workshop.latitude}, Long=${workshop.longitude}, Distância=${workshop.distance}km');
-
-            // Calcular distância real baseada nas coordenadas do MongoDB Atlas
-            if (userPosition != null && 
-                workshop.latitude != null && workshop.longitude != null) {
-              
-              // Calcular distância real usando Geolocator
-              final distanceInMeters = Geolocator.distanceBetween(
-                userPosition!.latitude, userPosition!.longitude, 
-                workshop.latitude!, workshop.longitude!
-              );
-              
-              // Converter para km e arredondar
-              workshop.distance = (distanceInMeters / 1000).round();
-              debugPrint('  Distância real calculada: ${workshop.distance}km');
-            } else {
-              // Se não tem localização do usuário, definir como 0
-              workshop.distance = 0;
-              debugPrint('  Sem localização do usuário, distância definida como 0km');
+          if (response.isNotEmpty && response.every((workshop) => (workshop.distance ?? 0) == 0)) {
+            debugPrint('🔧 [HomeController] Todos os workshops têm distância 0, recalculando...');
+            
+            for (final workshop in response) {
+              if (workshop.latitude != null && workshop.longitude != null) {
+                final distanceInMeters = Geolocator.distanceBetween(
+                  userPosition!.latitude,
+                  userPosition!.longitude,
+                  workshop.latitude!,
+                  workshop.longitude!,
+                );
+                
+                debugPrint('Estabelecimento ${workshop.fullName}: Lat=${workshop.latitude}, Long=${workshop.longitude}, Distância=${workshop.distance}km');
+                
+                if (distanceInMeters > 0) {
+                  workshop.distance = distanceInMeters / 1000;
+                  debugPrint('  Distância real calculada: ${workshop.distance}km');
+                } else {
+                  workshop.distance = 0;
+                }
+              }
             }
           }
-
-                      // Filtra localmente para garantir que só estabelecimentos até a distância escolhida sejam exibidos
+          
+          // Filtra localmente para garantir que só estabelecimentos até a distância escolhida sejam exibidos
           final maxDistance = distance > 50 ? 50 : distance;
-          final filtered = response.where((workshop) => workshop.distance != null && workshop.distance! <= maxDistance).toList();
+          final filtered = response.where((workshop) => (workshop.distance ?? 0) <= maxDistance).toList();
           final isLastPage = filtered.length < _workshopsLimit;
           if (isLastPage) {
             workshopsPagingController.appendLastPage(filtered);

@@ -11,8 +11,15 @@ class ServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Debug logs
+    print('🔧 [ServiceCard] Service ID: ${service.id}');
+    print('🔧 [ServiceCard] Service Name: ${service.name}');
+    print('🔧 [ServiceCard] Service Photo: ${service.photo}');
+    
     // Processar a URL da imagem
     final imageUrl = ImageUrlHelper.buildImageUrlWithValidation(service.photo, context: 'ServiceCard');
+    
+    print('🔧 [ServiceCard] Processed Image URL: $imageUrl');
 
     return Container(
       width: 120,
@@ -43,7 +50,21 @@ class ServiceCard extends StatelessWidget {
                       width: double.infinity,
                       height: double.infinity,
                       fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          width: double.infinity,
+                          height: double.infinity,
+                          color: Colors.grey[200],
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        );
+                      },
                       errorBuilder: (context, error, stackTrace) {
+                        print('🔧 [ServiceCard] ❌ Erro ao carregar imagem: $error');
                         return Container(
                           width: double.infinity,
                           height: double.infinity,

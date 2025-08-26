@@ -45,7 +45,7 @@ class MechanicWorkshopLocationRow extends StatelessWidget {
         ),
         SizedBox(width: spacing),
         Text(
-          '${mechanicWorkshop.distance ?? 0} km',
+          '${(mechanicWorkshop.distance ?? 0).toStringAsFixed(1)} km',
           style: TextStyle(
             color: AppColors.neutralGrayColor,
             fontWeight: FontWeight.w400,

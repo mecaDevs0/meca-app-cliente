@@ -77,7 +77,7 @@ class MechanicWorkshopInfo extends GetView<MechanicWorkshopDetailsController> {
                   ),
                 ),
               ),
-              AppRatingRow(rating: controller.workshopDetails?.rating ?? 0),
+              AppRatingRow(rating: (controller.workshopDetails?.rating ?? 0).round()),
             ],
           ),
           const SizedBox(

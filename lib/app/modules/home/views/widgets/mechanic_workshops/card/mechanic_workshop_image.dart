@@ -15,49 +15,66 @@ class MechanicWorkshopImage extends StatelessWidget {
     // Debug logs
     print('🔧 [MechanicWorkshopImage] Image Asset: "$imageAsset"');
     
+    // Se a URL já é completa (começa com http/https), usar diretamente
+    if (imageAsset.startsWith('http://') || imageAsset.startsWith('https://')) {
+      print('🔧 [MechanicWorkshopImage] ✅ URL já é completa: "$imageAsset"');
+      return _buildNetworkImage(imageAsset);
+    }
+    
     // Processar a URL da imagem
     final imageUrl = ImageUrlHelper.buildImageUrlWithValidation(imageAsset, context: 'Workshop');
     
     print('🔧 [MechanicWorkshopImage] Processed URL: "$imageUrl"');
 
     return imageUrl != null
-        ? Image.network(
-            imageUrl,
-            width: 52,
-            height: 56,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                width: 52,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.business,
-                    color: Colors.grey,
-                    size: 24,
-                  ),
-                ),
-              );
-            },
-          )
-        : Container(
-            width: 52,
-            height: 56,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(8),
+        ? _buildNetworkImage(imageUrl)
+        : _buildPlaceholderImage();
+  }
+  
+  Widget _buildNetworkImage(String imageUrl) {
+    return Image.network(
+      imageUrl,
+      width: 52,
+      height: 56,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Container(
+          width: 52,
+          height: 56,
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
             ),
-            child: const Center(
-              child: Icon(
-                Icons.business,
-                color: Colors.grey,
-                size: 24,
-              ),
-            ),
-          );
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        print('🔧 [MechanicWorkshopImage] ❌ Erro ao carregar imagem: $error');
+        return _buildPlaceholderImage();
+      },
+    );
+  }
+  
+  Widget _buildPlaceholderImage() {
+    return Container(
+      width: 52,
+      height: 56,
+      decoration: BoxDecoration(
+        color: Colors.grey[300],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.business,
+          color: Colors.grey,
+          size: 24,
+        ),
+      ),
+    );
   }
 }

@@ -22,6 +22,10 @@ class MechanicWorkshopRatingRow extends StatelessWidget {
     final double arrowSize = isTablet ? 24.0 : 16.0;
     final double starSpacing = isTablet ? 6.0 : 3.0;
 
+    // Debug logs
+    print('🔧 [MechanicWorkshopRatingRow] Workshop ID: ${mechanicWorkshop.id}');
+    print('🔧 [MechanicWorkshopRatingRow] Rating: ${mechanicWorkshop.rating}');
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -29,8 +33,10 @@ class MechanicWorkshopRatingRow extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: List.generate(5, (index) {
             Color starColor;
-            if (mechanicWorkshop.rating != null) {
-              starColor = index < mechanicWorkshop.rating!
+            if (mechanicWorkshop.rating != null && mechanicWorkshop.rating! > 0) {
+              // Converter rating para número de estrelas (0-5)
+              final ratingStars = mechanicWorkshop.rating!.round();
+              starColor = index < ratingStars
                   ? AppColors.favoritesYellowColor
                   : AppColors.favoritesGrayColor;
             } else {
