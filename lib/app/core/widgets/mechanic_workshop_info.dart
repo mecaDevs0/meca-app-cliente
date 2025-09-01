@@ -56,7 +56,7 @@ class MechanicWorkshopInfo extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   child: imageUrl != null && imageUrl!.isNotEmpty
                       ? Image.network(
-                          ImageUrlHelper.buildImageUrlWithValidation(imageUrl, context: 'MechanicWorkshopInfo') ?? '',
+                          ImageUrlHelper.buildImageUrlWithValidation(imageUrl, context: 'Workshop') ?? '',
                           width: 60,
                           height: 60,
                           fit: BoxFit.cover,

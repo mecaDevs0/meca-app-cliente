@@ -77,68 +77,33 @@ class Order {
     print('🔧 [Order] JSON original workshopServices: ${json['workshopServices']}');
     print('🔧 [Order] Tipo de workshopServices: ${json['workshopServices']?.runtimeType}');
     
-    // Mapeamento customizado para o workshop
-    Map<String, dynamic> workshopData = {};
+    // CORREÇÃO: Usar diretamente os dados da API sem mapeamento artificial
+    // A API já retorna os dados no formato correto (camelCase)
+    // Não precisamos converter para PascalCase
+    
     if (json['workshop'] != null && json['workshop'] is Map<String, dynamic>) {
       final workshopJson = json['workshop'] as Map<String, dynamic>;
       
-      // CORREÇÃO: Usar exatamente os mesmos campos que a API retorna
-      // Não fazer mapeamento artificial, usar os dados originais
-      workshopData = {
-        '_id': workshopJson['id'] ?? workshopJson['_id'],
-        'FullName': workshopJson['fullName'] ?? workshopJson['FullName'],
-        'CompanyName': workshopJson['companyName'] ?? workshopJson['CompanyName'],
-        'AccountableName': workshopJson['accountableName'] ?? workshopJson['AccountableName'],
-        'Phone': workshopJson['phone'] ?? workshopJson['Phone'],
-        'Cnpj': workshopJson['cnpj'] ?? workshopJson['Cnpj'],
-        'ZipCode': workshopJson['zipCode'] ?? workshopJson['ZipCode'],
-        'StreetAddress': workshopJson['streetAddress'] ?? workshopJson['StreetAddress'],
-        'Number': workshopJson['number'] ?? workshopJson['Number'],
-        'CityName': workshopJson['cityName'] ?? workshopJson['CityName'],
-        'CityId': workshopJson['cityId'] ?? workshopJson['CityId'],
-        'StateName': workshopJson['stateName'] ?? workshopJson['StateName'],
-        'StateUf': workshopJson['stateUf'] ?? workshopJson['StateUf'],
-        'StateId': workshopJson['stateId'] ?? workshopJson['StateId'],
-        'Neighborhood': workshopJson['neighborhood'] ?? workshopJson['Neighborhood'],
-        'Complement': workshopJson['complement'] ?? workshopJson['Complement'],
-        'Latitude': workshopJson['latitude'] ?? workshopJson['Latitude'],
-        'Longitude': workshopJson['longitude'] ?? workshopJson['Longitude'],
-        'Photo': workshopJson['photo'] ?? workshopJson['Photo'], // Tentar ambos os campos
-        'Email': workshopJson['email'] ?? workshopJson['Email'],
-        'Rating': workshopJson['rating'] ?? workshopJson['Rating'],
-        'Distance': workshopJson['distance'] ?? workshopJson['Distance'],
-        'Reason': workshopJson['reason'] ?? workshopJson['Reason'] ?? 'Estabelecimento de confiança para serviços automotivos',
-      };
-      
       // Log detalhado de todos os campos do workshop
       print('🔧 [Order] Workshop JSON completo: $workshopJson');
-      print('🔧 [Order] Workshop data mapeado: $workshopData');
-      
-      // Log para debug
-      print('🔧 [Order] Photo original da API: ${workshopJson['photo']}');
-      print('🔧 [Order] Photo PascalCase da API: ${workshopJson['Photo']}');
-      print('🔧 [Order] Photo mapeada: ${workshopData['Photo']}');
-      print('🔧 [Order] CompanyName original: ${workshopJson['companyName']}');
-      print('🔧 [Order] FullName original: ${workshopJson['fullName']}');
-      print('🔧 [Order] CompanyName mapeado: ${workshopData['CompanyName']}');
-      print('🔧 [Order] FullName mapeado: ${workshopData['FullName']}');
-      print('🔧 [Order] Workshop ID original: ${workshopJson['id']}');
-      print('🔧 [Order] Workshop ID PascalCase: ${workshopJson['_id']}');
-      print('🔧 [Order] Workshop ID mapeado: ${workshopData['_id']}');
+      print('🔧 [Order] Workshop ID: ${workshopJson['id']}');
+      print('🔧 [Order] Workshop CompanyName: ${workshopJson['companyName']}');
+      print('🔧 [Order] Workshop FullName: ${workshopJson['fullName']}');
+      print('🔧 [Order] Workshop Photo: ${workshopJson['photo']}');
+      print('🔧 [Order] Workshop StreetAddress: ${workshopJson['streetAddress']}');
     } else {
       print('🔧 [Order] Workshop data é null ou não é Map: ${json['workshop']}');
     }
     
-    // Criar uma cópia do JSON com o workshop mapeado corretamente
-    final modifiedJson = Map<String, dynamic>.from(json);
-    if (workshopData.isNotEmpty) {
-      modifiedJson['workshop'] = workshopData;
-    }
-    
-    final order = _$OrderFromJson(modifiedJson);
+    // Usar o JSON original sem modificações
+    final order = _$OrderFromJson(json);
     
     // Debug logs após mapeamento
     print('🔧 [Order] Order criado com ID: ${order.id}');
+    print('🔧 [Order] Workshop ID após mapeamento: ${order.workshop?.id}');
+    print('🔧 [Order] Workshop CompanyName após mapeamento: ${order.workshop?.companyName}');
+    print('🔧 [Order] Workshop FullName após mapeamento: ${order.workshop?.fullName}');
+    print('🔧 [Order] Workshop Photo após mapeamento: ${order.workshop?.photo}');
     print('🔧 [Order] WorkshopServices count após mapeamento: ${order.workshopServices?.length ?? 0}');
     if (order.workshopServices != null && order.workshopServices!.isNotEmpty) {
       for (int i = 0; i < order.workshopServices!.length; i++) {

@@ -79,21 +79,7 @@ class ServiceCard extends StatelessWidget {
                         );
                       },
                     )
-                  : Container(
-                      width: double.infinity,
-                      height: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.image,
-                          color: Colors.grey,
-                          size: 24,
-                        ),
-                      ),
-                    ),
+                  : _buildServicePlaceholder(),
             ),
           ),
           // Área do texto
@@ -130,6 +116,25 @@ class ServiceCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Gera um placeholder elegante para serviços
+  Widget _buildServicePlaceholder() {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.build,
+          color: Colors.grey,
+          size: 32,
+        ),
       ),
     );
   }

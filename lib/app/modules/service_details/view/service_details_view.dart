@@ -53,7 +53,7 @@ class ServiceDetailsView extends GetView<ServiceDetailsController> {
                       Center(
                         child: controller.serviceDetail?.photo != null
                             ? MegaCachedNetworkImage(
-                                imageUrl: ImageUrlHelper.buildImageUrl(controller.serviceDetail!.photo),
+                                imageUrl: ImageUrlHelper.buildImageUrl(controller.serviceDetail!.photo, context: 'ServiceCard'),
                                 width: imageWidth,
                                 height: imageHeight,
                               )

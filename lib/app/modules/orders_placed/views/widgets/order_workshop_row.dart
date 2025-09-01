@@ -107,6 +107,7 @@ class OrderWorkshopRow extends StatelessWidget {
           imageAsset: serviceImage ?? '',
           width: 60,
           height: 60,
+          context: 'ServiceCard', // Contexto correto para imagens de serviços
         ),
         const SizedBox(width: 12),
         

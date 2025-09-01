@@ -65,12 +65,12 @@ class MechanicWorkshopImage extends StatelessWidget {
       width: 52,
       height: 56,
       decoration: BoxDecoration(
-        color: Colors.grey[300],
+        color: Colors.grey[200],
         borderRadius: BorderRadius.circular(8),
       ),
       child: const Center(
         child: Icon(
-          Icons.business,
+          Icons.store,
           color: Colors.grey,
           size: 24,
         ),

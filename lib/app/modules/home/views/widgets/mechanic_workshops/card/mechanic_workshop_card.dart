@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mega_commons/mega_commons.dart';
 
 import '../../../../../../core/core.dart';
+import '../../../../../../core/utils/workshop_name_helper.dart';
 import '../../../../../../data/models/mechanic_workshop.dart';
 import 'mechanic_workshop_image.dart';
 import 'mechanic_workshop_location_row.dart';

@@ -32,7 +32,7 @@ class MechanicWorkshopInfo extends GetView<MechanicWorkshopDetailsController> {
                   width: 83,
                   height: 83,
                   radius: 100,
-                  imageUrl: ImageUrlHelper.buildImageUrl(controller.workshopDetails?.photo),
+                  imageUrl: ImageUrlHelper.buildImageUrl(controller.workshopDetails?.photo, context: 'Workshop'),
                 )
               : const Icon(
                   Icons.broken_image,

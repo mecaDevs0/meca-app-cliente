@@ -31,6 +31,8 @@ class ImageConfig {
   };
 
   /// Constrói a URL completa da imagem baseada no contexto
+  /// Lógica centralizada e inteligente para corrigir URLs de imagem
+  /// ÚNICA FONTE DE VERDADE para construção de URLs de imagem
   static String buildImageUrl(String? imageUrl, {String? context}) {
     print('🔧 [ImageConfig] Input imageUrl: "$imageUrl"');
     print('🔧 [ImageConfig] Context: "$context"');
@@ -43,9 +45,25 @@ class ImageConfig {
     final cleanUrl = imageUrl.trim();
     print('🔧 [ImageConfig] Clean URL: "$cleanUrl"');
     
-    // Se já é uma URL completa, retornar como está
+    // Se já é uma URL completa, verificar se precisa de correção
     if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
-      print('🔧 [ImageConfig] ✅ URL já é completa: "$cleanUrl"');
+      print('🔧 [ImageConfig] 🔍 URL completa detectada, verificando se precisa correção');
+      
+      // CORREÇÃO CRÍTICA: Se a URL contém /content/upload mas deveria ser /content/servicos/
+      if (cleanUrl.contains('/content/upload') && _isServiceImage(_extractFileName(cleanUrl))) {
+        final correctedUrl = cleanUrl.replaceAll('/content/upload', '/content/servicos/');
+        print('🔧 [ImageConfig] ✅ URL corrigida de upload para servicos/: "$correctedUrl"');
+        return correctedUrl;
+      }
+      
+      // CORREÇÃO: Se a URL contém /content/upload mas deveria ser /content/ para oficinas
+      if (cleanUrl.contains('/content/upload') && _isWorkshopImage(_extractFileName(cleanUrl))) {
+        final correctedUrl = cleanUrl.replaceAll('/content/upload', '/content/');
+        print('🔧 [ImageConfig] ✅ URL corrigida de upload para content/: "$correctedUrl"');
+        return correctedUrl;
+      }
+      
+      print('🔧 [ImageConfig] ✅ URL já é completa e correta: "$cleanUrl"');
       return cleanUrl;
     }
     
@@ -58,14 +76,15 @@ class ImageConfig {
     
     // Determinar o caminho baseado no contexto
     if (context != null) {
-      if (context.contains('Service') || context.contains('servico')) {
+      final lowerContext = context.toLowerCase();
+      if (lowerContext.contains('service') || lowerContext.contains('servico')) {
         final url = '$servicosBaseUrl$cleanUrl';
-        print('🔧 [ImageConfig] ✅ URL de serviço: "$url"');
+        print('🔧 [ImageConfig] ✅ URL de serviço (contexto): "$url"');
         return url;
-      } else if (context.contains('Workshop') || context.contains('oficina') || context.contains('MechanicWorkshop')) {
-        // Para workshops, usar o diretório upload
-        final url = '$uploadBaseUrl$cleanUrl';
-        print('🔧 [ImageConfig] ✅ URL de oficina (upload): "$url"');
+      } else if (lowerContext.contains('workshop') || lowerContext.contains('oficina') || lowerContext.contains('mechanicworkshop')) {
+        // Para workshops, usar o diretório content (não upload)
+        final url = '$baseUrl$contentPath$cleanUrl';
+        print('🔧 [ImageConfig] ✅ URL de oficina (contexto): "$url"');
         return url;
       }
     }
@@ -76,52 +95,68 @@ class ImageConfig {
       print('🔧 [ImageConfig] ✅ URL de serviço (detectada): "$url"');
       return url;
     } else if (_isWorkshopImage(cleanUrl)) {
-      // Para workshops, usar o diretório upload
-      final url = '$uploadBaseUrl$cleanUrl';
-      print('🔧 [ImageConfig] ✅ URL de oficina (upload, detectada): "$url"');
+      // Para workshops, usar o diretório content (não upload)
+      final url = '$baseUrl$contentPath$cleanUrl';
+      print('🔧 [ImageConfig] ✅ URL de oficina (content, detectada): "$url"');
       return url;
     }
     
-    // Padrão: usar upload para imagens de workshops
-    final url = '$uploadBaseUrl$cleanUrl';
-    print('🔧 [ImageConfig] ✅ URL padrão (upload): "$url"');
+    // Padrão: usar content para imagens de workshops
+    final url = '$baseUrl$contentPath$cleanUrl';
+    print('🔧 [ImageConfig] ✅ URL padrão (content): "$url"');
+    return url;
+  }
+
+  /// Extrai o nome do arquivo de uma URL completa
+  static String _extractFileName(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final pathSegments = uri.pathSegments;
+      if (pathSegments.isNotEmpty) {
+        return pathSegments.last;
+      }
+    } catch (e) {
+      print('🔧 [ImageConfig] ❌ Erro ao extrair nome do arquivo: $e');
+    }
     return url;
   }
 
   /// Verifica se é uma imagem de serviço baseado no nome
   static bool _isServiceImage(String fileName) {
     final serviceNames = [
-      'mecanica-geral.png',
-      'sistema-eletrico.png',
-      'sistema-ar-condicionado.png',
-      'injecao-eletronica.png',
-      'sistema-freios.png',
-      'alinhamento-balanceamento.png',
-      'troca-filtros.png',
-      'funilaria-pintura.png',
-      'performance-tuning.png',
-      'carros-antigos.png',
-      'carros-nacionais.png',
-      'sistema-arrefecimento.png',
-      'sistema-direcao.png',
-      'sistema-limpeza.png',
-      'carros-premium.png',
-      'sistema-escape.png',
-      'suvs-4x4.png',
-      'blindagem.png',
-      'sistema-embreagem.png',
-      'revisao-preventiva.png',
-      'pickups-utilitarios.png',
-      'sistema-motor.png',
-      'acessorios.png',
-      'revisao-venda.png',
-      'diagnostico-eletronico.png',
-      'martelinho-ouro.png',
-      'carros-importados.png',
-      'lava-rapido.png',
-      'correias.png',
+      'mecanica-geral',
+      'sistema-eletrico',
+      'sistema-ar-condicionado',
+      'injecao-eletronica',
+      'sistema-freios',
+      'alinhamento-balanceamento',
+      'troca-filtros',
+      'funilaria-pintura',
+      'performance-tuning',
+      'carros-antigos',
+      'carros-nacionais',
+      'sistema-arrefecimento',
+      'sistema-direcao',
+      'sistema-limpeza',
+      'carros-premium',
+      'sistema-escape',
+      'suvs-4x4',
+      'blindagem',
+      'sistema-embreagem',
+      'revisao-preventiva',
+      'pickups-utilitarios',
+      'sistema-motor',
+      'acessorios',
+      'revisao-venda',
+      'diagnostico-eletronico',
+      'martelinho-ouro',
+      'carros-importados',
+      'lava-rapido',
+      'correias',
     ];
-    return serviceNames.any((name) => fileName.contains(name));
+    
+    final cleanFileName = fileName.toLowerCase().replaceAll('.png', '').replaceAll('.jpg', '').replaceAll('.jpeg', '');
+    return serviceNames.any((name) => cleanFileName.contains(name.toLowerCase()));
   }
 
   /// Verifica se é uma imagem de oficina baseado no nome
@@ -163,6 +198,16 @@ class ImageConfig {
 
   /// Verifica se a URL da imagem é vazia ou inválida
   static bool isEmptyOrInvalid(String? imageUrl) {
-    return imageUrl == null || imageUrl.isEmpty || imageUrl.trim().isEmpty || !isValidImageUrl(buildImageUrl(imageUrl));
+    if (imageUrl == null || imageUrl.isEmpty || imageUrl.trim().isEmpty) {
+      return true;
+    }
+    
+    // Se já é uma URL completa, validar diretamente
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return !isValidImageUrl(imageUrl);
+    }
+    
+    // Se é apenas um filename, considerar válido (será processado depois)
+    return false;
   }
 }

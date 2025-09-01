@@ -72,7 +72,7 @@ class ServiceItem extends StatelessWidget {
                   ),
                   child: service.photo != null && service.photo!.isNotEmpty
                       ? Image.network(
-                          ImageUrlHelper.buildImageUrlWithValidation(service.photo, context: 'ServiceItem') ?? '',
+                          ImageUrlHelper.buildImageUrlWithValidation(service.photo, context: 'ServiceCard') ?? '',
                           width: double.infinity,
                           height: imageHeight,
                           fit: BoxFit.cover,

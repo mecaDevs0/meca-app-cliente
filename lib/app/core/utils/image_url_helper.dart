@@ -1,4 +1,5 @@
 import '../config/image_config.dart';
+import '../../data/models/service.dart';
 
 class ImageUrlHelper {
   static String buildImageUrl(String? imageUrl, {String? context}) {

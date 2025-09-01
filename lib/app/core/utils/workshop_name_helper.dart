@@ -2,13 +2,11 @@ import '../../data/models/mechanic_workshop.dart';
 
 class WorkshopNameHelper {
   /// Retorna o nome do estabelecimento seguindo a prioridade:
-  /// 1. companyName (se disponível e não vazio)
-  /// 2. Primeiro e último nome do fullName (se disponível)
-  /// 3. fullName completo (se disponível)
-  /// 4. accountableName (se disponível)
-  /// 5. Texto padrão
+  /// 1. companyName (se disponível e não vazio, exceto "Oficina Padrão")
+  /// 2. fullName formatado (primeiro e último nome)
+  /// 3. string vazia (o errorBuilder da imagem cuidará do visual)
   static String getDisplayName(MechanicWorkshop? workshop) {
-    if (workshop == null) return 'Estabelecimento';
+    if (workshop == null) return '';
     
     // Debug logs
     print('🔧 [WorkshopNameHelper] Workshop ID: ${workshop.id}');
@@ -16,50 +14,37 @@ class WorkshopNameHelper {
     print('🔧 [WorkshopNameHelper] FullName: "${workshop.fullName}"');
     print('🔧 [WorkshopNameHelper] AccountableName: "${workshop.accountableName}"');
     
-    // 1. Prioridade para companyName
+    // Prioridade 1: companyName (exceto "Oficina Padrão" que é genérico)
     if (workshop.companyName?.isNotEmpty == true && 
         workshop.companyName != 'null' && 
-        workshop.companyName != '') {
+        workshop.companyName != '' &&
+        workshop.companyName != 'Oficina Padrão') {
       final name = workshop.companyName!.trim();
       print('🔧 [WorkshopNameHelper] ✅ Usando CompanyName: "$name"');
       return name;
     }
     
-    // 2. Extrair primeiro e último nome do fullName
+    // Prioridade 2: fullName formatado (primeiro e último nome)
     if (workshop.fullName?.isNotEmpty == true && 
         workshop.fullName != 'null' && 
         workshop.fullName != '') {
-      final names = workshop.fullName!.trim().split(' ');
-      if (names.length >= 2) {
-        final name = '${names.first} ${names.last}';
-        print('🔧 [WorkshopNameHelper] ✅ Usando FullName (primeiro + último): "$name"');
-        return name;
-      } else if (names.length == 1) {
-        print('🔧 [WorkshopNameHelper] ✅ Usando FullName (único): "${names.first}"');
-        return names.first;
-      }
-      print('🔧 [WorkshopNameHelper] ✅ Usando FullName completo: "${workshop.fullName!.trim()}"');
-      return workshop.fullName!.trim();
+      final formattedName = _formatFullName(workshop.fullName!.trim());
+      print('🔧 [WorkshopNameHelper] ✅ Usando FullName formatado: "$formattedName"');
+      return formattedName;
     }
     
-    // 3. accountableName como fallback
-    if (workshop.accountableName?.isNotEmpty == true && 
-        workshop.accountableName != 'null' && 
-        workshop.accountableName != '') {
-      final name = workshop.accountableName!.trim();
-      print('🔧 [WorkshopNameHelper] ✅ Usando AccountableName: "$name"');
-      return name;
+    // Prioridade 3: string vazia (o errorBuilder da imagem cuidará do visual)
+    print('🔧 [WorkshopNameHelper] ❌ Nenhum nome válido encontrado, retornando string vazia');
+    return '';
+  }
+
+  /// Formata o nome completo para exibir apenas primeiro e último nome
+  static String _formatFullName(String fullName) {
+    final names = fullName.split(' ');
+    if (names.length >= 2) {
+      return '${names.first} ${names.last}';
     }
-    
-    // 4. Se temos ID, usar um nome genérico com o ID
-    if (workshop.id?.isNotEmpty == true) {
-      final name = 'Estabelecimento #${workshop.id!.substring(0, 8)}';
-      print('🔧 [WorkshopNameHelper] ✅ Usando ID genérico: "$name"');
-      return name;
-    }
-    
-    print('🔧 [WorkshopNameHelper] ❌ Usando nome padrão: "Estabelecimento"');
-    return 'Estabelecimento';
+    return fullName;
   }
   
   /// Retorna o nome completo do estabelecimento (sem truncamento)
