@@ -92,9 +92,28 @@ class MechanicWorkshopDetailsController extends GetxController {
     _isLoadingWorkshopServices.value = true;
     await MegaRequestUtils.load(
       action: () async {
-        final response = await _mechanicWorkshopDetailsProvider
-            .onRequestMechanicWorkshopServices(workshopId: workshopId);
-        _workshopServices.assignAll(response);
+        print('[WORKSHOP_DETAILS] Buscando serviços para workshop: $workshopId');
+        
+        try {
+          final response = await _mechanicWorkshopDetailsProvider
+              .onRequestMechanicWorkshopServices(workshopId: workshopId);
+          
+          print('[WORKSHOP_DETAILS] Serviços retornados: ${response.length}');
+          
+          if (response.isEmpty) {
+            print('[WORKSHOP_DETAILS] AVISO: Nenhum serviço encontrado para o workshop $workshopId');
+          } else {
+            final firstService = response.first;
+            print('[WORKSHOP_DETAILS] Primeiro serviço - ID: ${firstService.id}');
+            print('[WORKSHOP_DETAILS] Primeiro serviço - Service ID: ${firstService.service?.id}');
+            print('[WORKSHOP_DETAILS] Primeiro serviço - Service Name: ${firstService.service?.name}');
+          }
+          
+          _workshopServices.assignAll(response);
+        } catch (e) {
+          print('[WORKSHOP_DETAILS] ERRO ao buscar serviços: $e');
+          rethrow;
+        }
       },
       onFinally: () => _isLoadingWorkshopServices.value = false,
     );

@@ -92,11 +92,27 @@ class RequestAppointmentController extends GetxController {
         _vehicles.assignAll(vehicles);
 
         log('[AGENDAMENTO] Buscando serviços do estabelecimento $workshopId...');
-        final services = await _coreProvider.onRequestServices(
-          workshopId: workshopId,
-        );
-        log('[AGENDAMENTO] Serviços retornados: ${services.length}');
-        _services.assignAll(services);
+        log('[AGENDAMENTO] WorkshopId para busca: $workshopId');
+        
+        try {
+          final services = await _coreProvider.onRequestServices(
+            workshopId: workshopId,
+          );
+          log('[AGENDAMENTO] Serviços retornados: ${services.length}');
+          
+          if (services.isEmpty) {
+            log('[AGENDAMENTO] AVISO: Nenhum serviço encontrado para o workshop $workshopId');
+          } else {
+            log('[AGENDAMENTO] Primeiro serviço - ID: ${services.first.id}');
+            log('[AGENDAMENTO] Primeiro serviço - Service ID: ${services.first.service?.id}');
+            log('[AGENDAMENTO] Primeiro serviço - Service Name: ${services.first.service?.name}');
+          }
+          
+          _services.assignAll(services);
+        } catch (e) {
+          log('[AGENDAMENTO] ERRO ao buscar serviços: $e');
+          rethrow;
+        }
         
         // Pré-selecionar o serviço se foi passado nos argumentos
         if (_selectedServiceFromArgs != null) {

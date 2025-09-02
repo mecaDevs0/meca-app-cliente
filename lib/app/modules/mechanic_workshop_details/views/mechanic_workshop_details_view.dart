@@ -373,27 +373,35 @@ class MechanicWorkshopDetailsView
           borderRadius: borderRadius,
         ),
         SizedBox(height: spacing),
-        MegaBaseButton(
-          'Agendar',
-          buttonColor: AppColors.primaryColor, // Cor primária
-          textColor: AppColors.whiteColor, // Texto branco
-          onButtonPress: () {
-            log('Navigating to requestAppointment with:');
-            log('workshopId: ${controller.workshopId}');
-            log('workshopDetails: ${controller.workshopDetails}');
-            log('selectedService: ${controller.selectedService}');
-            Get.toNamed(
-              Routes.requestAppointment,
-              arguments: {
-                'workshopId': controller.workshopId,
-                'workshopDetails': controller.workshopDetails,
-                'selectedService': controller.selectedService,
-              },
-            );
-          },
-          buttonHeight: buttonHeight,
-          borderRadius: borderRadius,
-        ),
+                  MegaBaseButton(
+            'Agendar',
+            buttonColor: AppColors.primaryColor, // Cor primária
+            textColor: AppColors.whiteColor, // Texto branco
+            onButtonPress: () {
+              log('Navigating to requestAppointment with:');
+              log('workshopId: ${controller.workshopId}');
+              log('workshopDetails: ${controller.workshopDetails}');
+              log('selectedService: ${controller.selectedService}');
+              
+              // Verificar se o workshopId está válido
+              if (controller.workshopId.isEmpty) {
+                log('ERRO: workshopId está vazio!');
+                MegaSnackbar.showErroSnackBar('Erro: ID do estabelecimento não encontrado');
+                return;
+              }
+              
+              Get.toNamed(
+                Routes.requestAppointment,
+                arguments: {
+                  'workshopId': controller.workshopId,
+                  'workshopDetails': controller.workshopDetails,
+                  'selectedService': controller.selectedService,
+                },
+              );
+            },
+            buttonHeight: buttonHeight,
+            borderRadius: borderRadius,
+          ),
       ],
     );
   }
