@@ -32,27 +32,16 @@ class MechanicWorkshopDetailsProvider {
     String? search,
     String? workshopId,
   }) async {
-    print('🔧 [WORKSHOP_SERVICES_PROVIDER] Iniciando busca de serviços');
-    print('🔧 [WORKSHOP_SERVICES_PROVIDER] WorkshopId: $workshopId');
-    print('🔧 [WORKSHOP_SERVICES_PROVIDER] Search: $search');
-    
     final queryParameters = <String, dynamic>{
       if (workshopId != null) 'workshopId': workshopId,
       if (search != null) 'search': search,
     };
-    
-    print('🔧 [WORKSHOP_SERVICES_PROVIDER] Query parameters: $queryParameters');
-    print('🔧 [WORKSHOP_SERVICES_PROVIDER] URL: ${BaseUrls.workshopServices}');
 
     try {
       final response = await _restClientDio.get(
         BaseUrls.workshopServices,
         queryParameters: queryParameters,
       );
-      
-      print('🔧 [WORKSHOP_SERVICES_PROVIDER] Response status: ${response.statusCode}');
-      print('🔧 [WORKSHOP_SERVICES_PROVIDER] Response data type: ${response.data.runtimeType}');
-      print('🔧 [WORKSHOP_SERVICES_PROVIDER] Response data: ${response.data}');
       
       if (response.data is List) {
         final services = (response.data as List)
@@ -61,22 +50,11 @@ class MechanicWorkshopDetailsProvider {
             )
             .toList();
         
-        print('🔧 [WORKSHOP_SERVICES_PROVIDER] Serviços mapeados: ${services.length}');
-        if (services.isNotEmpty) {
-          final firstService = services.first;
-          print('🔧 [WORKSHOP_SERVICES_PROVIDER] Primeiro serviço - ID: ${firstService.id}');
-          print('🔧 [WORKSHOP_SERVICES_PROVIDER] Primeiro serviço - Service ID: ${firstService.service?.id}');
-          print('🔧 [WORKSHOP_SERVICES_PROVIDER] Primeiro serviço - Service Name: ${firstService.service?.name}');
-        }
-        
         return services;
       } else {
-        print('🔧 [WORKSHOP_SERVICES_PROVIDER] ERRO: Response.data não é uma List');
-        print('🔧 [WORKSHOP_SERVICES_PROVIDER] Response.data: ${response.data}');
         return [];
       }
     } catch (e) {
-      print('🔧 [WORKSHOP_SERVICES_PROVIDER] ERRO na requisição: $e');
       rethrow;
     }
   }
@@ -86,9 +64,6 @@ class MechanicWorkshopDetailsProvider {
       final response = await _restClientDio.get(
         '${BaseUrls.workshopSchedule}/$workshopId',
       );
-
-      // Log para verificar a estrutura dos dados recebidos
-      print('Workshop schedule response: ${response.data}');
 
       // Tratamento especial caso a API esteja retornando valores diferentes do esperado
       final data = response.data as Map<String, dynamic>;
@@ -104,9 +79,6 @@ class MechanicWorkshopDetailsProvider {
 
       return AgendaModel.fromJson(data);
     } catch (e, stackTrace) {
-              print('Erro ao buscar horário do estabelecimento: $e');
-      print('Stack trace: $stackTrace');
-
       // Criar um modelo padrão com todos os dias abertos para facilitar os testes
       return _createDefaultSchedule();
     }

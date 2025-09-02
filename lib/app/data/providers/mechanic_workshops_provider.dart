@@ -42,17 +42,10 @@ class MechanicWorkshopsProvider {
         if (workshopName != null && workshopName.isNotEmpty) 'workshopName': workshopName,
       };
 
-      print('🔍 MechanicWorkshopsProvider: Fazendo requisição para workshops');
-      print('🔍 URL: ${BaseUrls.workshops}');
-      print('🔍 Parâmetros: $queryParams');
-
       final response = await _restClientDio.get(
         BaseUrls.workshops,
         queryParameters: queryParams,
       );
-
-      print('✅ MechanicWorkshopsProvider: Resposta recebida com sucesso');
-      print('✅ Status: ${response.statusCode}');
 
       // Tratar a resposta de forma robusta
       final responseData = response.data;
@@ -65,7 +58,6 @@ class MechanicWorkshopsProvider {
         // API retorna diretamente o array (fallback)
         workshopsList = responseData;
       } else {
-        print('❌ Formato de resposta inesperado: ${responseData.runtimeType}');
         return [];
       }
 
@@ -78,14 +70,10 @@ class MechanicWorkshopsProvider {
     } on DioException catch (e) {
       // Tratamento específico para erro 500 na API Workshop
       if (e.response?.statusCode == 500) {
-        print('❌ Erro 500 na API Workshop (MechanicWorkshopsProvider): ${e.response?.data}');
-        print('❌ Detalhes do erro: ${e.message}');
         return [];
       }
-      print('❌ Erro DioException na API Workshop: ${e.message}');
       rethrow;
     } catch (e) {
-      print('❌ Erro inesperado na API Workshop (MechanicWorkshopsProvider): $e');
       return [];
     }
   }
