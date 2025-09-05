@@ -19,7 +19,40 @@ class AgendaModel {
   });
 
   factory AgendaModel.fromJson(Map<String, dynamic> json) {
-    return _$AgendaModelFromJson(json);
+    // CORREÇÃO: Tratamento seguro para valores null vindos da API
+    // A API está retornando {monday: null, tuesday: null, ...} então criamos defaults
+    final defaultDay = WeekDayModel(
+      open: true,
+      startTime: '08:00',
+      closingTime: '18:00',
+      startOfBreak: '12:00',
+      endOfBreak: '13:00',
+    );
+
+    return AgendaModel(
+      monday: json['monday'] != null 
+          ? WeekDayModel.fromJson(json['monday'] as Map<String, dynamic>)
+          : defaultDay,
+      tuesday: json['tuesday'] != null 
+          ? WeekDayModel.fromJson(json['tuesday'] as Map<String, dynamic>)
+          : defaultDay,
+      wednesday: json['wednesday'] != null 
+          ? WeekDayModel.fromJson(json['wednesday'] as Map<String, dynamic>)
+          : defaultDay,
+      thursday: json['thursday'] != null 
+          ? WeekDayModel.fromJson(json['thursday'] as Map<String, dynamic>)
+          : defaultDay,
+      friday: json['friday'] != null 
+          ? WeekDayModel.fromJson(json['friday'] as Map<String, dynamic>)
+          : defaultDay,
+      saturday: json['saturday'] != null 
+          ? WeekDayModel.fromJson(json['saturday'] as Map<String, dynamic>)
+          : defaultDay.copyWith(open: false), // Sábado fechado por padrão
+      sunday: json['sunday'] != null 
+          ? WeekDayModel.fromJson(json['sunday'] as Map<String, dynamic>)
+          : defaultDay.copyWith(open: false), // Domingo fechado por padrão
+      id: json['id'] as String?,
+    );
   }
 
   final WeekDayModel monday;

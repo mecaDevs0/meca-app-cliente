@@ -382,10 +382,13 @@ class MechanicWorkshopDetailsView
             log('workshopId: ${controller.workshopId}');
             log('workshopDetails: ${controller.workshopDetails}');
             log('selectedService: ${controller.selectedService}');
+            // CORREÇÃO: Adicionando workshopName nos argumentos para corrigir o problema
+            // do nome vazio no agendamento
             Get.toNamed(
               Routes.requestAppointment,
               arguments: {
                 'workshopId': controller.workshopId,
+                'workshopName': controller.workshopDetails?.fullName ?? controller.workshopDetails?.companyName ?? 'Oficina',
                 'workshopDetails': controller.workshopDetails,
                 'selectedService': controller.selectedService,
               },

@@ -41,13 +41,26 @@ class _AppDropDownState
   }
 
   void _updateServiceText() {
-    // Atualiza o texto do campo com os serviços selecionados
+    // CORREÇÃO: Atualiza o texto do campo com os serviços selecionados de forma segura
+    String newText;
     if (controller.selectedServices.isEmpty) {
-      _serviceController.text = '';
+      newText = '';
     } else if (controller.selectedServices.length == 1) {
-      _serviceController.text = controller.selectedServices.first.service?.name ?? 'Serviço selecionado';
+      // MELHORIA: Melhor tratamento para serviços com service null
+      final serviceName = controller.selectedServices.first.service?.name;
+      if (serviceName != null && serviceName.isNotEmpty) {
+        newText = serviceName;
+      } else {
+        // Se o service for null, usar a descrição do WorkshopService
+        newText = controller.selectedServices.first.description ?? 'Serviço selecionado';
+      }
     } else {
-      _serviceController.text = '${controller.selectedServices.length} serviços selecionados';
+      newText = '${controller.selectedServices.length} serviços selecionados';
+    }
+    
+    // Só atualiza se o texto realmente mudou para evitar loops
+    if (_serviceController.text != newText) {
+      _serviceController.text = newText;
     }
   }
 
@@ -145,8 +158,8 @@ class _AppDropDownState
 
   @override
   Widget build(BuildContext context) {
-    // Atualizando o texto sempre que o estado do controller mudar
-    _updateServiceText();
+    // CORREÇÃO: Atualizando o texto após o build para evitar setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateServiceText());
 
     return CompositedTransformTarget(
       link: _layerLink,
@@ -199,7 +212,8 @@ class ItemModal extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                service.service?.name ?? 'Serviço',
+                // MELHORIA: Melhor tratamento para exibir nome do serviço
+                service.service?.name ?? service.description ?? 'Serviço',
                 style: TextStyle(
                   color: AppColors.blackPrimaryColor,
                   fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,

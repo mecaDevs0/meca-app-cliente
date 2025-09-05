@@ -39,7 +39,11 @@ class RequestAppointmentController extends GetxController {
   bool get isLoading => _isLoading.value;
   bool get isLoadingScheduling => _isLoadingScheduling.value;
   List<Vehicle> get vehicles => _vehicles.toList();
-  List<WorkshopService> get services => _services;
+  // CORREÇÃO: Filtrar apenas serviços válidos (que têm service não null) 
+  // para evitar erro "Informe o campo Serviço" da API
+  List<WorkshopService> get services => _services
+      .where((ws) => ws.service != null && ws.service!.name != null && ws.service!.name!.isNotEmpty)
+      .toList();
   DateTime? get pickedDate => _pickedDate.value;
   List<WorkshopService> get selectedServices => _selectedServices.toList();
   bool get hasError => _hasError.value;
@@ -112,10 +116,19 @@ class RequestAppointmentController extends GetxController {
   }
 
   void selectService(WorkshopService service) {
+    // CORREÇÃO: Validar se o serviço é válido antes de selecionar
+    if (service.service == null || service.service!.name == null || service.service!.name!.isEmpty) {
+      log('[AGENDAMENTO] ⚠️ Tentativa de selecionar serviço inválido: ${service.id}');
+      MegaSnackbar.showErroSnackBar('Este serviço não está disponível para agendamento.');
+      return;
+    }
+
     if (_selectedServices.contains(service)) {
       _selectedServices.remove(service);
+      log('[AGENDAMENTO] ✅ Serviço removido da seleção: ${service.service!.name}');
     } else {
       _selectedServices.add(service);
+      log('[AGENDAMENTO] ✅ Serviço adicionado à seleção: ${service.service!.name}');
     }
   }
 
@@ -189,6 +202,54 @@ class RequestAppointmentController extends GetxController {
       log('[DEBUG] Falha ao logar timestamp: $e');
     }
     
+    // CORREÇÃO: Validação completa dos dados antes de enviar para API
+    log('[AGENDAMENTO] === INICIANDO AGENDAMENTO ===');
+    log('[AGENDAMENTO] WorkshopServices selecionados: ${newScheduling.workshopServices?.length ?? 0}');
+    
+    if (newScheduling.workshopServices != null) {
+      for (int i = 0; i < newScheduling.workshopServices!.length; i++) {
+        final ws = newScheduling.workshopServices![i];
+        log('[AGENDAMENTO] Serviço $i: ID=${ws.id}, Service=${ws.service?.name}, Photo=${ws.photo}');
+      }
+    }
+    
+    log('[AGENDAMENTO] Vehicle: ID=${newScheduling.vehicle?.id}, Plate=${newScheduling.vehicle?.plate}');
+    log('[AGENDAMENTO] Workshop: ID=${newScheduling.workshop?.id}, Name=${newScheduling.workshop?.fullName}');
+    log('[AGENDAMENTO] Date: ${newScheduling.date}');
+    log('[AGENDAMENTO] Status: ${newScheduling.status}');
+    log('[AGENDAMENTO] Observations: ${newScheduling.observations}');
+    
+    // Validar dados críticos antes de enviar
+    if (newScheduling.workshop?.fullName == null || newScheduling.workshop!.fullName!.isEmpty) {
+      log('[AGENDAMENTO] ❌ ERRO: Workshop fullName está vazio!');
+      MegaSnackbar.showErroSnackBar('❌ Erro interno!\n\nNome da oficina não foi encontrado. Tente novamente.');
+      isSuccess = false;
+      _isLoadingScheduling.value = false;
+      return isSuccess;
+    }
+
+    if (newScheduling.workshopServices == null || newScheduling.workshopServices!.isEmpty) {
+      log('[AGENDAMENTO] ❌ ERRO: Nenhum serviço selecionado!');
+      MegaSnackbar.showErroSnackBar('❌ Erro interno!\n\nNenhum serviço foi selecionado. Tente novamente.');
+      isSuccess = false;
+      _isLoadingScheduling.value = false;
+      return isSuccess;
+    }
+
+    // Validar se todos os serviços selecionados têm service válido
+    final invalidServices = newScheduling.workshopServices!.where((ws) => 
+        ws.service == null || ws.service!.name == null || ws.service!.name!.isEmpty).toList();
+    
+    if (invalidServices.isNotEmpty) {
+      log('[AGENDAMENTO] ❌ ERRO: Serviços inválidos encontrados: ${invalidServices.length}');
+      MegaSnackbar.showErroSnackBar('❌ Serviços inválidos!\n\nAlguns serviços selecionados não são válidos. Tente novamente.');
+      isSuccess = false;
+      _isLoadingScheduling.value = false;
+      return isSuccess;
+    }
+
+    log('[AGENDAMENTO] Chamando provider para registrar agendamento...');
+
     await MegaRequestUtils.load(
       action: () async {
         await _requestAppointmentProvider.onRegisterScheduling(newScheduling);
@@ -345,6 +406,17 @@ class RequestAppointmentController extends GetxController {
     // Validar se pelo menos um serviço foi selecionado
     if (services.isEmpty) {
       return '❌ Nenhum serviço selecionado!\n\nPor favor, selecione pelo menos um serviço para o agendamento.';
+    }
+
+    // CORREÇÃO: Validar se todos os serviços selecionados são válidos
+    final invalidServices = services.where((ws) => 
+        ws.service == null || 
+        ws.service!.name == null || 
+        ws.service!.name!.isEmpty).toList();
+    
+    if (invalidServices.isNotEmpty) {
+      log('[AGENDAMENTO] ❌ Serviços inválidos detectados: ${invalidServices.length}');
+      return '❌ Serviços inválidos selecionados!\n\nAlguns serviços não estão disponíveis para agendamento. Por favor, remova-os e tente novamente.';
     }
 
     // Validar se a data foi preenchida
