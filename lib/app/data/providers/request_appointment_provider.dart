@@ -26,8 +26,10 @@ class RequestAppointmentProvider {
           final message = errorData['message'] as String?;
           if (message?.contains('Horário inválido') == true) {
             throw MegaResponse(message: '❌ Horário não disponível!\n\nPor favor, selecione um horário futuro que respeite o tempo mínimo de agendamento (geralmente 2 horas de antecedência).', statusCode: 400);
-          } else if (message?.contains('estabelecimento não tem horários') == true) {
-            throw MegaResponse(message: '❌ Estabelecimento indisponível!\n\nEste estabelecimento não possui horários disponíveis para agendamento no momento. Tente outro estabelecimento.', statusCode: 400);
+          } else if (message?.contains('Oficina não está habilitada') == true || 
+                   message?.contains('agenda e serviços estão configurados') == true ||
+                   message?.contains('estabelecimento não tem horários') == true) {
+            throw MegaResponse(message: '❌ Oficina não habilitada!\n\nEsta oficina ainda não está configurada para receber agendamentos online. Entre em contato diretamente com a oficina ou tente novamente mais tarde.', statusCode: 400);
           } else if (message?.contains('data passada') == true) {
             throw MegaResponse(message: '❌ Data inválida!\n\nNão é possível agendar para uma data passada. Selecione uma data futura.', statusCode: 400);
           } else if (message?.contains('mínimo para agendamento') == true) {

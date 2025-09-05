@@ -30,6 +30,10 @@ class MechanicWorkshop {
     this.rating,
     this.distance,
     this.reason,
+    this.workshopAgendaValid,
+    this.workshopServicesValid,
+    this.dataBankValid,
+    this.status,
   });
 
   factory MechanicWorkshop.fromJson(Map<String, dynamic> json) =>
@@ -139,6 +143,20 @@ class MechanicWorkshop {
 
   @JsonKey(name: 'AccountableName')
   String? accountableName;
+
+  // CORREÇÃO CRÍTICA: Propriedades de validação que a API retorna
+  // mas que não estavam sendo capturadas pelo modelo
+  @JsonKey(name: 'workshopAgendaValid')
+  bool? workshopAgendaValid;
+  
+  @JsonKey(name: 'workshopServicesValid') 
+  bool? workshopServicesValid;
+  
+  @JsonKey(name: 'dataBankValid')
+  bool? dataBankValid;
+  
+  @JsonKey(name: 'status')
+  int? status;
 
   Map<String, dynamic> toJson() => _$MechanicWorkshopToJson(this);
 }

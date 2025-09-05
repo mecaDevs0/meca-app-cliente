@@ -378,6 +378,80 @@ class MechanicWorkshopDetailsView
           buttonColor: AppColors.primaryColor, // Cor primária
           textColor: AppColors.whiteColor, // Texto branco
           onButtonPress: () {
+            // VALIDAÇÃO PROATIVA: Verificar se a oficina está habilitada ANTES de navegar
+            final workshop = controller.workshopDetails;
+            if (workshop != null) {
+              log('[WORKSHOP_DETAILS] Verificando habilitação da oficina...');
+              
+              final agendaValid = workshop.workshopAgendaValid ?? false;
+              final servicesValid = workshop.workshopServicesValid ?? false;
+              final bankValid = workshop.dataBankValid ?? false;
+              
+              log('[WORKSHOP_DETAILS] - workshopAgendaValid: $agendaValid');
+              log('[WORKSHOP_DETAILS] - workshopServicesValid: $servicesValid');
+              log('[WORKSHOP_DETAILS] - dataBankValid: $bankValid');
+              
+              if (!agendaValid || !servicesValid) {
+                // Oficina não habilitada - mostrar alerta informativo
+                Get.dialog(
+                  AlertDialog(
+                    title: const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                        SizedBox(width: 8),
+                        Text('Oficina não habilitada', style: TextStyle(fontSize: 18)),
+                      ],
+                    ),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Esta oficina ainda não está configurada para receber agendamentos online.', 
+                                  style: TextStyle(fontSize: 16)),
+                        const SizedBox(height: 16),
+                        const Text('Você pode:', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        if (workshop.phone != null && workshop.phone!.isNotEmpty)
+                          Row(
+                            children: [
+                              const Icon(Icons.phone, color: AppColors.primaryColor, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text('Ligar diretamente: ${workshop.phone}')),
+                            ],
+                          ),
+                        const SizedBox(height: 8),
+                        const Row(
+                          children: [
+                            Icon(Icons.schedule, color: AppColors.primaryColor, size: 20),
+                            SizedBox(width: 8),
+                            Expanded(child: Text('Tentar novamente em alguns dias')),
+                          ],
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      if (workshop.phone != null && workshop.phone!.isNotEmpty)
+                        TextButton.icon(
+                          onPressed: () {
+                            Get.back();
+                            // Aqui poderia abrir um app de telefone
+                          },
+                          icon: const Icon(Icons.phone),
+                          label: const Text('Ligar'),
+                        ),
+                      TextButton(
+                        onPressed: () => Get.back(),
+                        child: const Text('Entendi'),
+                      ),
+                    ],
+                  ),
+                  barrierDismissible: false,
+                );
+                return;
+              }
+            }
+            
+            // Se chegou até aqui, oficina está habilitada - prosseguir com agendamento
             log('Navigating to requestAppointment with:');
             log('workshopId: ${controller.workshopId}');
             log('workshopDetails: ${controller.workshopDetails}');

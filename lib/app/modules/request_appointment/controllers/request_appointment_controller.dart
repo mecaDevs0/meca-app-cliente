@@ -56,6 +56,7 @@ class RequestAppointmentController extends GetxController {
   late String workshopName;
   String? _openingHours;
   dynamic _selectedServiceFromArgs;
+  dynamic workshopDetails; // CORREÇÃO: Adicionando workshopDetails para validações
 
   @override
   Future<void> onInit() async {
@@ -74,6 +75,7 @@ class RequestAppointmentController extends GetxController {
     workshopName = workshop.workshopName ?? '';
     _openingHours = workshop.openingHours;
     _selectedServiceFromArgs = workshop.selectedService;
+    workshopDetails = workshop.workshopDetails; // CORREÇÃO: Capturando workshopDetails dos argumentos
     
     // Log para debug
     log('[AGENDAMENTO] Argumentos recebidos:');
@@ -202,8 +204,38 @@ class RequestAppointmentController extends GetxController {
       log('[DEBUG] Falha ao logar timestamp: $e');
     }
     
-    // CORREÇÃO: Validação completa dos dados antes de enviar para API
+    // CORREÇÃO PROFISSIONAL: Validação completa dos dados antes de enviar para API
     log('[AGENDAMENTO] === INICIANDO AGENDAMENTO ===');
+    
+    // VALIDAÇÃO CRÍTICA: Verificar se a oficina está habilitada para agendamentos
+    // Com base nos dados que recebemos da API Workshop
+    if (workshopDetails != null && workshopDetails is MechanicWorkshop) {
+      final workshop = workshopDetails as MechanicWorkshop;
+      final workshopAgendaValid = workshop.workshopAgendaValid ?? false;
+      final workshopServicesValid = workshop.workshopServicesValid ?? false;
+      final dataBankValid = workshop.dataBankValid ?? false;
+      
+      log('[AGENDAMENTO] 🔍 Verificando habilitação da oficina:');
+      log('[AGENDAMENTO] - workshopAgendaValid: $workshopAgendaValid');
+      log('[AGENDAMENTO] - workshopServicesValid: $workshopServicesValid');
+      log('[AGENDAMENTO] - dataBankValid: $dataBankValid');
+      
+      if (!workshopAgendaValid) {
+        log('[AGENDAMENTO] ❌ OFICINA NÃO HABILITADA: Agenda não configurada');
+        MegaSnackbar.showErroSnackBar('❌ Oficina não habilitada!\n\nEsta oficina ainda não está configurada para receber agendamentos online.\n\nEntre em contato diretamente:\n📞 ${workshop.phone ?? "Telefone não disponível"}');
+        isSuccess = false;
+        _isLoadingScheduling.value = false;
+        return isSuccess;
+      }
+      
+      if (!workshopServicesValid) {
+        log('[AGENDAMENTO] ❌ OFICINA NÃO HABILITADA: Serviços não configurados');
+        MegaSnackbar.showErroSnackBar('❌ Serviços não configurados!\n\nEsta oficina ainda não configurou seus serviços para agendamento online.\n\nEntre em contato diretamente:\n📞 ${workshop.phone ?? "Telefone não disponível"}');
+        isSuccess = false;
+        _isLoadingScheduling.value = false;
+        return isSuccess;
+      }
+    }
     log('[AGENDAMENTO] WorkshopServices selecionados: ${newScheduling.workshopServices?.length ?? 0}');
     
     if (newScheduling.workshopServices != null) {
