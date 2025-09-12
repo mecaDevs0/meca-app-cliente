@@ -209,6 +209,14 @@ class MechanicWorkshop {
     updated = 0;
   }
 
-  factory MechanicWorkshop.fromJson(Map<String, dynamic> json) => _$MechanicWorkshopFromJson(json);
+  factory MechanicWorkshop.fromJson(Map<String, dynamic> json) {
+    print('🔧 [MechanicWorkshop] fromJson - Input JSON: $json');
+    final workshop = _$MechanicWorkshopFromJson(json);
+    print('🔧 [MechanicWorkshop] fromJson - Parsed workshop ID: ${workshop.id}');
+    print('🔧 [MechanicWorkshop] fromJson - Parsed companyName: "${workshop.companyName}"');
+    print('🔧 [MechanicWorkshop] fromJson - Parsed fullName: "${workshop.fullName}"');
+    print('🔧 [MechanicWorkshop] fromJson - Parsed photo: "${workshop.photo}"');
+    return workshop;
+  }
   Map<String, dynamic> toJson() => _$MechanicWorkshopToJson(this);
 }

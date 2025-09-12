@@ -28,11 +28,11 @@ class HomeProvider {
           ? (distance > 50 ? 50 : distance)
           : 50; // padrão: 50km se não informado
 
-      final queryParameters = <String, dynamic>{
-        'page': page,
-        'limit': limit,
-        'dataBlocked': 0,
-        if (search != null) 'search': search,
+    final queryParameters = <String, dynamic>{
+      'page': page,
+      'limit': limit,
+      'dataBlocked': 0,
+      if (search != null) 'search': search,
         if (serviceType != null && serviceType.isNotEmpty)
           'serviceTypes': serviceType,
         if (limitedDistance != null) 'distance': limitedDistance,
@@ -51,23 +51,43 @@ class HomeProvider {
       final responseData = response.data;
       List workshopsList;
       
+      print('🔧 [HomeProvider] Tipo de resposta: ${responseData.runtimeType}');
+      print('🔧 [HomeProvider] Dados da resposta: $responseData');
+      
       if (responseData is Map<String, dynamic>) {
         // API retorna objeto com propriedade 'data'
         workshopsList = responseData['data'] as List;
+        print('🔧 [HomeProvider] ✅ Extraído array de workshops do objeto: ${workshopsList.length} itens');
       } else if (responseData is List) {
         // API retorna diretamente o array (fallback)
         workshopsList = responseData;
+        print('🔧 [HomeProvider] ✅ Array direto de workshops: ${workshopsList.length} itens');
       } else {
+        print('🔧 [HomeProvider] ❌ Formato de resposta inesperado: ${responseData.runtimeType}');
         return [];
       }
 
       final workshops = workshopsList
           .map<MechanicWorkshop>(
-            (workshop) =>
-                MechanicWorkshop.fromJson(workshop as Map<String, dynamic>),
+            (workshop) {
+              print('🔧 [HomeProvider] Processando workshop: ${workshop['id']}');
+              print('🔧 [HomeProvider] Workshop companyName: "${workshop['companyName']}"');
+              print('🔧 [HomeProvider] Workshop fullName: "${workshop['fullName']}"');
+              print('🔧 [HomeProvider] Workshop photo: "${workshop['photo']}"');
+              
+              final parsedWorkshop = MechanicWorkshop.fromJson(workshop as Map<String, dynamic>);
+              
+              print('🔧 [HomeProvider] Workshop parseado - ID: ${parsedWorkshop.id}');
+              print('🔧 [HomeProvider] Workshop parseado - CompanyName: "${parsedWorkshop.companyName}"');
+              print('🔧 [HomeProvider] Workshop parseado - FullName: "${parsedWorkshop.fullName}"');
+              print('🔧 [HomeProvider] Workshop parseado - Photo: "${parsedWorkshop.photo}"');
+              
+              return parsedWorkshop;
+            },
           )
           .toList();
 
+      print('🔧 [HomeProvider] ✅ Total de workshops processados: ${workshops.length}');
       return workshops;
     } on DioException catch (e) {
       // Tratamento específico para erro 500 na API Workshop
@@ -91,11 +111,11 @@ class HomeProvider {
     int? activity,
   }) async {
     try {
-      final queryParameters = <String, dynamic>{
-        'page': page,
-        'limit': limit,
-        'dataBlocked': 0,
-        if (search != null) 'name': search,
+    final queryParameters = <String, dynamic>{
+      'page': page,
+      'limit': limit,
+      'dataBlocked': 0,
+      if (search != null) 'name': search,
         if (latUser != null) 'latUser': latUser,
         if (longUser != null) 'longUser': longUser,
         if (workshopId != null) 'workshopId': workshopId,

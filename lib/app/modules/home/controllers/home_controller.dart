@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart'; // Import adicionado para debugPrint
 import 'package:flutter/scheduler.dart';
 import 'package:mega_commons/shared/models/abbreviation.dart';
 import 'package:mega_commons/shared/models/auth_token.dart';
-import 'package:mega_commons/shared/utils/mega_one_signal_config.dart';
 import 'package:mega_commons/shared/utils/mega_request_utils.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 import 'package:mega_payment/mega_payment.dart';
@@ -197,6 +196,9 @@ class HomeController extends GetxController {
               ? services.map((service) => service.id!).toList()
               : null;
               
+          print('🔧 [HomeController] Fazendo requisição para workshops...');
+          print('🔧 [HomeController] Parâmetros: latUser=${userPosition?.latitude}, longUser=${userPosition?.longitude}, page=$page, limit=$_workshopsLimit');
+          
           final response = await _homeProvider.onRequestWorkshops(
             latUser: userPosition?.latitude,
             longUser: userPosition?.longitude,
@@ -207,6 +209,12 @@ class HomeController extends GetxController {
             serviceType: serviceTypes,
             search: _filterController.searchQuery,
           );
+          
+          print('🔧 [HomeController] Resposta recebida: ${response.length} workshops');
+          for (int i = 0; i < response.length; i++) {
+            final workshop = response[i];
+            print('🔧 [HomeController] Workshop ${i + 1}: ID=${workshop.id}, CompanyName="${workshop.companyName}", FullName="${workshop.fullName}", Photo="${workshop.photo}"');
+          }
 
           // Se a resposta está vazia, mas a posição do usuário é nula, isso pode indicar
           // que o backend não conseguiu calcular as distâncias

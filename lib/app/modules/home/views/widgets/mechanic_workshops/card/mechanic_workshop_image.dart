@@ -26,9 +26,13 @@ class MechanicWorkshopImage extends StatelessWidget {
     
     print('🔧 [MechanicWorkshopImage] Processed URL: "$imageUrl"');
 
-    return imageUrl != null
-        ? _buildNetworkImage(imageUrl)
-        : _buildPlaceholderImage();
+    // Temporariamente aceitar todas as URLs para debug
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return _buildNetworkImage(imageUrl);
+    } else {
+      print('🔧 [MechanicWorkshopImage] ❌ URL vazia, usando placeholder');
+      return _buildPlaceholderImage();
+    }
   }
   
   Widget _buildNetworkImage(String imageUrl) {

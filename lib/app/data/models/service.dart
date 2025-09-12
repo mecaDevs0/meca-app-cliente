@@ -43,6 +43,13 @@ class Service {
     this.created,
   });
 
-  factory Service.fromJson(Map<String, dynamic> json) => _$ServiceFromJson(json);
+  factory Service.fromJson(Map<String, dynamic> json) {
+    print('🔧 [Service] fromJson - Input JSON: $json');
+    final service = _$ServiceFromJson(json);
+    print('🔧 [Service] fromJson - Parsed service ID: ${service.id}');
+    print('🔧 [Service] fromJson - Parsed name: "${service.name}"');
+    print('🔧 [Service] fromJson - Parsed photo: "${service.photo}"');
+    return service;
+  }
   Map<String, dynamic> toJson() => _$ServiceToJson(this);
 }

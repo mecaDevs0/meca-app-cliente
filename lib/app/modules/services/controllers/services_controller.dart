@@ -69,6 +69,9 @@ class ServicesController extends GetxController {
         action: () async {
           try {
             log('Buscando serviços - página: $page, estabelecimento ID: ${_selectedWorkshopId.value}');
+            print('🔧 [ServicesController] Fazendo requisição para serviços...');
+            print('🔧 [ServicesController] Parâmetros: page=$page, limit=$_limit, search="${_filterController.searchQuery}"');
+            
             final response = await _servicesProvider.onRequestServices(
               page: page,
               limit: _limit,
@@ -87,6 +90,12 @@ class ServicesController extends GetxController {
               // Certifique-se de enviar o workshopId apenas se ele não estiver vazio
               workshopId: _selectedWorkshopId.value.isNotEmpty ? _selectedWorkshopId.value : null,
             );
+            
+            print('🔧 [ServicesController] Resposta recebida: ${response.length} serviços');
+            for (int i = 0; i < response.length; i++) {
+              final service = response[i];
+              print('🔧 [ServicesController] Serviço ${i + 1}: ID=${service.id}, Name="${service.name}", Photo="${service.photo}"');
+            }
 
             // Verifica se a resposta está vazia ou tem menos itens que o limite
             final isLastPage = response.isEmpty || response.length < _limit;

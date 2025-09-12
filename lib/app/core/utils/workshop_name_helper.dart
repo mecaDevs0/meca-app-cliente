@@ -14,11 +14,10 @@ class WorkshopNameHelper {
     print('🔧 [WorkshopNameHelper] FullName: "${workshop.fullName}"');
     print('🔧 [WorkshopNameHelper] AccountableName: "${workshop.accountableName}"');
     
-    // Prioridade 1: companyName (exceto "Oficina Padrão" que é genérico)
+    // Prioridade 1: companyName (incluindo "Oficina Padrão" que é válido)
     if (workshop.companyName?.isNotEmpty == true && 
         workshop.companyName != 'null' && 
-        workshop.companyName != '' &&
-        workshop.companyName != 'Oficina Padrão') {
+        workshop.companyName != '') {
       final name = workshop.companyName!.trim();
       print('🔧 [WorkshopNameHelper] ✅ Usando CompanyName: "$name"');
       return name;

@@ -54,9 +54,8 @@ class AppInterceptor extends Interceptor {
       console.log('❌ Motivo: method=${options.method}, profile.id=${profile.id}, shouldExclude=$shouldExcludeProfileId, hasExisting=$hasExistingProfileId', name: 'AppInterceptor');
     }
     
-    // Adicionar dataBlocked apenas em requisições GET que não são de autenticação
-    if (options.method == 'GET' && 
-        !options.path.contains('/Token') && 
+    if (options.method == 'GET' &&
+        !options.path.contains('/Token') &&
         !options.path.contains('/Register') &&
         !options.path.contains('/ForgotPassword')) {
       options.queryParameters['dataBlocked'] = 0;

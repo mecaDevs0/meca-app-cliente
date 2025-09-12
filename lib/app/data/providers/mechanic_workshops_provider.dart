@@ -2,7 +2,6 @@ import 'package:mega_commons/mega_commons.dart';
 import 'package:mega_commons_dependencies/mega_commons_dependencies.dart';
 
 import '../../core/app_urls.dart';
-import '../models/filter_query_workshop.dart';
 import '../models/mechanic_workshop.dart';
 
 class MechanicWorkshopsProvider {
@@ -51,13 +50,19 @@ class MechanicWorkshopsProvider {
       final responseData = response.data;
       List workshopsList;
       
+      print('🔧 [MechanicWorkshopsProvider] Tipo de resposta: ${responseData.runtimeType}');
+      print('🔧 [MechanicWorkshopsProvider] Dados da resposta: $responseData');
+      
       if (responseData is Map<String, dynamic>) {
         // API retorna objeto com propriedade 'data'
         workshopsList = responseData['data'] as List;
+        print('🔧 [MechanicWorkshopsProvider] ✅ Extraído array de workshops do objeto: ${workshopsList.length} itens');
       } else if (responseData is List) {
         // API retorna diretamente o array (fallback)
         workshopsList = responseData;
+        print('🔧 [MechanicWorkshopsProvider] ✅ Array direto de workshops: ${workshopsList.length} itens');
       } else {
+        print('🔧 [MechanicWorkshopsProvider] ❌ Formato de resposta inesperado: ${responseData.runtimeType}');
         return [];
       }
 

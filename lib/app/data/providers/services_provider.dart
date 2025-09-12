@@ -25,11 +25,11 @@ class ServicesProvider {
     String? workshopName,
   }) async {
     try {
-      final queryParams = FilterQueryService(
-        page: page,
-        limit: limit,
-        dataBlocked: 0,
-        name: search,
+    final queryParams = FilterQueryService(
+      page: page,
+      limit: limit,
+      dataBlocked: 0,
+      name: search,
         serviceTypes: serviceType,
         latUser: latUser,
         longUser: longUser,
@@ -57,14 +57,19 @@ class ServicesProvider {
       final responseData = response.data;
       List servicesList;
       
+      print('🔧 [ServicesProvider] Tipo de resposta: ${responseData.runtimeType}');
+      print('🔧 [ServicesProvider] Dados da resposta: $responseData');
+      
       if (responseData is Map<String, dynamic>) {
         // API retorna objeto com propriedade 'data'
         servicesList = responseData['data'] as List;
+        print('🔧 [ServicesProvider] ✅ Extraído array de serviços do objeto: ${servicesList.length} itens');
       } else if (responseData is List) {
         // API retorna diretamente o array (fallback)
         servicesList = responseData;
+        print('🔧 [ServicesProvider] ✅ Array direto de serviços: ${servicesList.length} itens');
       } else {
-        print('❌ Formato de resposta inesperado: ${responseData.runtimeType}');
+        print('🔧 [ServicesProvider] ❌ Formato de resposta inesperado: ${responseData.runtimeType}');
         return [];
       }
 

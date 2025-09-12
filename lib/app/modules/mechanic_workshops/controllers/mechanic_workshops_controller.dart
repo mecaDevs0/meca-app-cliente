@@ -63,6 +63,9 @@ class MechanicWorkshopsController extends GetxController {
 
     await MegaRequestUtils.load(
       action: () async {
+        print('🔧 [MechanicWorkshopsController] Fazendo requisição para workshops...');
+        print('🔧 [MechanicWorkshopsController] Parâmetros: page=$page, limit=$_limit, latUser=${userPosition?.latitude}, longUser=${userPosition?.longitude}');
+        
         final response = await _mechanicWorkshopsProvider.onRequestWorkshops(
           page: page,
           limit: _limit,
@@ -80,6 +83,12 @@ class MechanicWorkshopsController extends GetxController {
           latUser: userPosition?.latitude,
           longUser: userPosition?.longitude,
         );
+        
+        print('🔧 [MechanicWorkshopsController] Resposta recebida: ${response.length} workshops');
+        for (int i = 0; i < response.length; i++) {
+          final workshop = response[i];
+          print('🔧 [MechanicWorkshopsController] Workshop ${i + 1}: ID=${workshop.id}, CompanyName="${workshop.companyName}", FullName="${workshop.fullName}", Photo="${workshop.photo}"');
+        }
 
         // Verificar se todos os estabelecimentos estão com distância zero
         if (response.isNotEmpty && response.every((workshop) => (workshop.distance ?? 0) == 0)) {
