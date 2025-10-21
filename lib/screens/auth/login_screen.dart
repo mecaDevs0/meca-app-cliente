@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../services/api_service.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -56,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     setState(() => _isLoading = false);
 
     if (result['success']) {
-      Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushReplacementNamed(context, '/core');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -76,12 +78,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              const Color(0xFF252940),
-              const Color(0xFF1B1D2E),
+              const Color(0xFF00C977),
+              const Color(0xFF00B369),
+              const Color(0xFF00A85C),
             ],
           ),
         ),
         child: SafeArea(
+          bottom: false,
           child: Column(
             children: [
               // Logo Section
@@ -96,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         borderRadius: BorderRadius.circular(25),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF00C977).withOpacity(0.3),
+                            color: Colors.white.withOpacity(0.3),
                             blurRadius: 20,
                             spreadRadius: 3,
                           ),
@@ -105,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(25),
                         child: Image.asset(
-                          'assets/logos/icone_verde.png',
+                          'assets/logos/icone_branco.png',
                           fit: BoxFit.contain,
                         ),
                       ),
@@ -146,20 +150,46 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       children: [
                         // Tab Bar
                         Container(
+                          height: 60,
+                          padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(15),
+                            color: Colors.grey[50],
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(
+                              color: Colors.grey[200]!,
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
                           child: TabBar(
                             controller: _tabController,
                             indicator: BoxDecoration(
                               color: const Color(0xFF00C977),
-                              borderRadius: BorderRadius.circular(15),
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF00C977).withOpacity(0.4),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
+                            indicatorSize: TabBarIndicatorSize.tab,
+                            dividerColor: Colors.transparent,
                             labelColor: Colors.white,
                             unselectedLabelColor: Colors.grey[600],
                             labelStyle: const TextStyle(
                               fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                            unselectedLabelStyle: const TextStyle(
+                              fontWeight: FontWeight.w500,
                               fontSize: 16,
                             ),
                             tabs: const [
@@ -240,7 +270,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   alignment: Alignment.centerRight,
                                   child: TextButton(
                                     onPressed: () {
-                                      // Forgot password
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const ForgotPasswordScreen(),
+                                        ),
+                                      );
                                     },
                                     child: const Text(
                                       'Esqueceu a senha?',
@@ -262,7 +297,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 child: ElevatedButton(
                                   onPressed: _isLoading ? null : _handleSubmit,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF00C977),
+                                    backgroundColor: _isLogin ? const Color(0xFF00C977) : const Color(0xFF00C977),
+                                    foregroundColor: Colors.white,
+                                    disabledBackgroundColor: Colors.grey[300],
+                                    disabledForegroundColor: Colors.grey[600],
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(15),
                                     ),
@@ -303,9 +341,39 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    _buildSocialButton(Icons.g_mobiledata, 'Google'),
+                                    _buildSocialButton(
+                                      Container(
+                                        width: 20,
+                                        height: 20,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(4),
+                                          color: Colors.white,
+                                        ),
+                                        child: const Icon(
+                                          Icons.g_mobiledata,
+                                          color: Color(0xFF4285F4),
+                                          size: 18,
+                                        ),
+                                      ),
+                                      'Google',
+                                    ),
                                     const SizedBox(width: 15),
-                                    _buildSocialButton(Icons.apple, 'Apple'),
+                                    _buildSocialButton(
+                                      Container(
+                                        width: 20,
+                                        height: 20,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(4),
+                                          color: Colors.black,
+                                        ),
+                                        child: const Icon(
+                                          Icons.apple,
+                                          color: Colors.white,
+                                          size: 18,
+                                        ),
+                                      ),
+                                      'Apple',
+                                    ),
                                   ],
                                 ),
                               ],
@@ -338,8 +406,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       obscureText: obscureText,
       keyboardType: keyboardType,
       validator: validator,
+      style: const TextStyle(
+        color: Colors.black87,
+        fontSize: 16,
+      ),
       decoration: InputDecoration(
         labelText: label,
+        labelStyle: const TextStyle(
+          color: Colors.grey,
+          fontSize: 14,
+        ),
         prefixIcon: Icon(icon, color: const Color(0xFF00C977)),
         suffixIcon: suffixIcon,
         filled: true,
@@ -360,11 +436,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           borderRadius: BorderRadius.circular(15),
           borderSide: const BorderSide(color: Colors.red),
         ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       ),
     );
   }
 
-  Widget _buildSocialButton(IconData icon, String label) {
+  Widget _buildSocialButton(Widget icon, String label) {
     return InkWell(
       onTap: () {
         // Social login
@@ -378,7 +455,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         ),
         child: Row(
           children: [
-            Icon(icon, size: 24),
+            icon,
             const SizedBox(width: 10),
             Text(
               label,
@@ -403,148 +480,3 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     super.dispose();
   }
 }
-      backgroundColor: AppColors.white,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 40),
-                // Logo MECA
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(25),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.3),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'MECA',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 30),
-                const Text(
-                  'Bem-vindo!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.secondary,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Entre para agendar seu serviço',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 40),
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: const Icon(Icons.email, color: AppColors.primary),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Digite seu email';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'Senha',
-                    prefixIcon: const Icon(Icons.lock, color: AppColors.primary),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Digite sua senha';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 30),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _login,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'Entrar',
-                          style: TextStyle(fontSize: 18, color: Colors.white),
-                        ),
-                ),
-                const SizedBox(height: 20),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                    );
-                  },
-                  child: const Text(
-                    'Não tem conta? Cadastre-se',
-                    style: TextStyle(color: AppColors.secondary),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-}
-

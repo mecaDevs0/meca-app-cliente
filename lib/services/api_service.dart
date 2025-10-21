@@ -1,16 +1,18 @@
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/app_config.dart';
+
 class ApiService {
-  static const String baseUrl = 'http://localhost:9000';
+  // API configurada no AppConfig (EC2 AWS)
+  static String get baseUrl => AppConfig.apiBaseUrl;
   final Dio _dio = Dio();
   String? _token;
 
   ApiService() {
     _dio.options.baseUrl = baseUrl;
-    _dio.options.connectTimeout = const Duration(seconds: 30);
-    _dio.options.receiveTimeout = const Duration(seconds: 30);
+    _dio.options.connectTimeout = const Duration(seconds: 60);
+    _dio.options.receiveTimeout = const Duration(seconds: 60);
     
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
@@ -43,6 +45,31 @@ class ApiService {
     await prefs.remove('auth_token');
   }
 
+  // Helper method to extract error messages
+  String _getErrorMessage(dynamic error) {
+    if (error is DioException) {
+      if (error.response?.data != null) {
+        final data = error.response!.data;
+        if (data is Map<String, dynamic>) {
+          return data['message'] ?? data['error'] ?? 'Erro na requisição';
+        }
+      }
+      switch (error.type) {
+        case DioExceptionType.connectionTimeout:
+          return 'Timeout de conexão. Verifique sua internet.';
+        case DioExceptionType.receiveTimeout:
+          return 'Timeout de resposta. Tente novamente.';
+        case DioExceptionType.connectionError:
+          return 'Erro de conexão. Verifique sua internet.';
+        case DioExceptionType.badResponse:
+          return 'Erro no servidor. Tente novamente mais tarde.';
+        default:
+          return 'Erro de conexão. Tente novamente.';
+      }
+    }
+    return 'Erro inesperado. Tente novamente.';
+  }
+
   // Auth
   Future<Map<String, dynamic>> register({
     required String name,
@@ -51,20 +78,26 @@ class ApiService {
     required String phone,
   }) async {
     try {
+      print('🔐 Tentando registrar: $email');
+      
       final response = await _dio.post('/auth/customer/register', data: {
-        'name': name,
+        'first_name': name.split(' ').first,
+        'last_name': name.split(' ').length > 1 ? name.split(' ').sublist(1).join(' ') : '',
         'email': email,
         'password': password,
         'phone': phone,
       });
       
-      if (response.data['token'] != null) {
-        await saveToken(response.data['token']);
+      print('✅ Registro bem-sucedido: ${response.statusCode}');
+      
+      if (response.data['customer'] != null && response.data['customer']['token'] != null) {
+        await saveToken(response.data['customer']['token']);
       }
       
       return {'success': true, 'data': response.data};
     } catch (e) {
-      return {'success': false, 'error': e.toString()};
+      print('❌ Erro no registro: ${e.toString()}');
+      return {'success': false, 'error': _getErrorMessage(e)};
     }
   }
 
@@ -73,18 +106,51 @@ class ApiService {
     required String password,
   }) async {
     try {
-      final response = await _dio.post('/auth/customer/login', data: {
+      print('🔐 Tentando login: $email');
+      
+      final response = await _dio.post('/auth/customer/token', data: {
         'email': email,
         'password': password,
       });
       
-      if (response.data['token'] != null) {
-        await saveToken(response.data['token']);
+      print('✅ Login bem-sucedido: ${response.statusCode}');
+      
+      if (response.data['access_token'] != null) {
+        await saveToken(response.data['access_token']);
       }
       
       return {'success': true, 'data': response.data};
     } catch (e) {
-      return {'success': false, 'error': e.toString()};
+      print('❌ Erro no login: ${e.toString()}');
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    try {
+      final response = await _dio.post('/auth/customer/forgot-password', data: {
+        'email': email,
+      });
+      
+      return {'success': true, 'data': response.data};
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  Future<Map<String, dynamic>> resetPassword({
+    required String token,
+    required String password,
+  }) async {
+    try {
+      final response = await _dio.post('/auth/customer/reset-password', data: {
+        'token': token,
+        'password': password,
+      });
+      
+      return {'success': true, 'data': response.data};
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
     }
   }
 
@@ -93,7 +159,17 @@ class ApiService {
       final response = await _dio.get('/store/customers/me');
       return {'success': true, 'data': response.data};
     } catch (e) {
-      return {'success': false, 'error': e.toString()};
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  // Services
+  Future<Map<String, dynamic>> getServices() async {
+    try {
+      final response = await _dio.get('/store/products');
+      return {'success': true, 'data': response.data['products'] ?? []};
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
     }
   }
 
@@ -122,6 +198,15 @@ class ApiService {
       return {'success': true, 'data': response.data};
     } catch (e) {
       return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> getWorkshopsByService(String serviceId) async {
+    try {
+      final response = await _dio.get('/store/workshops/by-service/$serviceId');
+      return {'success': true, 'data': response.data['workshops'] ?? []};
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
     }
   }
 
@@ -265,7 +350,7 @@ class ApiService {
       return {'success': false, 'error': e.toString()};
     }
   }
-}
+
   // Device Token (FCM)
   Future<Response> registerDeviceToken(String token) async {
     return await _dio.post('/store/device-tokens', data: {
@@ -273,4 +358,3 @@ class ApiService {
     });
   }
 }
-

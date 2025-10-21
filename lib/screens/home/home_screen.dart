@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:async';
+
 import '../../services/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -11,21 +12,39 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  GoogleMapController? _mapController;
-  Position? _currentPosition;
   final ApiService _apiService = ApiService();
+  Position? _currentPosition;
+  List<Map<String, dynamic>> _services = [];
   List<Map<String, dynamic>> _workshops = [];
-  Set<Marker> _markers = {};
+  List<Map<String, dynamic>> _filteredWorkshops = [];
   bool _loading = true;
+  String _sortBy = 'distancia';
   final TextEditingController _searchController = TextEditingController();
+  final PageController _servicesPageController = PageController(viewportFraction: 0.4);
+  Timer? _autoScrollTimer;
+  int _currentServicePage = 0;
 
   @override
   void initState() {
     super.initState();
-    _initializeLocation();
+    _initializeData();
+    _startAutoScroll();
   }
 
-  Future<void> _initializeLocation() async {
+  void _startAutoScroll() {
+    _autoScrollTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (_services.isNotEmpty && _servicesPageController.hasClients) {
+        _currentServicePage = (_currentServicePage + 1) % _services.take(6).length;
+        _servicesPageController.animateToPage(
+          _currentServicePage,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _initializeData() async {
     try {
       final permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -37,10 +56,22 @@ class _HomeScreenState extends State<HomeScreen> {
         _currentPosition = position;
       });
 
-      await _loadWorkshops();
+      await Future.wait([
+        _loadServices(),
+        _loadWorkshops(),
+      ]);
     } catch (e) {
-      print('Error getting location: $e');
+      print('Error initializing: $e');
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadServices() async {
+    final result = await _apiService.getServices();
+    if (result['success']) {
+      setState(() {
+        _services = (result['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      });
     }
   }
 
@@ -50,30 +81,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final result = await _apiService.getWorkshops(
       latitude: _currentPosition?.latitude,
       longitude: _currentPosition?.longitude,
-      radius: 10.0,
+      radius: 50.0,
     );
 
     if (result['success']) {
       final workshops = (result['data']['workshops'] as List?) ?? [];
-      
-      final markers = workshops.map((workshop) {
-        return Marker(
-          markerId: MarkerId(workshop['id'].toString()),
-          position: LatLng(
-            workshop['latitude'] ?? -23.550520,
-            workshop['longitude'] ?? -46.633308,
-          ),
-          infoWindow: InfoWindow(
-            title: workshop['name'],
-            snippet: workshop['address'],
-          ),
-          onTap: () => _showWorkshopDetails(workshop),
-        );
-      }).toSet();
-
       setState(() {
         _workshops = workshops.cast<Map<String, dynamic>>();
-        _markers = markers;
+        _filteredWorkshops = List.from(_workshops);
+        _applySorting();
         _loading = false;
       });
     } else {
@@ -81,392 +97,266 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _showWorkshopDetails(Map<String, dynamic> workshop) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-          ),
-          child: ListView(
-            controller: scrollController,
-            padding: const EdgeInsets.all(20),
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00C977),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: const Icon(Icons.build, color: Colors.white, size: 30),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          workshop['name'] ?? '',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF252940),
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            const Icon(Icons.star, color: Colors.amber, size: 18),
-                            const SizedBox(width: 5),
-                            Text(
-                              '${workshop['rating'] ?? '4.8'} (${workshop['reviews_count'] ?? '120'} avaliações)',
-                              style: TextStyle(color: Colors.grey[600]),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              _buildInfoRow(Icons.location_on, workshop['address'] ?? 'Endereço não disponível'),
-              const SizedBox(height: 10),
-              _buildInfoRow(Icons.phone, workshop['phone'] ?? '(11) 0000-0000'),
-              const SizedBox(height: 10),
-              _buildInfoRow(Icons.access_time, 'Seg-Sex: 8h - 18h | Sáb: 8h - 12h'),
-              const SizedBox(height: 25),
-              const Text(
-                'Serviços Disponíveis',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF252940),
-                ),
-              ),
-              const SizedBox(height: 15),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _buildServiceChip('Troca de Óleo'),
-                  _buildServiceChip('Freios'),
-                  _buildServiceChip('Suspensão'),
-                  _buildServiceChip('Alinhamento'),
-                ],
-              ),
-              const SizedBox(height: 25),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pushNamed(
-                    context,
-                    '/workshop-detail',
-                    arguments: workshop,
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C977),
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  elevation: 5,
-                ),
-                child: const Text(
-                  'Agendar Serviço',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void _applySorting() {
+    switch (_sortBy) {
+      case 'distancia':
+        _filteredWorkshops.sort((a, b) {
+          final distA = a['distance'] ?? 999999;
+          final distB = b['distance'] ?? 999999;
+          return distA.compareTo(distB);
+        });
+        break;
+      case 'nota':
+        _filteredWorkshops.sort((a, b) {
+          final ratingA = a['rating'] ?? 0;
+          final ratingB = b['rating'] ?? 0;
+          return ratingB.compareTo(ratingA);
+        });
+        break;
+      case 'nome':
+        _filteredWorkshops.sort((a, b) {
+          final nameA = a['name'] ?? '';
+          final nameB = b['name'] ?? '';
+          return nameA.compareTo(nameB);
+        });
+        break;
+      case 'preco':
+        _filteredWorkshops.sort((a, b) {
+          final priceA = a['average_price'] ?? 0;
+          final priceB = b['average_price'] ?? 0;
+          return priceA.compareTo(priceB);
+        });
+        break;
+    }
   }
 
-  Widget _buildInfoRow(IconData icon, String text) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF00C977).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: const Color(0xFF00C977), size: 20),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(color: Colors.grey[700], fontSize: 14),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildServiceChip(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF00C977).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF00C977).withOpacity(0.3)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Color(0xFF00C977),
-          fontWeight: FontWeight.w600,
-          fontSize: 13,
-        ),
-      ),
-    );
+  void _filterWorkshops(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredWorkshops = List.from(_workshops);
+      } else {
+        _filteredWorkshops = _workshops.where((workshop) {
+          final name = workshop['name']?.toString().toLowerCase() ?? '';
+          final address = workshop['address']?.toString().toLowerCase() ?? '';
+          return name.contains(query.toLowerCase()) || address.contains(query.toLowerCase());
+        }).toList();
+      }
+      _applySorting();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          // Map
-          if (_currentPosition != null)
-            GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: LatLng(
-                  _currentPosition!.latitude,
-                  _currentPosition!.longitude,
-                ),
-                zoom: 14,
-              ),
-              markers: _markers,
-              myLocationEnabled: true,
-              myLocationButtonEnabled: false,
-              zoomControlsEnabled: false,
-              mapToolbarEnabled: false,
-              onMapCreated: (controller) => _mapController = controller,
-            )
-          else
-            const Center(child: CircularProgressIndicator()),
-
-          // Search Bar
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
-            left: 15,
-            right: 15,
-            child: Container(
+      backgroundColor: Colors.grey[50],
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Container(
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF00C977),
+                    Color(0xFF00B369),
+                  ],
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(30),
+                ),
+              ),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Olá! 👋',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white.withOpacity(0.9),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          const Text(
+                            'Encontre sua oficina',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        padding: const EdgeInsets.all(12),
+                        child: const Icon(Icons.notifications, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  // Search Bar
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: _filterWorkshops,
+                      decoration: InputDecoration(
+                        hintText: 'Buscar oficinas...',
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF00C977)),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                      ),
+                    ),
                   ),
                 ],
               ),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Buscar oficinas...',
-                  prefixIcon: const Icon(Icons.search, color: Color(0xFF00C977)),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.filter_list, color: Color(0xFF252940)),
-                    onPressed: () {
-                      // Show filters
-                    },
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                ),
-                onSubmitted: (value) {
-                  // Search logic
-                },
-              ),
             ),
-          ),
 
-          // My Location Button
-          Positioned(
-            bottom: 100,
-            right: 15,
-            child: FloatingActionButton(
-              onPressed: () {
-                if (_currentPosition != null) {
-                  _mapController?.animateCamera(
-                    CameraUpdate.newLatLng(
-                      LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+            // Services Carousel
+            if (_services.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      'Serviços Populares',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF252940),
+                      ),
                     ),
-                  );
-                }
-              },
-              backgroundColor: Colors.white,
-              child: const Icon(Icons.my_location, color: Color(0xFF00C977)),
-            ),
-          ),
+                  ),
+                  const SizedBox(height: 15),
+                  SizedBox(
+                    height: 120,
+                    child: PageView.builder(
+                      controller: _servicesPageController,
+                      itemCount: _services.take(6).length,
+                      itemBuilder: (context, index) {
+                        final service = _services.take(6).toList()[index];
+                        return _buildServiceCard(service);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
 
-          // Loading Indicator
-          if (_loading)
-            Container(
-              color: Colors.black26,
-              child: const Center(
-                child: CircularProgressIndicator(color: Color(0xFF00C977)),
+            // Filter and Sort
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${_filteredWorkshops.length} oficinas encontradas',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF252940),
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      setState(() {
+                        _sortBy = value;
+                        _applySorting();
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00C977).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF00C977).withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.sort, size: 18, color: Color(0xFF00C977)),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Ordenar',
+                            style: const TextStyle(
+                              color: Color(0xFF00C977),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(value: 'distancia', child: Text('Distância')),
+                      const PopupMenuItem(value: 'nota', child: Text('Nota')),
+                      const PopupMenuItem(value: 'nome', child: Text('Nome')),
+                      const PopupMenuItem(value: 'preco', child: Text('Preço')),
+                    ],
+                  ),
+                ],
               ),
             ),
-        ],
-      ),
-    );
-  }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _mapController?.dispose();
-    super.dispose();
-  }
-}
-    return Scaffold(
-      backgroundColor: AppColors.lightGray,
-      appBar: AppBar(
-        backgroundColor: AppColors.secondary,
-        foregroundColor: Colors.white,
-        title: const Text('MECA Cliente'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await authProvider.logout();
-              if (context.mounted) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Qual serviço você precisa?',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppColors.secondary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Buscar serviço...',
-                prefixIcon: const Icon(Icons.search, color: AppColors.primary),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25),
-                  borderSide: BorderSide.none,
-                ),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.arrow_forward, color: AppColors.primary),
-                  onPressed: () {
-                    if (_searchController.text.isNotEmpty) {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => SearchResultsScreen(
-                            query: _searchController.text,
+            const SizedBox(height: 15),
+
+            // Workshops List
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
+                  : _filteredWorkshops.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.search_off, size: 80, color: Colors.grey[300]),
+                              const SizedBox(height: 20),
+                              Text(
+                                'Nenhuma oficina encontrada',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _loadWorkshops,
+                          color: const Color(0xFF00C977),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            itemCount: _filteredWorkshops.length,
+                            itemBuilder: (context, index) {
+                              final workshop = _filteredWorkshops[index];
+                              return _buildWorkshopCard(workshop);
+                            },
                           ),
                         ),
-                      );
-                    }
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 30),
-            const Text(
-              'Ações Rápidas',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.secondary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              children: [
-                _buildQuickActionCard(
-                  icon: Icons.directions_car,
-                  title: 'Meus Veículos',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const VehicleListScreen()),
-                    );
-                  },
-                ),
-                _buildQuickActionCard(
-                  icon: Icons.calendar_today,
-                  title: 'Meus Agendamentos',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const BookingListScreen()),
-                    );
-                  },
-                ),
-                _buildQuickActionCard(
-                  icon: Icons.build,
-                  title: 'Serviços Populares',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Em desenvolvimento')),
-                    );
-                  },
-                ),
-                _buildQuickActionCard(
-                  icon: Icons.star,
-                  title: 'Avaliações',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Em desenvolvimento')),
-                    );
-                  },
-                ),
-              ],
             ),
           ],
         ),
@@ -474,37 +364,54 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildQuickActionCard({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildServiceCard(Map<String, dynamic> service) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        // Navigate to service detail
+        Navigator.pushNamed(context, '/service-detail', arguments: service);
+      },
       child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 5),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(15),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 15,
-              offset: const Offset(0, 8),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
             ),
           ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 48, color: AppColors.primary),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppColors.secondary,
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: const Color(0xFF00C977).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.build,
+                color: Color(0xFF00C977),
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                service['title'] ?? service['name'] ?? 'Serviço',
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF252940),
+                ),
               ),
             ),
           ],
@@ -513,10 +420,128 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildWorkshopCard(Map<String, dynamic> workshop) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/workshop-detail',
+              arguments: workshop,
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(15),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Workshop Image
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00C977).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: const Icon(
+                    Icons.build,
+                    color: Color(0xFF00C977),
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(width: 15),
+                // Workshop Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        workshop['name'] ?? 'Oficina',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF252940),
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          const Icon(Icons.star, color: Colors.amber, size: 16),
+                          const SizedBox(width: 5),
+                          Text(
+                            '${workshop['rating'] ?? '4.5'}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF252940),
+                            ),
+                          ),
+                          Text(
+                            ' (${workshop['reviews_count'] ?? '0'})',
+                            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          Icon(Icons.location_on, color: Colors.grey[600], size: 16),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              workshop['address'] ?? 'Endereço não disponível',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          Icon(Icons.directions_car, color: Colors.grey[600], size: 16),
+                          const SizedBox(width: 5),
+                          Text(
+                            workshop['distance'] != null
+                                ? '${(workshop['distance'] as num).toStringAsFixed(1)} km'
+                                : 'Distância não disponível',
+                            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Arrow Icon
+                const Icon(Icons.arrow_forward_ios, color: Color(0xFF00C977), size: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _autoScrollTimer?.cancel();
+    _servicesPageController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 }
-
