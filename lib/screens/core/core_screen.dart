@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../services/theme_service.dart';
+import '../../widgets/custom_bottom_nav.dart';
 import '../home/home_screen.dart';
 import '../orders/orders_screen.dart';
 import '../profile/profile_screen.dart';
@@ -11,11 +14,11 @@ class CoreScreen extends StatefulWidget {
   State<CoreScreen> createState() => _CoreScreenState();
 }
 
-class _CoreScreenState extends State<CoreScreen> {
-  int _selectedIndex = 0;
+class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateMixin {
+  int _currentIndex = 0;
   late PageController _pageController;
-
-  final List<Widget> _screens = [
+  
+  final List<Widget> _pages = [
     const HomeScreen(),
     const OrdersScreen(),
     const ProfileScreen(),
@@ -24,7 +27,7 @@ class _CoreScreenState extends State<CoreScreen> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: 0);
+    _pageController = PageController(initialPage: _currentIndex);
   }
 
   @override
@@ -33,91 +36,58 @@ class _CoreScreenState extends State<CoreScreen> {
     super.dispose();
   }
 
-  void _onItemTapped(int index) {
+  void _onPageChanged(int index) {
     setState(() {
-      _selectedIndex = index;
+      _currentIndex = index;
     });
+  }
+
+  void _onNavTap(int index) {
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOutCubic,
+      curve: Curves.easeInOut,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: PageView(
-        controller: _pageController,
-        onPageChanged: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        children: _screens,
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-          child: BottomNavigationBar(
-            currentIndex: _selectedIndex,
-            onTap: _onItemTapped,
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: Colors.white,
-            selectedItemColor: const Color(0xFF00C977),
-            unselectedItemColor: Colors.grey[400],
-            selectedFontSize: 12,
-            unselectedFontSize: 12,
-            elevation: 0,
-            items: [
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          body: PageView(
+            controller: _pageController,
+            onPageChanged: _onPageChanged,
+            children: _pages,
+          ),
+          bottomNavigationBar: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: _onNavTap,
+            items: const [
               BottomNavigationBarItem(
-                icon: _buildNavItem(Icons.home_outlined, Icons.home, 0),
+                icon: Icon(Icons.home),
                 label: 'Início',
               ),
               BottomNavigationBarItem(
-                icon: _buildNavItem(Icons.calendar_today_outlined, Icons.calendar_today, 1),
+                icon: Icon(Icons.event_note),
                 label: 'Agendamentos',
               ),
               BottomNavigationBarItem(
-                icon: _buildNavItem(Icons.person_outline, Icons.person, 2),
+                icon: Icon(Icons.person),
                 label: 'Perfil',
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData outlinedIcon, IconData filledIcon, int index) {
-    final isSelected = _selectedIndex == index;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: isSelected 
-            ? const Color(0xFF00C977).withOpacity(0.1) 
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Icon(
-        isSelected ? filledIcon : outlinedIcon,
-        size: 26,
-      ),
+        );
+      },
     );
   }
 }
+
+
+
+
+
 
 
 

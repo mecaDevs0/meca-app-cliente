@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -37,11 +38,11 @@ class ThemeService extends ChangeNotifier {
         unselectedItemColor: Color(0xFF8B8B8B),
         type: BottomNavigationBarType.fixed,
       ),
-      cardTheme: const CardTheme(
-        color: Color(0xFF1A1A1A),
+      cardTheme: CardThemeData(
+        color: const Color(0xFF1A1A1A),
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderRadius: BorderRadius.circular(16),
         ),
       ),
       inputDecorationTheme: const InputDecorationTheme(
@@ -125,12 +126,12 @@ class ThemeService extends ChangeNotifier {
         unselectedItemColor: Color(0xFF8B8B8B),
         type: BottomNavigationBarType.fixed,
       ),
-      cardTheme: const CardTheme(
+      cardTheme: CardThemeData(
         color: Colors.white,
         elevation: 2,
-        shadowColor: Color(0x1A000000),
+        shadowColor: const Color(0x1A000000),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderRadius: BorderRadius.circular(16),
         ),
       ),
       inputDecorationTheme: const InputDecorationTheme(

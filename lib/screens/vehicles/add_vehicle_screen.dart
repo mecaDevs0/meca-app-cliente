@@ -52,7 +52,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
       plate: _plateController.text.toUpperCase(),
       brand: _brandController.text,
       model: _modelController.text,
-      year: int.parse(_yearController.text),
+      year: _yearController.text,
     );
 
     setState(() => _loading = false);

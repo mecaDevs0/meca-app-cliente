@@ -4,99 +4,93 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 
 class ApiService {
-  // API configurada no AppConfig (EC2 AWS)
-  static String get baseUrl => AppConfig.apiBaseUrl;
-  final Dio _dio = Dio();
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+
+  late Dio _dio;
   String? _token;
 
-  ApiService() {
-    _dio.options.baseUrl = baseUrl;
-    _dio.options.connectTimeout = const Duration(seconds: 60);
-    _dio.options.receiveTimeout = const Duration(seconds: 60);
-    
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
-        if (_token != null) {
-          options.headers['Authorization'] = 'Bearer $_token';
-        }
-        return handler.next(options);
-      },
-      onError: (error, handler) {
-        print('API Error: ${error.message}');
-        return handler.next(error);
+  ApiService._internal() {
+    _dio = Dio(BaseOptions(
+      baseUrl: AppConfig.apiBaseUrl,
+      connectTimeout: Duration(seconds: AppConfig.connectionTimeout),
+      receiveTimeout: Duration(seconds: AppConfig.receiveTimeout),
+      headers: {
+        'Content-Type': 'application/json',
       },
     ));
+
+    // Interceptor para adicionar token automaticamente
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (_token != null) {
+            options.headers['Authorization'] = 'Bearer $_token';
+          }
+          return handler.next(options);
+        },
+        onError: (error, handler) {
+          print('❌ API Error: ${error.response?.statusCode} - ${error.message}');
+          return handler.next(error);
+        },
+      ),
+    );
   }
 
+  // Token Management
   Future<void> loadToken() async {
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('auth_token');
+    _token = prefs.getString('token');
+    print('🔑 Token carregado: ${_token != null ? "Sim" : "Não"}');
   }
 
   Future<void> saveToken(String token) async {
     _token = token;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_token', token);
+    await prefs.setString('token', token);
+    print('💾 Token salvo');
   }
 
   Future<void> clearToken() async {
     _token = null;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
+    await prefs.remove('token');
+    print('🗑️ Token removido');
   }
 
-  // Helper method to extract error messages
   String _getErrorMessage(dynamic error) {
     if (error is DioException) {
-      if (error.response?.data != null) {
+      if (error.response != null) {
         final data = error.response!.data;
-        if (data is Map<String, dynamic>) {
-          return data['message'] ?? data['error'] ?? 'Erro na requisição';
+        if (data is Map && data.containsKey('message')) {
+          return data['message'];
         }
+        return 'Erro: ${error.response!.statusCode}';
       }
-      switch (error.type) {
-        case DioExceptionType.connectionTimeout:
-          return 'Timeout de conexão. Verifique sua internet.';
-        case DioExceptionType.receiveTimeout:
-          return 'Timeout de resposta. Tente novamente.';
-        case DioExceptionType.connectionError:
-          return 'Erro de conexão. Verifique sua internet.';
-        case DioExceptionType.badResponse:
-          return 'Erro no servidor. Tente novamente mais tarde.';
-        default:
-          return 'Erro de conexão. Tente novamente.';
-      }
+      return 'Erro de conexão com o servidor';
     }
-    return 'Erro inesperado. Tente novamente.';
+    return error.toString();
   }
 
   // Auth
   Future<Map<String, dynamic>> register({
-    required String name,
     required String email,
     required String password,
-    required String phone,
+    required String firstName,
+    String? lastName,
+    String? phone,
   }) async {
     try {
-      print('🔐 Tentando registrar: $email');
-      
-      final response = await _dio.post('/auth/customer/register', data: {
-        'first_name': name.split(' ').first,
-        'last_name': name.split(' ').length > 1 ? name.split(' ').sublist(1).join(' ') : '',
+      final response = await _dio.post('/public/customers', data: {
         'email': email,
         'password': password,
+        'first_name': firstName,
+        'last_name': lastName,
         'phone': phone,
       });
       
-      print('✅ Registro bem-sucedido: ${response.statusCode}');
-      
-      if (response.data['customer'] != null && response.data['customer']['token'] != null) {
-        await saveToken(response.data['customer']['token']);
-      }
-      
       return {'success': true, 'data': response.data};
     } catch (e) {
-      print('❌ Erro no registro: ${e.toString()}');
       return {'success': false, 'error': _getErrorMessage(e)};
     }
   }
@@ -114,9 +108,16 @@ class ApiService {
       });
       
       print('✅ Login bem-sucedido: ${response.statusCode}');
+      print('📦 Response data: ${response.data}');
       
-      if (response.data['access_token'] != null) {
-        await saveToken(response.data['access_token']);
+      // O token pode estar em access_token ou token
+      String? token = response.data['access_token'] ?? response.data['token'];
+      
+      if (token != null) {
+        print('💾 Salvando token: ${token.substring(0, 20)}...');
+        await saveToken(token);
+      } else {
+        print('⚠️ Nenhum token encontrado na resposta');
       }
       
       return {'success': true, 'data': response.data};
@@ -166,7 +167,7 @@ class ApiService {
   // Services
   Future<Map<String, dynamic>> getServices() async {
     try {
-      final response = await _dio.get('/store/products');
+      final response = await _dio.get('/public/master-services');
       return {'success': true, 'data': response.data['products'] ?? []};
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
@@ -178,14 +179,16 @@ class ApiService {
     double? latitude,
     double? longitude,
     double? radius,
+    String? serviceId,
   }) async {
     try {
-      final queryParams = <String, dynamic>{};
-      if (latitude != null) queryParams['lat'] = latitude;
-      if (longitude != null) queryParams['lng'] = longitude;
-      if (radius != null) queryParams['radius'] = radius;
+      final params = <String, dynamic>{};
+      if (latitude != null) params['latitude'] = latitude;
+      if (longitude != null) params['longitude'] = longitude;
+      if (radius != null) params['radius'] = radius;
+      if (serviceId != null) params['service_id'] = serviceId;
 
-      final response = await _dio.get('/store/workshops', queryParameters: queryParams);
+      final response = await _dio.get('/public/workshops', queryParameters: params);
       return {'success': true, 'data': response.data};
     } catch (e) {
       return {'success': false, 'error': e.toString()};
@@ -224,10 +227,7 @@ class ApiService {
     required String date,
   }) async {
     try {
-      final response = await _dio.get(
-        '/store/workshops/$workshopId/availability',
-        queryParameters: {'date': date},
-      );
+      final response = await _dio.get('/store/workshops/$workshopId/availability?date=$date');
       return {'success': true, 'data': response.data};
     } catch (e) {
       return {'success': false, 'error': e.toString()};
@@ -245,17 +245,19 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> addVehicle({
-    required String plate,
     required String brand,
     required String model,
-    required int year,
+    required String year,
+    required String plate,
+    String? color,
   }) async {
     try {
       final response = await _dio.post('/store/vehicles', data: {
-        'plate': plate,
         'brand': brand,
         'model': model,
         'year': year,
+        'plate': plate,
+        'color': color,
       });
       return {'success': true, 'data': response.data};
     } catch (e) {

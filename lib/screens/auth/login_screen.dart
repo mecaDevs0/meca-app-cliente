@@ -48,7 +48,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       );
     } else {
       result = await _apiService.register(
-        name: _nameController.text,
+        firstName: _nameController.text,
         email: _emailController.text,
         password: _passwordController.text,
         phone: _phoneController.text,
@@ -58,7 +58,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     setState(() => _isLoading = false);
 
     if (result['success']) {
-      Navigator.pushReplacementNamed(context, '/core');
+      // Mostrar mensagem de sucesso
+      if (!_isLogin) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Conta criada com sucesso!'),
+            backgroundColor: Color(0xFF00C977),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      
+      // Navegar para home após login/registro bem-sucedido
+      Navigator.pushReplacementNamed(context, '/home');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -273,7 +285,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (_) => const ForgotPasswordScreen(),
+                                          builder: (_) => ForgotPasswordScreen(),
                                         ),
                                       );
                                     },
@@ -342,35 +354,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     _buildSocialButton(
-                                      Container(
-                                        width: 20,
-                                        height: 20,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(4),
-                                          color: Colors.white,
-                                        ),
-                                        child: const Icon(
-                                          Icons.g_mobiledata,
-                                          color: Color(0xFF4285F4),
-                                          size: 18,
-                                        ),
+                                      const Icon(
+                                        Icons.email,
+                                        color: Color(0xFF4285F4),
+                                        size: 22,
                                       ),
                                       'Google',
                                     ),
                                     const SizedBox(width: 15),
                                     _buildSocialButton(
-                                      Container(
-                                        width: 20,
-                                        height: 20,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(4),
-                                          color: Colors.black,
-                                        ),
-                                        child: const Icon(
-                                          Icons.apple,
-                                          color: Colors.white,
-                                          size: 18,
-                                        ),
+                                      const Icon(
+                                        Icons.apple,
+                                        color: Colors.black,
+                                        size: 22,
                                       ),
                                       'Apple',
                                     ),

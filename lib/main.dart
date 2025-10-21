@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/auth/login_screen.dart';
-import 'screens/booking/booking_screen.dart';
 import 'screens/core/core_screen.dart';
 import 'screens/help/help_center_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
@@ -10,12 +9,9 @@ import 'screens/orders/order_detail_screen.dart';
 import 'screens/orders/orders_screen.dart';
 import 'screens/profile/edit_profile_screen.dart';
 import 'screens/profile/profile_screen.dart';
-import 'screens/services/service_detail_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/vehicles/add_vehicle_screen.dart';
 import 'screens/vehicles/my_vehicles_screen.dart';
-import 'screens/workshops/workshop_detail_screen.dart';
-import 'screens/workshops/workshops_list_screen.dart';
 import 'services/theme_service.dart';
 
 void main() {
@@ -28,7 +24,7 @@ class MecaClienteApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (context) => ThemeService()..initializeTheme(),
+      create: (context) => ThemeService(),
       child: Consumer<ThemeService>(
         builder: (context, themeService, child) {
           return MaterialApp(
@@ -47,22 +43,11 @@ class MecaClienteApp extends StatelessWidget {
           case '/home':
             return MaterialPageRoute(builder: (_) => const CoreScreen());
           case '/workshops':
-            return MaterialPageRoute(builder: (_) => const WorkshopsListScreen());
-          case '/service-detail':
-            final args = settings.arguments as Map<String, dynamic>;
-            return MaterialPageRoute(
-              builder: (_) => ServiceDetailScreen(service: args),
-            );
+            return MaterialPageRoute(builder: (_) => const CoreScreen());
           case '/workshop-detail':
-            final args = settings.arguments as Map<String, dynamic>;
-            return MaterialPageRoute(
-              builder: (_) => WorkshopDetailScreen(workshop: args),
-            );
+            return MaterialPageRoute(builder: (_) => const CoreScreen());
           case '/booking':
-            final args = settings.arguments as Map<String, dynamic>;
-            return MaterialPageRoute(
-              builder: (_) => BookingScreen(workshop: args),
-            );
+            return MaterialPageRoute(builder: (_) => const CoreScreen());
           case '/my-vehicles':
             return MaterialPageRoute(builder: (_) => const MyVehiclesScreen());
           case '/add-vehicle':
@@ -86,7 +71,7 @@ class MecaClienteApp extends StatelessWidget {
             return MaterialPageRoute(builder: (_) => const SplashScreen());
         }
       },
-          );
+    );
         },
       ),
     );
