@@ -6,6 +6,7 @@ import '../../widgets/custom_bottom_nav.dart';
 import '../home/home_screen.dart';
 import '../orders/orders_screen.dart';
 import '../profile/profile_screen.dart';
+import '../workshops/workshops_screen.dart';
 
 class CoreScreen extends StatefulWidget {
   const CoreScreen({Key? key}) : super(key: key);
@@ -20,6 +21,7 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
   
   final List<Widget> _pages = [
     const HomeScreen(),
+    const WorkshopsScreen(),
     const OrdersScreen(),
     const ProfileScreen(),
   ];
@@ -60,20 +62,28 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
             onPageChanged: _onPageChanged,
             children: _pages,
           ),
-          bottomNavigationBar: BottomNavigationBar(
+          bottomNavigationBar: CustomBottomNav(
             currentIndex: _currentIndex,
             onTap: _onNavTap,
             items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.home),
+              BottomNavItem(
+                icon: Icons.home,
+                activeIcon: Icons.home,
                 label: 'Início',
               ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.event_note),
+              BottomNavItem(
+                icon: Icons.build,
+                activeIcon: Icons.build,
+                label: 'Oficinas',
+              ),
+              BottomNavItem(
+                icon: Icons.schedule,
+                activeIcon: Icons.schedule,
                 label: 'Agendamentos',
               ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.person),
+              BottomNavItem(
+                icon: Icons.person,
+                activeIcon: Icons.person,
                 label: 'Perfil',
               ),
             ],
@@ -83,11 +93,3 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
     );
   }
 }
-
-
-
-
-
-
-
-

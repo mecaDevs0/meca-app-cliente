@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/api_service.dart';
+import '../../widgets/meca_loading_widget.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({Key? key}) : super(key: key);
@@ -33,9 +34,12 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   }
 
   Future<void> _loadBookings() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     
-    final result = await _apiService.getMyBookings();
+    final result = await _apiService.getMyBookings('cus_KM5SA01GI'); // TODO: Obter do usuário logado
+    
+    if (!mounted) return;
     
     if (result['success']) {
       var bookings = (result['data']['bookings'] as List?)?.cast<Map<String, dynamic>>() ?? [];
@@ -44,59 +48,150 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         bookings = bookings.where((b) => b['status'] == _currentStatus).toList();
       }
       
-      setState(() {
-        _bookings = bookings;
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _bookings = bookings;
+          _loading = false;
+        });
+      }
     } else {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        title: const Text(
-          'Meus Agendamentos',
-          style: TextStyle(
-            color: Color(0xFF252940),
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
+      backgroundColor: const Color(0xFF0A0A0A),
+      body: CustomScrollView(
+        slivers: [
+          // AppBar futurista
+          SliverAppBar(
+            expandedHeight: 120,
+            floating: false,
+            pinned: true,
+            backgroundColor: const Color(0xFF00C977),
+            flexibleSpace: FlexibleSpaceBar(
+              title: const Text(
+                'Meus Agendamentos',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF00C977),
+                      Color(0xFF00B369),
+                      Color(0xFF00A85C),
+                    ],
+                  ),
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withOpacity(0.1),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: const Color(0xFF00C977),
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: const Color(0xFF00C977),
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          tabs: const [
-            Tab(text: 'Todos'),
-            Tab(text: 'Pendentes'),
-            Tab(text: 'Confirmados'),
-            Tab(text: 'Concluídos'),
-          ],
-        ),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
-          : RefreshIndicator(
-              color: const Color(0xFF00C977),
-              onRefresh: _loadBookings,
+          // TabBar futurista
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _FuturisticTabBarDelegate(
+              TabBar(
+                controller: _tabController,
+                labelColor: const Color(0xFF00C977),
+                unselectedLabelColor: Colors.grey.shade400,
+                indicator: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  color: const Color(0xFF00C977).withOpacity(0.2),
+                  border: Border.all(
+                    color: const Color(0xFF00C977),
+                    width: 1,
+                  ),
+                ),
+                indicatorSize: TabBarIndicatorSize.tab,
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.bold, 
+                  fontSize: 14,
+                  letterSpacing: 0.5,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontWeight: FontWeight.normal,
+                  fontSize: 14,
+                ),
+                tabs: const [
+                  Tab(text: 'Todos'),
+                  Tab(text: 'Pendentes'),
+                  Tab(text: 'Confirmados'),
+                  Tab(text: 'Concluídos'),
+                ],
+              ),
+            ),
+          ),
+          // Conteúdo principal
+          SliverFillRemaining(
+            child: _loading
+                ? const MecaApiLoadingWidget(message: 'Carregando agendamentos...')
+                : RefreshIndicator(
+                    color: const Color(0xFF00C977),
+                    onRefresh: _loadBookings,
               child: _bookings.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.event_busy, size: 80, color: Colors.grey[300]),
-                          const SizedBox(height: 20),
-                          const Text(
-                            'Nenhum agendamento encontrado',
-                            style: TextStyle(fontSize: 18, color: Colors.grey),
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00C977).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFF00C977).withOpacity(0.2),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.event_busy,
+                                  size: 80,
+                                  color: Color(0xFF00C977),
+                                ),
+                                const SizedBox(height: 20),
+                                const Text(
+                                  'Nenhum agendamento encontrado',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF00C977),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Agende um serviço para começar',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -109,7 +204,10 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                         return _buildBookingCard(booking);
                       },
                     ),
-            ),
+                  ),
+                ),
+        ],
+      ),
     );
   }
 
@@ -120,13 +218,24 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF1A1A1A),
+            const Color(0xFF2A2A2A),
+          ],
+        ),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF00C977).withOpacity(0.3),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+            color: const Color(0xFF00C977).withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -156,7 +265,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF252940),
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -182,20 +291,20 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 // Date & Time
                 Row(
                   children: [
-                    Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                    Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade400),
                     const SizedBox(width: 8),
                     Text(
                       booking['scheduled_date'] != null
                           ? DateFormat('dd/MM/yyyy').format(DateTime.parse(booking['scheduled_date']))
                           : 'Data não definida',
-                      style: TextStyle(color: Colors.grey[700]),
+                      style: TextStyle(color: Colors.grey.shade300),
                     ),
                     const SizedBox(width: 15),
                     Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
                     const SizedBox(width: 8),
                     Text(
                       booking['scheduled_time'] ?? '00:00',
-                      style: TextStyle(color: Colors.grey[700]),
+                      style: TextStyle(color: Colors.grey.shade300),
                     ),
                   ],
                 ),
@@ -208,7 +317,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                     const SizedBox(width: 8),
                     Text(
                       '${booking['vehicle_brand']} ${booking['vehicle_model']} - ${booking['vehicle_plate']}',
-                      style: TextStyle(color: Colors.grey[700]),
+                      style: TextStyle(color: Colors.grey.shade300),
                     ),
                   ],
                 ),
@@ -303,5 +412,30 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+}
+
+class _FuturisticTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+
+  _FuturisticTabBarDelegate(this.tabBar);
+
+  @override
+  double get minExtent => 48;
+
+  @override
+  double get maxExtent => 48;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: const Color(0xFF0A0A0A),
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) {
+    return false;
   }
 }

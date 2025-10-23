@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../../services/api_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -16,7 +15,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _loading = false;
   bool _emailSent = false;
 
-  Future<void> _handleSubmit() async {
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendResetEmail() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _loading = true);
@@ -27,6 +32,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     if (result['success']) {
       setState(() => _emailSent = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Email de recuperação enviado!'),
+          backgroundColor: Color(0xFF00C977),
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -41,12 +52,43 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Recuperar Senha'),
+        title: const Text('Esqueci minha senha'),
+        backgroundColor: const Color(0xFF00C977),
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: _emailSent ? _buildSuccessView() : _buildFormView(),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF00C977),
+              Color(0xFF00B369),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(30),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 20,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(30),
+                child: _emailSent ? _buildSuccessView() : _buildFormView(),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -63,44 +105,69 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             size: 80,
             color: Color(0xFF00C977),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 20),
           const Text(
-            'Esqueceu sua senha?',
-            textAlign: TextAlign.center,
+            'Recuperar Senha',
             style: TextStyle(
-              fontSize: 24,
+              fontSize: 28,
               fontWeight: FontWeight.bold,
+              color: Color(0xFF00C977),
             ),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 10),
           const Text(
-            'Digite seu email e enviaremos instruções para redefinir sua senha.',
+            'Digite seu email para receber as instruções de recuperação de senha.',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+            ),
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: Colors.grey),
           ),
           const SizedBox(height: 30),
           TextFormField(
             controller: _emailController,
             decoration: const InputDecoration(
               labelText: 'Email',
-              hintText: 'seu@email.com',
               prefixIcon: Icon(Icons.email),
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.white,
             ),
             keyboardType: TextInputType.emailAddress,
             validator: (value) {
-              if (value?.isEmpty ?? true) return 'Campo obrigatório';
-              if (!value!.contains('@')) return 'Email inválido';
+              if (value == null || value.isEmpty) {
+                return 'Por favor, insira seu email';
+              }
+              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                return 'Por favor, insira um email válido';
+              }
               return null;
             },
           ),
           const SizedBox(height: 30),
-          SizedBox(
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _loading ? null : _handleSubmit,
-              child: _loading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('Enviar Código'),
+          _loading
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
+              : ElevatedButton(
+                  onPressed: _sendResetEmail,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C977),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'Enviar Email',
+                    style: TextStyle(fontSize: 18, color: Colors.white),
+                  ),
+                ),
+          const SizedBox(height: 20),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Voltar ao Login',
+              style: TextStyle(color: Color(0xFF00C977)),
             ),
           ),
         ],
@@ -110,34 +177,48 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Widget _buildSuccessView() {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Icon(
-          Icons.mark_email_read,
-          size: 100,
+          Icons.check_circle,
+          size: 80,
           color: Color(0xFF00C977),
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 20),
         const Text(
           'Email Enviado!',
           style: TextStyle(
-            fontSize: 24,
+            fontSize: 28,
             fontWeight: FontWeight.bold,
+            color: Color(0xFF00C977),
           ),
-        ),
-        const SizedBox(height: 15),
-        const Text(
-          'Verifique sua caixa de entrada e siga as instruções para redefinir sua senha.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 14, color: Colors.grey),
         ),
-        const SizedBox(height: 40),
-        TextButton(
+        const SizedBox(height: 10),
+        const Text(
+          'Enviamos as instruções de recuperação de senha para o seu email.',
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.grey,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 30),
+        ElevatedButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Voltar para Login'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF00C977),
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          child: const Text(
+            'Voltar ao Login',
+            style: TextStyle(fontSize: 18, color: Colors.white),
+          ),
         ),
       ],
     );
   }
 }
-

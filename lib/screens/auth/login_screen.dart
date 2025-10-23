@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../services/api_service.dart';
+import '../../utils/phone_formatter.dart';
+import '../../widgets/meca_loading_widget.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -34,6 +37,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     });
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -51,30 +64,29 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         firstName: _nameController.text,
         email: _emailController.text,
         password: _passwordController.text,
-        phone: _phoneController.text,
+        phone: _phoneController.text.replaceAll(RegExp(r'\D'), ''),
       );
     }
 
     setState(() => _isLoading = false);
 
     if (result['success']) {
-      // Mostrar mensagem de sucesso
       if (!_isLogin) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Conta criada com sucesso!'),
+            content: Text('✅ Conta criada com sucesso! Faça login para continuar.'),
             backgroundColor: Color(0xFF00C977),
-            duration: Duration(seconds: 2),
+            duration: Duration(seconds: 3),
           ),
         );
+        _tabController.animateTo(0);
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
       }
-      
-      // Navegar para home após login/registro bem-sucedido
-      Navigator.pushReplacementNamed(context, '/home');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['error'] ?? 'Erro ao autenticar'),
+          content: Text(result['error'] ?? 'Ocorreu um erro inesperado. Tente novamente.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -85,14 +97,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              const Color(0xFF00C977),
-              const Color(0xFF00B369),
-              const Color(0xFF00A85C),
+              Color(0xFF00C977),
+              Color(0xFF00B369),
+              Color(0xFF00A85C),
             ],
           ),
         ),
@@ -101,107 +113,91 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           child: Column(
             children: [
               // Logo Section
-              Padding(
+              Expanded(
+                flex: 3,
+                child: Padding(
                 padding: const EdgeInsets.all(40),
                 child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      width: 100,
-                      height: 100,
+                        width: 120,
+                        height: 120,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(25),
+                          borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.white.withOpacity(0.3),
-                            blurRadius: 20,
-                            spreadRadius: 3,
+                              color: Colors.white.withOpacity(0.4),
+                              blurRadius: 25,
+                              spreadRadius: 5,
                           ),
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(25),
+                          borderRadius: BorderRadius.circular(30),
                         child: Image.asset(
                           'assets/logos/icone_branco.png',
                           fit: BoxFit.contain,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                      const SizedBox(height: 30),
                     const Text(
                       'MECA',
                       style: TextStyle(
-                        fontSize: 36,
+                          fontSize: 42,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
-                        letterSpacing: 6,
+                          letterSpacing: 8,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 5),
+                      const SizedBox(height: 10),
                     Text(
                       'Seu carro em boas mãos',
                       style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white.withOpacity(0.7),
-                        letterSpacing: 1,
+                          fontSize: 16,
+                          color: Colors.white.withOpacity(0.8),
+                          letterSpacing: 2,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-
-              // Form Section
-              Expanded(
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-                  ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(30),
-                    child: Column(
-                      children: [
-                        // Tab Bar
+              
+              // Tab Bar for Login/Register
                         Container(
-                          height: 60,
-                          padding: const EdgeInsets.all(6),
+                margin: const EdgeInsets.symmetric(horizontal: 20),
                           decoration: BoxDecoration(
-                            color: Colors.grey[50],
+                  color: Colors.white.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(30),
-                            border: Border.all(
-                              color: Colors.grey[200]!,
-                              width: 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
                           ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8), // Aumenta altura vertical
                           child: TabBar(
                             controller: _tabController,
                             indicator: BoxDecoration(
-                              color: const Color(0xFF00C977),
-                              borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(30),
+                    color: Colors.white,
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF00C977).withOpacity(0.4),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        spreadRadius: 2,
                                 ),
                               ],
                             ),
                             indicatorSize: TabBarIndicatorSize.tab,
-                            dividerColor: Colors.transparent,
-                            labelColor: Colors.white,
-                            unselectedLabelColor: Colors.grey[600],
+                  indicatorPadding: const EdgeInsets.all(4),
+                  dividerColor: Colors.transparent, // Remove a barra horizontal preta
+                  labelColor: const Color(0xFF00C977),
+                  unselectedLabelColor: Colors.white,
                             labelStyle: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
                             unselectedLabelStyle: const TextStyle(
-                              fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.normal,
                               fontSize: 16,
                             ),
                             tabs: const [
@@ -209,74 +205,79 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               Tab(text: 'Cadastrar'),
                             ],
                           ),
+                          ),
                         ),
 
-                        const SizedBox(height: 30),
-
-                        // Form
-                        Form(
+              // Form Section
+              Expanded(
+                flex: 2, // Aumentado de 1 para 2 para ocupar 50% da tela
+                child: Container(
+                  margin: const EdgeInsets.only(top: 20),
+                  padding: const EdgeInsets.all(20),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                  ),
+                  child: Form(
                           key: _formKey,
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        // Login Form
+                        SingleChildScrollView(
                           child: Column(
                             children: [
-                              if (!_isLogin) ...[
-                                _buildTextField(
-                                  controller: _nameController,
-                                  label: 'Nome Completo',
-                                  icon: Icons.person,
-                                  validator: (value) =>
-                                      value?.isEmpty ?? true ? 'Campo obrigatório' : null,
-                                ),
-                                const SizedBox(height: 15),
-                              ],
-
-                              _buildTextField(
+                              TextFormField(
+                                style: const TextStyle(color: Colors.black),
                                 controller: _emailController,
-                                label: 'Email',
-                                icon: Icons.email,
+                                decoration: const InputDecoration(
+                                  labelText: 'Email',
+                                  prefixIcon: Icon(Icons.email),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
                                 keyboardType: TextInputType.emailAddress,
                                 validator: (value) {
-                                  if (value?.isEmpty ?? true) return 'Campo obrigatório';
-                                  if (!value!.contains('@')) return 'Email inválido';
+                                  if (value == null || value.isEmpty) {
+                                    return 'Por favor, insira seu email';
+                                  }
+                                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                                    return 'Por favor, insira um email válido';
+                                  }
                                   return null;
                                 },
                               ),
-
-                              const SizedBox(height: 15),
-
-                              if (!_isLogin) ...[
-                                _buildTextField(
-                                  controller: _phoneController,
-                                  label: 'Telefone',
-                                  icon: Icons.phone,
-                                  keyboardType: TextInputType.phone,
-                                  validator: (value) =>
-                                      value?.isEmpty ?? true ? 'Campo obrigatório' : null,
-                                ),
-                                const SizedBox(height: 15),
-                              ],
-
-                              _buildTextField(
+                              const SizedBox(height: 20),
+                              TextFormField(
+                                style: const TextStyle(color: Colors.black),
                                 controller: _passwordController,
-                                label: 'Senha',
-                                icon: Icons.lock,
-                                obscureText: _obscurePassword,
+                                decoration: InputDecoration(
+                                  labelText: 'Senha',
+                                  prefixIcon: const Icon(Icons.lock),
+                                  filled: true,
+                                  fillColor: Colors.white,
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                    color: Colors.grey[600],
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
                                   ),
-                                  onPressed: () {
-                                    setState(() => _obscurePassword = !_obscurePassword);
-                                  },
                                 ),
+                                obscureText: _obscurePassword,
                                 validator: (value) {
-                                  if (value?.isEmpty ?? true) return 'Campo obrigatório';
-                                  if (value!.length < 6) return 'Mínimo 6 caracteres';
+                                  if (value == null || value.isEmpty) {
+                                    return 'Por favor, insira sua senha';
+                                  }
+                                  if (value.length < 6) {
+                                    return 'A senha deve ter pelo menos 6 caracteres';
+                                  }
                                   return null;
                                 },
                               ),
-
-                              if (_isLogin) ...[
                                 const SizedBox(height: 10),
                                 Align(
                                   alignment: Alignment.centerRight,
@@ -284,95 +285,169 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     onPressed: () {
                                       Navigator.push(
                                         context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ForgotPasswordScreen(),
-                                        ),
+                                      MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
                                       );
                                     },
                                     child: const Text(
                                       'Esqueceu a senha?',
-                                      style: TextStyle(
-                                        color: Color(0xFF00C977),
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
+                                    style: TextStyle(color: Color(0xFF00C977)),
                                   ),
                                 ),
-                              ],
-
+                              ),
                               const SizedBox(height: 30),
-
-                              // Submit Button
-                              SizedBox(
+                              _isLoading
+                                  ? const MecaApiLoadingWidget(message: 'Entrando...')
+                                  : SizedBox(
                                 width: double.infinity,
-                                height: 60,
+                                      height: 50,
                                 child: ElevatedButton(
-                                  onPressed: _isLoading ? null : _handleSubmit,
+                                        onPressed: _handleSubmit,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: _isLogin ? const Color(0xFF00C977) : const Color(0xFF00C977),
-                                    foregroundColor: Colors.white,
-                                    disabledBackgroundColor: Colors.grey[300],
-                                    disabledForegroundColor: Colors.grey[600],
+                                          backgroundColor: const Color(0xFF00C977),
+                                          elevation: 3,
+                                          shadowColor: const Color(0xFF00C977).withOpacity(0.3),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(15),
-                                    ),
-                                    elevation: 5,
-                                    shadowColor: const Color(0xFF00C977).withOpacity(0.3),
-                                  ),
-                                  child: _isLoading
-                                      ? const CircularProgressIndicator(color: Colors.white)
-                                      : Text(
-                                          _isLogin ? 'Entrar' : 'Cadastrar',
-                                          style: const TextStyle(
+                                            borderRadius: BorderRadius.circular(25),
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Entrar',
+                                          style: TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,
                                             color: Colors.white,
                                           ),
                                         ),
+                                      ),
+                                    ),
+                            ],
+                          ),
+                        ),
+
+                        // Register Form
+                        SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              TextFormField(
+                                style: const TextStyle(color: Colors.black),
+                                controller: _nameController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Nome Completo',
+                                  prefixIcon: Icon(Icons.person),
+                                  filled: true,
+                                  fillColor: Colors.white,
                                 ),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Por favor, insira seu nome';
+                                  }
+                                  return null;
+                                },
                               ),
-
                               const SizedBox(height: 20),
-
-                              // Social Login (Optional)
-                              if (_isLogin) ...[
-                                Row(
-                                  children: [
-                                    Expanded(child: Divider(color: Colors.grey[300])),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 15),
-                                      child: Text(
-                                        'ou continue com',
-                                        style: TextStyle(color: Colors.grey[600]),
-                                      ),
-                                    ),
-                                    Expanded(child: Divider(color: Colors.grey[300])),
-                                  ],
+                              TextFormField(
+                                style: const TextStyle(color: Colors.black),
+                                controller: _emailController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Email',
+                                  prefixIcon: Icon(Icons.email),
+                                  filled: true,
+                                  fillColor: Colors.white,
                                 ),
-                                const SizedBox(height: 20),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    _buildSocialButton(
-                                      const Icon(
-                                        Icons.email,
-                                        color: Color(0xFF4285F4),
-                                        size: 22,
-                                      ),
-                                      'Google',
-                                    ),
-                                    const SizedBox(width: 15),
-                                    _buildSocialButton(
-                                      const Icon(
-                                        Icons.apple,
-                                        color: Colors.black,
-                                        size: 22,
-                                      ),
-                                      'Apple',
-                                    ),
-                                  ],
+                                keyboardType: TextInputType.emailAddress,
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Por favor, insira seu email';
+                                  }
+                                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                                    return 'Por favor, insira um email válido';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+                              TextFormField(
+                                style: const TextStyle(color: Colors.black),
+                                controller: _phoneController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Telefone',
+                                  prefixIcon: Icon(Icons.phone),
+                                  hintText: '(XX) XXXXX-XXXX',
+                                  filled: true,
+                                  fillColor: Colors.white,
                                 ),
-                              ],
+                                keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  PhoneInputFormatter(),
+                                ],
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Por favor, insira seu telefone';
+                                  }
+                                  if (value.replaceAll(RegExp(r'\D'), '').length < 10) {
+                                    return 'Por favor, insira um telefone válido com DDD';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+                              TextFormField(
+                                style: const TextStyle(color: Colors.black),
+                                controller: _passwordController,
+                                decoration: InputDecoration(
+                                  labelText: 'Senha',
+                                  prefixIcon: const Icon(Icons.lock),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
+                                  ),
+                                ),
+                                obscureText: _obscurePassword,
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Por favor, insira sua senha';
+                                  }
+                                  if (value.length < 6) {
+                                    return 'A senha deve ter pelo menos 6 caracteres';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 30),
+                              _isLoading
+                                  ? const MecaApiLoadingWidget(message: 'Entrando...')
+                                  : SizedBox(
+                                      width: double.infinity,
+                                      height: 50,
+                                      child: ElevatedButton(
+                                        onPressed: _handleSubmit,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF00C977),
+                                          elevation: 3,
+                                          shadowColor: const Color(0xFF00C977).withOpacity(0.3),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(25),
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Registrar',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                             ],
                           ),
                         ),
@@ -386,93 +461,5 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         ),
       ),
     );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool obscureText = false,
-    TextInputType? keyboardType,
-    Widget? suffixIcon,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      validator: validator,
-      style: const TextStyle(
-        color: Colors.black87,
-        fontSize: 16,
-      ),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(
-          color: Colors.grey,
-          fontSize: 14,
-        ),
-        prefixIcon: Icon(icon, color: const Color(0xFF00C977)),
-        suffixIcon: suffixIcon,
-        filled: true,
-        fillColor: Colors.grey[50],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide(color: Colors.grey[200]!),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: Color(0xFF00C977), width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: Colors.red),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      ),
-    );
-  }
-
-  Widget _buildSocialButton(Widget icon, String label) {
-    return InkWell(
-      onTap: () {
-        // Social login
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.grey[300]!),
-        ),
-        child: Row(
-          children: [
-            icon,
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    _nameController.dispose();
-    _phoneController.dispose();
-    super.dispose();
   }
 }

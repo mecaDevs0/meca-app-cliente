@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../services/api_service.dart';
 
 class AddVehicleScreen extends StatefulWidget {
@@ -15,29 +16,52 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
   final _brandController = TextEditingController();
   final _modelController = TextEditingController();
   final _yearController = TextEditingController();
+  final _colorController = TextEditingController();
+  final _fuelController = TextEditingController();
   final ApiService _apiService = ApiService();
   bool _loading = false;
-  bool _searchingPlate = false;
 
-  Future<void> _searchByPlate() async {
-    if (_plateController.text.isEmpty) return;
+  @override
+  void dispose() {
+    _plateController.dispose();
+    _brandController.dispose();
+    _modelController.dispose();
+    _yearController.dispose();
+    _colorController.dispose();
+    _fuelController.dispose();
+    super.dispose();
+  }
 
-    setState(() => _searchingPlate = true);
-
+  Future<void> _searchVehicleByPlate() async {
+    if (_plateController.text.length != 7) return;
+    
+    setState(() => _loading = true);
+    
     final result = await _apiService.searchVehicleByPlate(_plateController.text);
-
-    setState(() => _searchingPlate = false);
-
+    
+    setState(() => _loading = false);
+    
     if (result['success'] && result['data'] != null) {
       final vehicleData = result['data'];
-      _brandController.text = vehicleData['brand'] ?? '';
-      _modelController.text = vehicleData['model'] ?? '';
-      _yearController.text = vehicleData['year']?.toString() ?? '';
+      setState(() {
+        _brandController.text = vehicleData['brand'] ?? '';
+        _modelController.text = vehicleData['model'] ?? '';
+        _yearController.text = vehicleData['year']?.toString() ?? '';
+        _colorController.text = vehicleData['color'] ?? '';
+        _fuelController.text = vehicleData['fuel'] ?? '';
+      });
       
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Dados do veículo encontrados!'),
+          content: Text('✅ Dados do veículo preenchidos automaticamente!'),
           backgroundColor: Color(0xFF00C977),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Veículo não encontrado. Preencha os dados manualmente.'),
+          backgroundColor: Colors.orange,
         ),
       );
     }
@@ -48,27 +72,31 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
 
     setState(() => _loading = true);
 
-    final result = await _apiService.addVehicle(
-      plate: _plateController.text.toUpperCase(),
-      brand: _brandController.text,
-      model: _modelController.text,
-      year: _yearController.text,
-    );
+    final vehicleData = {
+      'customerId': 'cus_KM5SA01GI', // TODO: Obter do usuário logado
+      'plate': _plateController.text.toUpperCase(),
+      'brand': _brandController.text,
+      'model': _modelController.text,
+      'year': int.tryParse(_yearController.text),
+      'color': _colorController.text,
+    };
+
+    final result = await _apiService.addVehicle(vehicleData);
 
     setState(() => _loading = false);
 
     if (result['success']) {
-      Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Veículo adicionado com sucesso!'),
+          content: Text('✅ Veículo adicionado com sucesso!'),
           backgroundColor: Color(0xFF00C977),
         ),
       );
+      Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Erro: ${result['error']}'),
+          content: Text(result['error'] ?? 'Erro ao adicionar veículo'),
           backgroundColor: Colors.red,
         ),
       );
@@ -78,18 +106,11 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
+        title: const Text('Adicionar Veículo'),
+        backgroundColor: const Color(0xFF00C977),
+        foregroundColor: Colors.white,
         elevation: 0,
-        backgroundColor: Colors.white,
-        title: const Text(
-          'Adicionar Veículo',
-          style: TextStyle(
-            color: Color(0xFF252940),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        iconTheme: const IconThemeData(color: Color(0xFF252940)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -98,147 +119,82 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Plate Search
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _plateController,
-                      decoration: InputDecoration(
-                        labelText: 'Placa',
-                        hintText: 'ABC-1234',
-                        prefixIcon: const Icon(Icons.car_rental, color: Color(0xFF00C977)),
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: BorderSide(color: Colors.grey[200]!),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: const BorderSide(color: Color(0xFF00C977), width: 2),
-                        ),
-                      ),
+              // Placa
+              TextFormField(
+                controller: _plateController,
+                decoration: InputDecoration(
+                  labelText: 'Placa do Veículo',
+                  hintText: 'Ex: ABC1234',
+                  prefixIcon: const Icon(Icons.directions_car),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: _searchVehicleByPlate,
+                  ),
+                ),
                       textCapitalization: TextCapitalization.characters,
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9-]')),
-                        LengthLimitingTextInputFormatter(8),
+                  FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9]')),
+                  LengthLimitingTextInputFormatter(7),
                       ],
+                onChanged: (value) {
+                  if (value.length == 7) {
+                    _searchVehicleByPlate();
+                  }
+                },
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Campo obrigatório';
+                    return 'Por favor, insira a placa do veículo';
+                  }
+                  if (value.length < 7) {
+                    return 'A placa deve ter 7 caracteres';
                         }
                         return null;
                       },
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: _searchingPlate ? null : _searchByPlate,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C977),
-                      padding: const EdgeInsets.all(15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                    ),
-                    child: _searchingPlate
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(Icons.search, color: Colors.white),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-              Text(
-                'Busque pela placa para preencher automaticamente',
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              ),
-              const SizedBox(height: 30),
-
-              // Brand
+              const SizedBox(height: 20),
+              
+              // Marca
               TextFormField(
                 controller: _brandController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Marca',
-                  hintText: 'Ex: Fiat, Volkswagen, Ford',
-                  prefixIcon: const Icon(Icons.business, color: Color(0xFF00C977)),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide(color: Colors.grey[200]!),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: const BorderSide(color: Color(0xFF00C977), width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.branding_watermark),
+                  border: OutlineInputBorder(),
                 ),
-                validator: (value) => value?.isEmpty ?? true ? 'Campo obrigatório' : null,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Por favor, insira a marca do veículo';
+                  }
+                  return null;
+                },
               ),
-              const SizedBox(height: 15),
-
-              // Model
+              const SizedBox(height: 20),
+              
+              // Modelo
               TextFormField(
                 controller: _modelController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Modelo',
-                  hintText: 'Ex: Uno, Gol, Ka',
-                  prefixIcon: const Icon(Icons.directions_car, color: Color(0xFF00C977)),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide(color: Colors.grey[200]!),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: const BorderSide(color: Color(0xFF00C977), width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.model_training),
+                  border: OutlineInputBorder(),
                 ),
-                validator: (value) => value?.isEmpty ?? true ? 'Campo obrigatório' : null,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Por favor, insira o modelo do veículo';
+                  }
+                  return null;
+                },
               ),
-              const SizedBox(height: 15),
-
-              // Year
+              const SizedBox(height: 20),
+              
+              // Ano
               TextFormField(
                 controller: _yearController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Ano',
-                  hintText: 'Ex: 2024',
-                  prefixIcon: const Icon(Icons.calendar_today, color: Color(0xFF00C977)),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide(color: Colors.grey[200]!),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: const BorderSide(color: Color(0xFF00C977), width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.calendar_today),
+                  border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [
@@ -246,36 +202,66 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                   LengthLimitingTextInputFormatter(4),
                 ],
                 validator: (value) {
-                  if (value == null || value.isEmpty) return 'Campo obrigatório';
-                  final year = int.tryParse(value);
-                  if (year == null || year < 1900 || year > DateTime.now().year + 1) {
-                    return 'Ano inválido';
+                  if (value == null || value.isEmpty) {
+                    return 'Por favor, insira o ano do veículo';
+                  }
+                  if (int.tryParse(value) == null || value.length != 4) {
+                    return 'Por favor, insira um ano válido (ex: 2020)';
                   }
                   return null;
                 },
               ),
-              const SizedBox(height: 40),
-
-              // Save Button
-              ElevatedButton(
-                onPressed: _loading ? null : _saveVehicle,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C977),
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  elevation: 5,
+              const SizedBox(height: 20),
+              
+              // Cor
+              TextFormField(
+                controller: _colorController,
+                decoration: const InputDecoration(
+                  labelText: 'Cor',
+                  prefixIcon: Icon(Icons.palette),
+                  border: OutlineInputBorder(),
                 ),
-                child: _loading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text(
-                        'Adicionar Veículo',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Por favor, insira a cor do veículo';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+              
+              // Combustível
+              TextFormField(
+                controller: _fuelController,
+                decoration: const InputDecoration(
+                  labelText: 'Combustível',
+                  prefixIcon: Icon(Icons.local_gas_station),
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Por favor, insira o tipo de combustível';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 30),
+              
+              // Botão Salvar
+              _loading
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
+                  : ElevatedButton(
+                      onPressed: _saveVehicle,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00C977),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
+                      ),
+                      child: const Text(
+                        'Salvar Veículo',
+                        style: TextStyle(fontSize: 18, color: Colors.white),
                       ),
               ),
             ],
@@ -283,14 +269,5 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _plateController.dispose();
-    _brandController.dispose();
-    _modelController.dispose();
-    _yearController.dispose();
-    super.dispose();
   }
 }

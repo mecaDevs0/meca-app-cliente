@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../services/theme_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({Key? key}) : super(key: key);
@@ -9,193 +11,192 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final List<Map<String, dynamic>> _notifications = [
-    {
-      'id': '1',
-      'title': 'Agendamento Confirmado',
-      'message': 'Sua oficina confirmou o agendamento para amanhã às 10h',
-      'type': 'booking',
-      'read': false,
-      'created_at': DateTime.now().subtract(const Duration(hours: 2)),
-    },
-    {
-      'id': '2',
-      'title': 'Serviço Concluído',
-      'message': 'O serviço de troca de óleo foi concluído',
-      'type': 'service',
-      'read': false,
-      'created_at': DateTime.now().subtract(const Duration(days: 1)),
-    },
-    {
-      'id': '3',
-      'title': 'Nova Promoção',
-      'message': '20% de desconto em alinhamento e balanceamento',
-      'type': 'promo',
-      'read': true,
-      'created_at': DateTime.now().subtract(const Duration(days: 2)),
-    },
-  ];
+  bool _pushNotifications = true;
+  bool _emailNotifications = true;
+  bool _smsNotifications = false;
+  bool _marketingNotifications = false;
+  bool _bookingReminders = true;
+  bool _serviceUpdates = true;
+  bool _promotions = false;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        title: const Text(
-          'Notificações',
-          style: TextStyle(
-            color: Color(0xFF252940),
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() {
-                for (var notif in _notifications) {
-                  notif['read'] = true;
-                }
-              });
-            },
-            child: const Text(
-              'Marcar todas como lidas',
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          backgroundColor: themeService.isDarkMode 
+              ? const Color(0xFF121212) 
+              : const Color(0xFFFAFAFA),
+          appBar: AppBar(
+            elevation: 0,
+            backgroundColor: themeService.isDarkMode 
+                ? const Color(0xFF1E1E1E) 
+                : Colors.white,
+            title: Text(
+              'Notificações',
               style: TextStyle(
-                color: Color(0xFF00C977),
+                color: themeService.isDarkMode 
+                    ? Colors.white 
+                    : const Color(0xFF252940),
                 fontWeight: FontWeight.bold,
+                fontSize: 24,
               ),
             ),
-          ),
-        ],
-      ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(15),
-        itemCount: _notifications.length,
-        itemBuilder: (context, index) {
-          final notification = _notifications[index];
-          return _buildNotificationCard(notification);
-        },
-      ),
-    );
-  }
-
-  Widget _buildNotificationCard(Map<String, dynamic> notification) {
-    final isRead = notification['read'] ?? false;
-    final type = notification['type'] ?? 'general';
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: isRead ? Colors.white : const Color(0xFF00C977).withOpacity(0.05),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: isRead ? Colors.grey[200]! : const Color(0xFF00C977).withOpacity(0.3),
-          width: isRead ? 1 : 2,
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: _getNotificationTypeColor(type).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            _getNotificationTypeIcon(type),
-            color: _getNotificationTypeColor(type),
-          ),
-        ),
-        title: Text(
-          notification['title'] ?? '',
-          style: TextStyle(
-            fontWeight: isRead ? FontWeight.w600 : FontWeight.bold,
-            color: const Color(0xFF252940),
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 5),
-            Text(
-              notification['message'] ?? '',
-              style: TextStyle(color: Colors.grey[700], fontSize: 14),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            leading: IconButton(
+              icon: Icon(
+                Icons.arrow_back,
+                color: themeService.isDarkMode 
+                    ? Colors.white 
+                    : const Color(0xFF252940),
+              ),
+              onPressed: () => Navigator.pop(context),
             ),
-            const SizedBox(height: 8),
-            Text(
-              _formatDate(notification['created_at']),
-              style: TextStyle(color: Colors.grey[500], fontSize: 12),
-            ),
-          ],
-        ),
-        trailing: !isRead
-            ? Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF00C977),
-                  shape: BoxShape.circle,
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildNotificationType(
+                  'Push Notifications',
+                  'Receber notificações no dispositivo',
+                  _pushNotifications,
+                  (value) => setState(() => _pushNotifications = value),
                 ),
-              )
-            : null,
-        onTap: () {
-          setState(() {
-            notification['read'] = true;
-          });
-          Navigator.pushNamed(
-            context,
-            '/notification-detail',
-            arguments: notification,
-          );
-        },
+                const SizedBox(height: 16),
+                _buildNotificationType(
+                  'Email',
+                  'Receber notificações por email',
+                  _emailNotifications,
+                  (value) => setState(() => _emailNotifications = value),
+                ),
+                const SizedBox(height: 16),
+                _buildNotificationType(
+                  'SMS',
+                  'Receber notificações por SMS',
+                  _smsNotifications,
+                  (value) => setState(() => _smsNotifications = value),
+                ),
+                const SizedBox(height: 24),
+                _buildSectionTitle('Tipos de Notificação'),
+                const SizedBox(height: 16),
+                _buildNotificationType(
+                  'Lembretes de Agendamento',
+                  'Receber lembretes antes dos agendamentos',
+                  _bookingReminders,
+                  (value) => setState(() => _bookingReminders = value),
+                ),
+                const SizedBox(height: 16),
+                _buildNotificationType(
+                  'Atualizações de Serviço',
+                  'Receber atualizações sobre o status dos serviços',
+                  _serviceUpdates,
+                  (value) => setState(() => _serviceUpdates = value),
+                ),
+                const SizedBox(height: 16),
+                _buildNotificationType(
+                  'Promoções',
+                  'Receber ofertas e promoções especiais',
+                  _promotions,
+                  (value) => setState(() => _promotions = value),
+                ),
+                const SizedBox(height: 16),
+                _buildNotificationType(
+                  'Marketing',
+                  'Receber conteúdo promocional',
+                  _marketingNotifications,
+                  (value) => setState(() => _marketingNotifications = value),
+                ),
+                const SizedBox(height: 32),
+                _buildSaveButton(),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF00C977),
       ),
     );
   }
 
-  IconData _getNotificationTypeIcon(String type) {
-    switch (type) {
-      case 'booking':
-        return Icons.event;
-      case 'service':
-        return Icons.build;
-      case 'promo':
-        return Icons.local_offer;
-      default:
-        return Icons.notifications;
-    }
+  Widget _buildNotificationType(
+    String title,
+    String subtitle,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) {
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            title: Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: themeService.isDarkMode ? Colors.white : Colors.black,
+              ),
+            ),
+            subtitle: Text(
+              subtitle,
+              style: TextStyle(
+                color: themeService.isDarkMode ? Colors.grey[400] : Colors.grey[600],
+              ),
+            ),
+            trailing: Switch(
+              value: value,
+              onChanged: onChanged,
+              activeColor: const Color(0xFF00C977),
+            ),
+          ),
+        );
+      },
+    );
   }
 
-  Color _getNotificationTypeColor(String type) {
-    switch (type) {
-      case 'booking':
-        return const Color(0xFF7896D8);
-      case 'service':
-        return const Color(0xFF00C977);
-      case 'promo':
-        return const Color(0xFFDBA800);
-      default:
-        return const Color(0xFF252940);
-    }
+  Widget _buildSaveButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _saveSettings,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF00C977),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: const Text(
+          'Salvar Configurações',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
   }
 
-  String _formatDate(DateTime? date) {
-    if (date == null) return '';
-    
-    final now = DateTime.now();
-    final difference = now.difference(date);
-    
-    if (difference.inMinutes < 60) {
-      return 'Há ${difference.inMinutes} minutos';
-    } else if (difference.inHours < 24) {
-      return 'Há ${difference.inHours} horas';
-    } else if (difference.inDays == 1) {
-      return 'Ontem';
-    } else {
-      return DateFormat('dd/MM/yyyy HH:mm').format(date);
-    }
+  void _saveSettings() {
+    // Aqui você salvaria as configurações no backend
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Configurações salvas com sucesso!'),
+        backgroundColor: Color(0xFF00C977),
+      ),
+    );
   }
 }

@@ -1,9 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
+import '../widgets/meca_enter_loading_widget.dart';
 import '../services/api_service.dart';
-import '../widgets/animation_widgets.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -42,13 +40,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   Future<void> _initializeApp() async {
     await Future.delayed(const Duration(seconds: 2));
     
-    await _apiService.loadToken();
-    
     if (mounted) {
       // Check if user is logged in
-      final result = await _apiService.getProfile();
+      final token = await _apiService.getToken();
       
-      if (result['success'] == true) {
+      if (token != null) {
         Navigator.pushReplacementNamed(context, '/home');
       } else {
         Navigator.pushReplacementNamed(context, '/login');
@@ -64,45 +60,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF00C977),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FadeTransition(
-              opacity: _fadeAnimation,
-              child: ScaleTransition(
-                scale: _scaleAnimation,
-                child: Column(
-                  children: [
-                    // Logo MECA
-                    Container(
-                      width: 150,
-                      height: 150,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00C977).withOpacity(0.3),
-                            blurRadius: 30,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: Image.asset(
-                        'assets/logos/wordmark_branco.png',
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return const MecaEnterLoadingWidget();
   }
 }
 

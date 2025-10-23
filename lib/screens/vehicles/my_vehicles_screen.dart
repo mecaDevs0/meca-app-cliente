@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import '../../services/api_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/meca_loading_widget.dart';
 
 class MyVehiclesScreen extends StatefulWidget {
   const MyVehiclesScreen({Key? key}) : super(key: key);
@@ -22,7 +26,7 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
   Future<void> _loadVehicles() async {
     setState(() => _loading = true);
     
-    final result = await _apiService.getMyVehicles();
+    final result = await _apiService.getMyVehicles('cus_KM5SA01GI'); // TODO: Obter do usuário logado
     
     if (result['success']) {
       setState(() {
@@ -36,19 +40,27 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        title: const Text(
-          'Meus Veículos',
-          style: TextStyle(
-            color: Color(0xFF252940),
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
-          ),
-        ),
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          backgroundColor: themeService.isDarkMode 
+              ? const Color(0xFF121212) 
+              : const Color(0xFFFAFAFA),
+          appBar: AppBar(
+            elevation: 0,
+            backgroundColor: themeService.isDarkMode 
+                ? const Color(0xFF1E1E1E) 
+                : Colors.white,
+            title: Text(
+              'Meus Veículos',
+              style: TextStyle(
+                color: themeService.isDarkMode 
+                    ? Colors.white 
+                    : const Color(0xFF252940),
+                fontWeight: FontWeight.bold,
+                fontSize: 24,
+              ),
+            ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add_circle, color: Color(0xFF00C977), size: 28),
@@ -59,31 +71,61 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
+          ? const MecaApiLoadingWidget(message: 'Carregando veículos...')
           : _vehicles.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.directions_car, size: 80, color: Colors.grey[300]),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'Nenhum veículo cadastrado',
-                        style: TextStyle(fontSize: 18, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 30),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/add-vehicle').then((_) => _loadVehicles());
-                        },
-                        icon: const Icon(Icons.add),
-                        label: const Text('Adicionar Veículo'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00C977),
-                          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00C977).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFF00C977).withOpacity(0.2),
                           ),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.directions_car,
+                              size: 80,
+                              color: Color(0xFF00C977),
+                            ),
+                            const SizedBox(height: 20),
+                            const Text(
+                              'Nenhum veículo cadastrado',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF00C977),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Adicione um veículo para começar',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.pushNamed(context, '/add-vehicle').then((_) => _loadVehicles());
+                              },
+                              icon: const Icon(Icons.add),
+                              label: const Text('Adicionar Veículo'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF00C977),
+                                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -101,6 +143,8 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                     },
                   ),
                 ),
+        );
+      },
     );
   }
 
