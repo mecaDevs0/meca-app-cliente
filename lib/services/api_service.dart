@@ -333,6 +333,7 @@ class ApiService {
     }
   }
 
+
   String _getErrorMessage(dynamic error) {
     if (error is DioException) {
       if (error.response != null) {

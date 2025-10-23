@@ -114,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             const SizedBox(width: 16),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment: CrossAxisAlignment.end,
                                               children: [
                   const Text(
                     'Bem-vindo ao MECA',
@@ -123,6 +123,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF00C977),
                     ),
+                    textAlign: TextAlign.right,
                   ),
                   const SizedBox(height: 8),
                   const Text(
@@ -131,6 +132,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                                     fontSize: 16,
                       color: Colors.grey,
                     ),
+                    textAlign: TextAlign.right,
                   ),
                 ],
               ),

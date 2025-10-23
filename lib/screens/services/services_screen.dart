@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/meca_loading_widget.dart';
 import 'service_detail_screen.dart';
 
 class ServicesScreen extends StatefulWidget {
@@ -12,8 +15,8 @@ class ServicesScreen extends StatefulWidget {
 
 class _ServicesScreenState extends State<ServicesScreen> {
   final ApiService _apiService = ApiService();
-  List<dynamic> _services = [];
-  bool _loading = false;
+  List<Map<String, dynamic>> _services = [];
+  bool _loading = true;
   String _error = '';
 
   @override
@@ -23,18 +26,28 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   Future<void> _loadServices() async {
-    setState(() => _loading = true);
-    
-    final result = await _apiService.getServices();
-    
-    if (result['success']) {
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+
+    try {
+      final result = await _apiService.getServices();
+      
+      if (result['success']) {
+        setState(() {
+          _services = List<Map<String, dynamic>>.from(result['data']['services'] ?? []);
+          _loading = false;
+        });
+      } else {
+        setState(() {
+          _error = result['error'] ?? 'Erro ao carregar serviços';
+          _loading = false;
+        });
+      }
+    } catch (e) {
       setState(() {
-        _services = result['data']['services'] ?? [];
-        _loading = false;
-      });
-    } else {
-      setState(() {
-        _error = result['error'] ?? 'Erro ao carregar serviços';
+        _error = 'Erro de conexão. Verifique sua internet.';
         _loading = false;
       });
     }
@@ -42,25 +55,36 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Serviços Disponíveis'),
-        backgroundColor: const Color(0xFF00C977),
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
-          : _error.isNotEmpty
-              ? _buildErrorView()
-              : _buildServicesList(),
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          backgroundColor: themeService.isDarkMode ? const Color(0xFF0A0A0A) : Colors.grey[50],
+          appBar: AppBar(
+            title: const Text(
+              'Serviços',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF00C977),
+              ),
+            ),
+            backgroundColor: themeService.isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+            elevation: 0,
+            iconTheme: const IconThemeData(color: Color(0xFF00C977)),
+          ),
+          body: _loading
+              ? const MecaApiLoadingWidget(message: 'Carregando serviços...')
+              : _error.isNotEmpty
+                  ? _buildErrorWidget()
+                  : _buildServicesList(),
+        );
+      },
     );
   }
 
-  Widget _buildErrorView() {
+  Widget _buildErrorWidget() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -73,21 +97,30 @@ class _ServicesScreenState extends State<ServicesScreen> {
             Text(
               'Erro ao carregar serviços',
               style: const TextStyle(
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: Color(0xFF00C977),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Text(
               _error,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey),
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _loadServices,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00C977),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               child: const Text('Tentar Novamente'),
             ),
@@ -99,10 +132,37 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   Widget _buildServicesList() {
     if (_services.isEmpty) {
-      return const Center(
-        child: Text(
-          'Nenhum serviço disponível',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.build_outlined,
+                size: 80,
+                color: Color(0xFF00C977),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Nenhum serviço disponível',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF00C977),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Não há serviços cadastrados no momento',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -118,89 +178,115 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   Widget _buildServiceCard(Map<String, dynamic> service) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ServiceDetailScreen(
-                serviceId: service['id'],
-                workshopId: 'wks_001', // TODO: Obter workshopId do contexto
-              ),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: const Color(0xFF00C977).withOpacity(0.1),
-                ),
-                child: const Icon(
-                  Icons.build,
-                  color: Color(0xFF00C977),
-                  size: 30,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      service['name'] ?? 'Serviço',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      service['description'] ?? '',
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00C977).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        service['category'] ?? '',
-                        style: const TextStyle(
-                          color: Color(0xFF00C977),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: InkWell(
+            onTap: () => _navigateToServiceDetail(service),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    const Color(0xFF00C977).withOpacity(0.1),
+                    const Color(0xFF00C977).withOpacity(0.05),
                   ],
                 ),
+                border: Border.all(
+                  color: const Color(0xFF00C977).withOpacity(0.2),
+                ),
               ),
-              const Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.grey,
-                size: 16,
+              child: Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00C977).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.build,
+                      color: Color(0xFF00C977),
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          service['name'] ?? 'Serviço',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF00C977),
+                          ),
+                        ),
+                        if (service['description'] != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            service['description'],
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on,
+                              size: 16,
+                              color: Color(0xFF00C977),
+                            ),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'Ver oficinas próximas',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF00C977),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const Spacer(),
+                            const Icon(
+                              Icons.arrow_forward_ios,
+                              size: 16,
+                              color: Color(0xFF00C977),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+        );
+      },
+    );
+  }
+
+  void _navigateToServiceDetail(Map<String, dynamic> service) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ServiceDetailScreen(service: service),
       ),
     );
   }
