@@ -224,30 +224,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             color: const Color(0xFF00C977).withOpacity(0.2),
           ),
         ),
-                            child: Column(
-                              children: [
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
             Icon(
               icon,
               color: const Color(0xFF00C977),
-              size: 32,
+              size: 28,
             ),
-            const SizedBox(height: 8),
-                                Text(
+            const SizedBox(height: 6),
+            Text(
               title,
               style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
               ),
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               subtitle,
               style: const TextStyle(
                 color: Colors.grey,
-                fontSize: 12,
+                fontSize: 11,
               ),
               textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
