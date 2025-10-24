@@ -50,8 +50,8 @@ class _MecaEnterLoadingWidgetState extends State<MecaEnterLoadingWidget> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 200,
-              height: 200,
+              width: 300, // Aumentado de 200 para 300
+              height: 300, // Aumentado de 200 para 300
               child: Image.asset(
                 'assets/animations/AnimacaoEnter.gif',
                 fit: BoxFit.contain,
@@ -82,3 +82,4 @@ class _MecaEnterLoadingWidgetState extends State<MecaEnterLoadingWidget> {
     );
   }
 }
+

@@ -56,15 +56,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     if (_isLogin) {
       result = await _apiService.login(
-        email: _emailController.text,
-        password: _passwordController.text,
+        _emailController.text,
+        _passwordController.text,
       );
     } else {
       result = await _apiService.register(
-        firstName: _nameController.text,
-        email: _emailController.text,
-        password: _passwordController.text,
-        phone: _phoneController.text.replaceAll(RegExp(r'\D'), ''),
+        _nameController.text,
+        _emailController.text,
+        _passwordController.text,
+        _phoneController.text.replaceAll(RegExp(r'\D'), ''),
       );
     }
 
@@ -114,15 +114,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             children: [
               // Logo Section
               Expanded(
-                flex: 3,
+                flex: 2,
                 child: Padding(
-                padding: const EdgeInsets.all(40),
+                padding: const EdgeInsets.fromLTRB(40, 20, 40, 10),
                 child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                        width: 120,
-                        height: 120,
+                        width: 80,
+                        height: 80,
                       decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(30),
                         boxShadow: [
@@ -141,23 +141,23 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                       ),
                     ),
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 15),
                     const Text(
                       'MECA',
                       style: TextStyle(
-                          fontSize: 42,
+                          fontSize: 28,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
-                          letterSpacing: 8,
+                          letterSpacing: 4,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 5),
                     Text(
                       'Seu carro em boas mãos',
                       style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 12,
                           color: Colors.white.withOpacity(0.8),
-                          letterSpacing: 2,
+                          letterSpacing: 1,
                         ),
                       ),
                     ],

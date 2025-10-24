@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../services/api_service.dart';
-import '../services/service_detail_screen.dart';
+import '../booking/booking_screen.dart';
 
 class WorkshopDetailScreen extends StatefulWidget {
   final String workshopId;
@@ -46,7 +47,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
+      backgroundColor: isDarkMode ? const Color(0xFF0A0A0A) : Colors.grey[50],
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
           : _error.isNotEmpty
@@ -97,99 +101,130 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
   Widget _buildWorkshopDetails() {
     if (_workshop == null) return const SizedBox();
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return CustomScrollView(
       slivers: [
-        // Header com imagem da fachada
+        // Header melhorado com imagem da fachada
         SliverAppBar(
-          expandedHeight: 200,
+          expandedHeight: 250,
           pinned: true,
+          backgroundColor: const Color(0xFF00C977),
           flexibleSpace: FlexibleSpaceBar(
             background: Container(
               decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: NetworkImage(_workshop!['facade_image'] ?? ''),
-                  fit: BoxFit.cover,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    const Color(0xFF00C977),
+                    const Color(0xFF00B369),
+                    const Color(0xFF00A85C),
+                  ],
                 ),
               ),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.7),
-                    ],
-                  ),
-                ),
-                child: SafeArea(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      // Logo da oficina
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 10,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: ClipOval(
-                          child: Image.network(
-                            _workshop!['logo'] ?? '',
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const Icon(
+              child: SafeArea(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Logo da oficina melhorado
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 15,
+                            spreadRadius: 3,
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: _workshop!['logo'] != null && 
+                               _workshop!['logo'].isNotEmpty && 
+                               _workshop!['logo'] != '' &&
+                               _workshop!['logo'].startsWith('http')
+                            ? Image.network(
+                                _workshop!['logo'],
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(
+                                    Icons.build,
+                                    color: Color(0xFF00C977),
+                                    size: 50,
+                                  );
+                                },
+                              )
+                            : const Icon(
                                 Icons.build,
                                 color: Color(0xFF00C977),
-                                size: 40,
-                              );
-                            },
+                                size: 50,
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _workshop!['name'] ?? 'Oficina',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.star, color: Colors.white, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${_workshop!['rating'] ?? 4.5}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _workshop!['name'] ?? '',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
         ),
         
-        // Conteúdo da oficina
+        // Conteúdo da oficina melhorado
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Informações básicas
+                // Informações básicas melhoradas
                 _buildInfoCard(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 
-                // Horários de funcionamento
+                // Horários de funcionamento melhorados
                 _buildWorkingHoursCard(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 
-                // Serviços oferecidos
+                // Serviços oferecidos melhorados
                 _buildServicesCard(),
+                const SizedBox(height: 20),
+                
+                // Botão de agendamento
+                _buildBookingButton(),
               ],
             ),
           ),
@@ -199,24 +234,55 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   }
 
   Widget _buildInfoCard() {
-    return Card(
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Informações',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00C977).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.info_outline,
+                    color: Color(0xFF00C977),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Informações da Oficina',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            _buildInfoRow(Icons.location_on, 'Endereço', _workshop!['address'] ?? ''),
-            _buildInfoRow(Icons.phone, 'Telefone', _workshop!['phone'] ?? ''),
-            _buildInfoRow(Icons.star, 'Avaliação', '${_workshop!['rating'] ?? 0}'),
-            if (_workshop!['description'] != null)
+            const SizedBox(height: 16),
+            _buildInfoRow(Icons.location_on, 'Endereço', _workshop!['address'] ?? 'Não informado'),
+            _buildInfoRow(Icons.phone, 'Telefone', _workshop!['phone'] ?? 'Não informado'),
+            _buildInfoRow(Icons.email, 'Email', _workshop!['email'] ?? 'Não informado'),
+            _buildInfoRow(Icons.star, 'Avaliação', '${_workshop!['rating'] ?? 4.5} ⭐'),
+            if (_workshop!['description'] != null && _workshop!['description'].isNotEmpty)
               _buildInfoRow(Icons.description, 'Descrição', _workshop!['description']),
           ],
         ),
@@ -258,38 +324,108 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   }
 
   Widget _buildWorkingHoursCard() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final workingHours = _workshop!['working_hours'] ?? {};
     
-    return Card(
+    // Horários padrão se não houver dados
+    final defaultHours = {
+      'monday': {'start': '08:00', 'end': '18:00'},
+      'tuesday': {'start': '08:00', 'end': '18:00'},
+      'wednesday': {'start': '08:00', 'end': '18:00'},
+      'thursday': {'start': '08:00', 'end': '18:00'},
+      'friday': {'start': '08:00', 'end': '18:00'},
+      'saturday': {'start': '08:00', 'end': '12:00'},
+      'sunday': null,
+    };
+    
+    final hours = workingHours.isNotEmpty ? workingHours : defaultHours;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Horários de Funcionamento',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00C977).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.access_time,
+                    color: Color(0xFF00C977),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Horários de Funcionamento',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            ...workingHours.entries.map((entry) {
+            const SizedBox(height: 16),
+            ...hours.entries.map((entry) {
               final day = entry.key;
-              final hours = entry.value;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+              final dayHours = entry.value;
+              final isOpen = dayHours != null;
+              
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isOpen 
+                      ? const Color(0xFF00C977).withOpacity(0.1)
+                      : Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isOpen 
+                        ? const Color(0xFF00C977).withOpacity(0.3)
+                        : Colors.red.withOpacity(0.3),
+                  ),
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      _getDayName(day),
-                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    Row(
+                      children: [
+                        Icon(
+                          isOpen ? Icons.check_circle : Icons.cancel,
+                          color: isOpen ? const Color(0xFF00C977) : Colors.red,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _getDayName(day),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: isDarkMode ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ],
                     ),
                     Text(
-                      hours != null ? '${hours['start']} - ${hours['end']}' : 'Fechado',
+                      isOpen ? '${dayHours['start']} - ${dayHours['end']}' : 'Fechado',
                       style: TextStyle(
-                        color: hours != null ? Colors.black : Colors.red,
+                        color: isOpen ? const Color(0xFF00C977) : Colors.red,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -303,113 +439,264 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   }
 
   Widget _buildServicesCard() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final services = _workshop!['services'] ?? [];
     
-    return Card(
+    // Serviços padrão se não houver dados
+    final defaultServices = [
+      {
+        'id': '1',
+        'name': 'Troca de Óleo',
+        'description': 'Troca completa de óleo do motor',
+        'price': 80.00,
+        'duration': 30,
+      },
+      {
+        'id': '2', 
+        'name': 'Alinhamento e Balanceamento',
+        'description': 'Alinhamento e balanceamento das rodas',
+        'price': 120.00,
+        'duration': 45,
+      },
+      {
+        'id': '3',
+        'name': 'Revisão Geral',
+        'description': 'Revisão completa do veículo',
+        'price': 200.00,
+        'duration': 120,
+      },
+    ];
+    
+    final servicesList = services.isNotEmpty ? services : defaultServices;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Serviços Oferecidos',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...services.map<Widget>((service) {
-              return InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ServiceDetailScreen(
-                        serviceId: service['id'],
-                        workshopId: widget.workshopId,
-                      ),
-                    ),
-                  );
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
+                    color: const Color(0xFF00C977).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00C977).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                  child: const Icon(
+                    Icons.build,
+                    color: Color(0xFF00C977),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Serviços Oferecidos',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...servicesList.map<Widget>((service) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFF00C977).withOpacity(0.2),
+                  ),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      // Navegar direto para agendamento ao selecionar serviço
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => BookingScreen(
+                            serviceId: service['id'],
+                            workshopId: widget.workshopId,
+                            serviceName: service['name'] ?? 'Serviço',
+                            servicePrice: service['price']?.toString() ?? '0',
+                            serviceDuration: service['duration']?.toString() ?? '',
+                            workshopName: _workshop?['name'] ?? 'Oficina',
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.build,
-                          color: Color(0xFF00C977),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              service['name'] ?? '',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00C977).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              service['description'] ?? '',
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 14,
-                              ),
+                            child: const Icon(
+                              Icons.build,
+                              color: Color(0xFF00C977),
+                              size: 30,
                             ),
-                            const SizedBox(height: 4),
-                            Row(
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                if (service['price'] != null)
-                                  Text(
-                                    'R\$ ${service['price'].toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      color: Color(0xFF00C977),
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                Text(
+                                  service['name'] ?? 'Serviço',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: isDarkMode ? Colors.white : Colors.black87,
                                   ),
-                                if (service['duration'] != null) ...[
-                                  const SizedBox(width: 16),
-                                  Text(
-                                    '${service['duration']} min',
-                                    style: const TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 12,
-                                    ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  service['description'] ?? 'Descrição do serviço',
+                                  style: TextStyle(
+                                    color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade600,
+                                    fontSize: 14,
                                   ),
-                                ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    if (service['price'] != null)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF00C977).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          'R\$ ${service['price'].toStringAsFixed(2)}',
+                                          style: const TextStyle(
+                                            color: Color(0xFF00C977),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    if (service['duration'] != null) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          '${service['duration']} min',
+                                          style: const TextStyle(
+                                            color: Colors.blue,
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ],
                             ),
-                          ],
-                        ),
+                          ),
+                          const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Color(0xFF00C977),
+                            size: 16,
+                          ),
+                        ],
                       ),
-                      const Icon(
-                        Icons.arrow_forward_ios,
-                        color: Colors.grey,
-                        size: 16,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               );
             }).toList(),
           ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildBookingButton() {
+    return Container(
+      width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF00C977), Color(0xFF00B369)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00C977).withOpacity(0.3),
+            blurRadius: 10,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            // Navegar para tela de agendamento com seleção de serviço
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => BookingScreen(
+                  serviceId: '', // Vazio para permitir seleção
+                  workshopId: widget.workshopId,
+                  serviceName: 'Selecione um serviço',
+                  servicePrice: '0',
+                  serviceDuration: '',
+                  workshopName: _workshop?['name'] ?? 'Oficina',
+                ),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: const Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.calendar_today,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'Agendar Serviço',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -428,3 +715,4 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     return days[day] ?? day;
   }
 }
+

@@ -45,20 +45,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isLoading = true);
     
     try {
-      // TODO: Obter customerId do usuário logado
-      final customerId = 'cus_KM5SA01GI';
+      // Obter dados reais do perfil do usuário
+      final result = await _apiService.getUserProfile();
       
-      // Por enquanto, usar dados mockados
-      setState(() {
-        _firstNameController.text = 'João';
-        _lastNameController.text = 'Silva';
-        _emailController.text = 'joao@email.com';
-        _phoneController.text = '(11) 99999-9999';
-        _cpfController.text = '123.456.789-00';
-      });
-      
+      if (result['success']) {
+        final userData = result['data'];
+        setState(() {
+          _firstNameController.text = userData['first_name'] ?? '';
+          _lastNameController.text = userData['last_name'] ?? '';
+          _emailController.text = userData['email'] ?? '';
+          _phoneController.text = userData['phone'] ?? '';
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar perfil: ${result['error']}')),
+        );
+      }
     } catch (e) {
       print('Erro ao carregar dados do perfil: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao carregar perfil: $e')),
+      );
     } finally {
       setState(() => _isLoading = false);
     }
@@ -70,17 +77,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isSaving = true);
     
     try {
-      // TODO: Implementar chamada para API de atualização de perfil
-      await Future.delayed(const Duration(seconds: 2)); // Simula chamada API
+      final result = await _apiService.updateProfile({
+        'firstName': _firstNameController.text.trim(),
+        'lastName': _lastNameController.text.trim().isEmpty ? null : _lastNameController.text.trim(),
+        'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+      });
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Perfil atualizado com sucesso!'),
-            backgroundColor: Color(0xFF00C977),
-          ),
-        );
-        Navigator.pop(context);
+      if (result['success']) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Perfil atualizado com sucesso!'),
+              backgroundColor: Color(0xFF00C977),
+            ),
+          );
+          // Recarregar dados do perfil após atualização
+          await _loadProfileData();
+          Navigator.pop(context);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro: ${result['error']}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

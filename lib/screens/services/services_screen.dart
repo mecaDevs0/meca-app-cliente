@@ -286,7 +286,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ServiceDetailScreen(service: service),
+        builder: (context) => ServiceDetailScreen(
+          serviceId: service['id'] ?? '',
+          workshopId: service['workshop_id'] ?? '',
+        ),
       ),
     );
   }

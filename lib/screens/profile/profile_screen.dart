@@ -27,21 +27,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
     
     try {
-      // TODO: Obter customerId do usuário logado
-      final customerId = 'cus_KM5SA01GI';
+      // Obter dados reais do perfil do usuário
+      final result = await _apiService.getUserProfile();
       
-      // Por enquanto, usar dados mockados
-      setState(() {
-        _customerData = {
-          'id': customerId,
-          'first_name': 'João',
-          'last_name': 'Silva',
-          'email': 'joao@email.com',
-          'phone': '(11) 99999-9999',
-          'address': 'Rua das Flores, 123',
-          'cpf': '123.456.789-00',
-        };
-      });
+      if (result['success']) {
+        setState(() {
+          _customerData = result['data'];
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar perfil: ${result['error']}')),
+        );
+      }
       
     } catch (e) {
       print('Erro ao carregar dados do cliente: $e');

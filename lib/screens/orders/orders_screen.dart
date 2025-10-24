@@ -17,14 +17,15 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   late TabController _tabController;
   List<Map<String, dynamic>> _bookings = [];
   bool _loading = true;
-  String _currentStatus = 'all';
+  String _currentStatus = 'pendente_oficina';
+  Map<String, Map<String, dynamic>> _vehicleData = {};
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
-      final statuses = ['all', 'pending', 'confirmed', 'completed'];
+      final statuses = ['pendente_oficina', 'confirmado', 'finalizado_cliente'];
       setState(() {
         _currentStatus = statuses[_tabController.index];
       });
@@ -37,16 +38,17 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     if (!mounted) return;
     setState(() => _loading = true);
     
-    final result = await _apiService.getMyBookings('cus_KM5SA01GI'); // TODO: Obter do usuário logado
+    final result = await _apiService.getMyBookings('cus_01K83MVXK5RDQA6R079DXP2C56'); // ID do usuário logado
     
     if (!mounted) return;
     
     if (result['success']) {
-      var bookings = (result['data']['bookings'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      var bookings = (result['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       
-      if (_currentStatus != 'all') {
-        bookings = bookings.where((b) => b['status'] == _currentStatus).toList();
-      }
+      bookings = bookings.where((b) => b['status'] == _currentStatus).toList();
+      
+      // Carregar dados dos veículos
+      await _loadVehicleData(bookings);
       
       if (mounted) {
         setState(() {
@@ -61,26 +63,73 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     }
   }
 
+  Future<void> _loadVehicleData(List<Map<String, dynamic>> bookings) async {
+    try {
+      final vehiclesResult = await _apiService.getUserVehicles();
+      if (vehiclesResult['success']) {
+        final vehicles = (vehiclesResult['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        for (var vehicle in vehicles) {
+          _vehicleData[vehicle['id']] = vehicle;
+        }
+      }
+    } catch (e) {
+      print('Erro ao carregar dados dos veículos: $e');
+    }
+  }
+
+  String _getVehicleDisplayName(Map<String, dynamic> booking) {
+    // Primeiro tenta usar vehicle_snapshot se disponível
+    if (booking['vehicle_snapshot'] != null) {
+      final snapshot = booking['vehicle_snapshot'];
+      return '${snapshot['brand'] ?? ''} ${snapshot['model'] ?? ''} - ${snapshot['plate'] ?? ''}';
+    }
+    
+    // Se não, tenta usar os dados carregados do veículo
+    if (booking['vehicle_id'] != null && _vehicleData.containsKey(booking['vehicle_id'])) {
+      final vehicle = _vehicleData[booking['vehicle_id']];
+      return '${vehicle?['brand'] ?? ''} ${vehicle?['model'] ?? ''} - ${vehicle?['plate'] ?? ''}';
+    }
+    
+    // Se não há dados, mostra uma mensagem genérica
+    return 'Veículo não informado';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: isDarkMode ? const Color(0xFF0A0A0A) : Colors.grey[50],
       body: CustomScrollView(
         slivers: [
-          // AppBar futurista
+          // AppBar melhorado
           SliverAppBar(
-            expandedHeight: 120,
+            expandedHeight: 60,
             floating: false,
             pinned: true,
             backgroundColor: const Color(0xFF00C977),
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back,
+                color: Colors.white,
+                size: 24,
+              ),
+              onPressed: () {
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/home',
+                  (route) => false,
+                );
+              },
+            ),
             flexibleSpace: FlexibleSpaceBar(
               title: const Text(
                 'Meus Agendamentos',
                 style: TextStyle(
                   color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 16,
+                  letterSpacing: 0.5,
                 ),
               ),
               background: Container(
@@ -110,34 +159,33 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
               ),
             ),
           ),
-          // TabBar futurista
+          // TabBar melhorado com padding
           SliverPersistentHeader(
             pinned: true,
             delegate: _FuturisticTabBarDelegate(
               TabBar(
                 controller: _tabController,
                 labelColor: const Color(0xFF00C977),
-                unselectedLabelColor: Colors.grey.shade400,
+                unselectedLabelColor: isDarkMode ? Colors.grey[400] : Colors.grey[600],
                 indicator: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  color: const Color(0xFF00C977).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                  color: const Color(0xFF00C977).withOpacity(0.15),
                   border: Border.all(
-                    color: const Color(0xFF00C977),
+                    color: const Color(0xFF00C977).withOpacity(0.3),
                     width: 1,
                   ),
                 ),
                 indicatorSize: TabBarIndicatorSize.tab,
                 labelStyle: const TextStyle(
-                  fontWeight: FontWeight.bold, 
+                  fontWeight: FontWeight.w600, 
                   fontSize: 14,
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.3,
                 ),
                 unselectedLabelStyle: const TextStyle(
-                  fontWeight: FontWeight.normal,
+                  fontWeight: FontWeight.w500,
                   fontSize: 14,
                 ),
                 tabs: const [
-                  Tab(text: 'Todos'),
                   Tab(text: 'Pendentes'),
                   Tab(text: 'Confirmados'),
                   Tab(text: 'Concluídos'),
@@ -152,60 +200,60 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 : RefreshIndicator(
                     color: const Color(0xFF00C977),
                     onRefresh: _loadBookings,
-              child: _bookings.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00C977).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: const Color(0xFF00C977).withOpacity(0.2),
-                              ),
-                            ),
+                    child: _bookings.isEmpty
+                        ? Center(
                             child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(
-                                  Icons.event_busy,
-                                  size: 80,
-                                  color: Color(0xFF00C977),
-                                ),
-                                const SizedBox(height: 20),
-                                const Text(
-                                  'Nenhum agendamento encontrado',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF00C977),
+                                Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00C977).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: const Color(0xFF00C977).withOpacity(0.2),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Agende um serviço para começar',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey.shade400,
+                                  child: Column(
+                                    children: [
+                                      const Icon(
+                                        Icons.event_busy,
+                                        size: 80,
+                                        color: Color(0xFF00C977),
+                                      ),
+                                      const SizedBox(height: 20),
+                                      const Text(
+                                        'Nenhum agendamento encontrado',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF00C977),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Agende um serviço para começar',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade400,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(15),
+                            itemCount: _bookings.length,
+                            itemBuilder: (context, index) {
+                              final booking = _bookings[index];
+                              return _buildBookingCard(booking);
+                            },
                           ),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(15),
-                      itemCount: _bookings.length,
-                      itemBuilder: (context, index) {
-                        final booking = _bookings[index];
-                        return _buildBookingCard(booking);
-                      },
-                    ),
                   ),
-                ),
+          ),
         ],
       ),
     );
@@ -294,8 +342,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                     Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade400),
                     const SizedBox(width: 8),
                     Text(
-                      booking['scheduled_date'] != null
-                          ? DateFormat('dd/MM/yyyy').format(DateTime.parse(booking['scheduled_date']))
+                      booking['appointment_date'] != null
+                          ? DateFormat('dd/MM/yyyy').format(DateTime.parse(booking['appointment_date']))
                           : 'Data não definida',
                       style: TextStyle(color: Colors.grey.shade300),
                     ),
@@ -303,7 +351,9 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                     Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
                     const SizedBox(width: 8),
                     Text(
-                      booking['scheduled_time'] ?? '00:00',
+                      booking['appointment_date'] != null
+                          ? DateFormat('HH:mm').format(DateTime.parse(booking['appointment_date']))
+                          : '00:00',
                       style: TextStyle(color: Colors.grey.shade300),
                     ),
                   ],
@@ -316,7 +366,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                     Icon(Icons.directions_car, size: 16, color: Colors.grey[600]),
                     const SizedBox(width: 8),
                     Text(
-                      '${booking['vehicle_brand']} ${booking['vehicle_model']} - ${booking['vehicle_plate']}',
+                      _getVehicleDisplayName(booking),
                       style: TextStyle(color: Colors.grey.shade300),
                     ),
                   ],
@@ -324,50 +374,46 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 const SizedBox(height: 15),
 
                 // Services
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: ((booking['services'] as List?) ?? []).map((service) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00C977).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
+                if (booking['product_id'] != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00C977).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'Serviço ID: ${booking['product_id']}',
+                      style: const TextStyle(
+                        color: Color(0xFF00C977),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
                       ),
-                      child: Text(
-                        service['title'] ?? 'Serviço',
-                        style: const TextStyle(
-                          color: Color(0xFF00C977),
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
+                    ),
+                  ),
                 const SizedBox(height: 15),
 
-                // Total
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Total',
-                      style: TextStyle(
-                        color: Colors.grey[700],
-                        fontSize: 16,
+                // Total - só mostra se houver preço
+                if (booking['estimated_price'] != null || booking['final_price'] != null)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Total',
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontSize: 16,
+                        ),
                       ),
-                    ),
-                    Text(
-                      'R\$ ${(booking['total'] ?? 0) / 100}',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF00C977),
+                      Text(
+                        'R\$ ${((booking['final_price'] ?? booking['estimated_price']) ?? 0) / 100}',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF00C977),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             ),
           ),

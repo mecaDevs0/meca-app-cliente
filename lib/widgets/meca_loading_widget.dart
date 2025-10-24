@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:lottie/lottie.dart';
 
 import '../services/theme_service.dart';
 
@@ -11,7 +10,7 @@ class MecaLoadingWidget extends StatefulWidget {
   const MecaLoadingWidget({
     Key? key,
     this.message,
-    this.size = 80.0,
+    this.size = 300.0, // Aumentado para 300.0 - muito maior
   }) : super(key: key);
 
   @override
@@ -119,7 +118,7 @@ class MecaApiLoadingWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return MecaLoadingWidget(
       message: message ?? 'Carregando...',
-      size: 60.0,
+      size: 120.0, // Aumentado de 60.0 para 120.0
     );
   }
 }
@@ -138,7 +137,7 @@ class MecaEnterLoadingWidget extends StatelessWidget {
           children: [
             const MecaLoadingWidget(
               message: 'Bem-vindo ao MECA',
-              size: 120.0,
+              size: 200.0, // Aumentado de 120.0 para 200.0
             ),
             const SizedBox(height: 40),
             const Text(

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/meca_loading_widget.dart';
+import 'vehicle_history_screen.dart';
 
 class MyVehiclesScreen extends StatefulWidget {
   const MyVehiclesScreen({Key? key}) : super(key: key);
@@ -35,6 +36,36 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
       });
     } else {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _setAsDefault(String vehicleId) async {
+    try {
+      final result = await _apiService.setDefaultVehicle(vehicleId, 'cus_KM5SA01GI');
+      
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Veículo definido como padrão'),
+            backgroundColor: Color(0xFF00C977),
+          ),
+        );
+        _loadVehicles(); // Recarrega a lista
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erro ao definir veículo padrão'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Erro ao definir veículo padrão'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -234,16 +265,59 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                     ],
                   ),
                 ),
-                // Action Button
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Color(0xFF00C977)),
-                  onPressed: () {
-                    Navigator.pushNamed(
-                      context,
-                      '/edit-vehicle',
-                      arguments: vehicle,
-                    ).then((_) => _loadVehicles());
-                  },
+                // Action Buttons
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Set as default button
+                    if (!(vehicle['is_default'] ?? false))
+                      IconButton(
+                        icon: const Icon(Icons.star_border, color: Color(0xFF00C977)),
+                        onPressed: () => _setAsDefault(vehicle['id']),
+                        tooltip: 'Definir como padrão',
+                      ),
+                    // Default indicator
+                    if (vehicle['is_default'] ?? false)
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00C977),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.star,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    // History button
+                    IconButton(
+                      icon: const Icon(Icons.history, color: Color(0xFF00C977)),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => VehicleHistoryScreen(
+                              vehicleId: vehicle['id'],
+                              vehicle: vehicle,
+                            ),
+                          ),
+                        );
+                      },
+                      tooltip: 'Ver histórico',
+                    ),
+                    // Edit button
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Color(0xFF00C977)),
+                      onPressed: () {
+                        Navigator.pushNamed(
+                          context,
+                          '/edit-vehicle',
+                          arguments: vehicle,
+                        ).then((_) => _loadVehicles());
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),

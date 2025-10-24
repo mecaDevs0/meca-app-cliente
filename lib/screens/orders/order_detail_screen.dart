@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../../services/api_service.dart';
+import 'booking_evidence_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Map<String, dynamic> booking;
@@ -231,6 +233,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ],
               ),
             ),
+            
+            // Botões de ação conforme o fluxo
+            _buildActionButtons(status),
           ],
         ),
       ),
@@ -395,5 +400,145 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Map<String, dynamic> _getStatusConfig(String status) {
     return {};
+  }
+
+  Widget _buildActionButtons(String status) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          
+          // Botão "Ver Provas" - quando status = "completed" ou "in_progress"
+          if (status == 'completed' || status == 'in_progress') ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _viewEvidence,
+                icon: const Icon(Icons.photo_camera),
+                label: const Text('Ver Provas da Oficina'),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF00C977)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          
+          // Botão "Avaliar Serviço" - quando status = "completed"
+          if (status == 'completed') ...[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _rateService,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00C977),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Avaliar Serviço',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          
+          // Botão "Me Notificar" - quando status = "confirmed" e passou de 1 dia
+          if (status == 'confirmed' && _shouldShowNotificationButton()) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _requestNotification,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF00C977)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Me Notificar',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF00C977),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+
+
+  Future<void> _rateService() async {
+    // TODO: Implementar tela de avaliação
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Tela de avaliação será implementada em breve'),
+        backgroundColor: Color(0xFF00C977),
+      ),
+    );
+  }
+
+  Future<void> _requestNotification() async {
+    // TODO: Implementar sistema de notificações
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Sistema de notificações será implementado em breve'),
+        backgroundColor: Color(0xFF00C977),
+      ),
+    );
+  }
+
+  Future<void> _viewEvidence() async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BookingEvidenceScreen(
+          bookingId: widget.booking['id'],
+          booking: widget.booking,
+        ),
+      ),
+    );
+  }
+
+  bool _shouldShowNotificationButton() {
+    // Verificar se passou mais de 1 dia desde a confirmação
+    final confirmedDate = DateTime.tryParse(widget.booking['confirmed_at'] ?? '');
+    if (confirmedDate == null) return false;
+    
+    final now = DateTime.now();
+    final difference = now.difference(confirmedDate).inDays;
+    return difference >= 1;
+  }
+
+  double _calculateTotalAmount() {
+    // TODO: Calcular valor total baseado no serviço
+    return widget.booking['service']?['price']?.toDouble() ?? 0.0;
+  }
+
+  double _calculateMecaFee() {
+    // Taxa MECA de 5%
+    final serviceAmount = _calculateServiceAmount();
+    return serviceAmount * 0.05;
+  }
+
+  double _calculateServiceAmount() {
+    return widget.booking['service']?['price']?.toDouble() ?? 0.0;
   }
 }

@@ -322,3 +322,4 @@ class EmailService {
     return '${date.day} de ${months[date.month - 1]} de ${date.year} às ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 }
+

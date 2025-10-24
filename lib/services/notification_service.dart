@@ -1,6 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 // import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -49,8 +50,13 @@ class NotificationService {
   }
 
   Future<String?> getFCMToken() async {
-    // return await _firebaseMessaging.getToken();
-    return 'mock_fcm_token'; // Mock token temporário
+    try {
+      // TODO: Implementar Firebase Messaging quando necessário
+      return 'mock_fcm_token_${DateTime.now().millisecondsSinceEpoch}';
+    } catch (e) {
+      print('Erro ao obter FCM token: $e');
+      return null;
+    }
   }
 
   Future<void> showLocalNotification({
@@ -119,7 +125,7 @@ class NotificationService {
       id,
       title,
       body,
-      scheduledDate,
+      tz.TZDateTime.from(scheduledDate, tz.getLocation('America/Sao_Paulo')),
       notificationDetails,
       payload: payload,
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,

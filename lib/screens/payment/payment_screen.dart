@@ -1,21 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../services/payment_service.dart';
-import '../../services/notification_service.dart';
-import '../../services/email_service.dart';
+
+import '../../services/pagbank_service.dart';
 
 class PaymentScreen extends StatefulWidget {
-  final String bookingId;
-  final String serviceName;
-  final String workshopName;
-  final double amount;
+  final Map<String, dynamic> service;
+  final Map<String, dynamic> workshop;
+  final Map<String, dynamic> booking;
 
   const PaymentScreen({
     Key? key,
-    required this.bookingId,
-    required this.serviceName,
-    required this.workshopName,
-    required this.amount,
+    required this.service,
+    required this.workshop,
+    required this.booking,
   }) : super(key: key);
 
   @override
@@ -25,28 +22,36 @@ class PaymentScreen extends StatefulWidget {
 class _PaymentScreenState extends State<PaymentScreen> {
   final _formKey = GlobalKey<FormState>();
   final _cardNumberController = TextEditingController();
-  final _expiryController = TextEditingController();
+  final _expiryDateController = TextEditingController();
   final _cvvController = TextEditingController();
-  final _holderNameController = TextEditingController();
+  final _cardholderNameController = TextEditingController();
   
-  String _selectedPaymentMethod = PaymentService.paymentTypePix;
-  bool _loading = false;
-  bool _saveCard = false;
-  String? _pixCode;
-  String? _pixQrCode;
+  String _selectedPaymentMethod = 'credit_card';
+  int _selectedInstallments = 1;
+  bool _isLoading = false;
+  
+  late double _serviceAmount;
+  late List<Map<String, dynamic>> _installmentOptions;
 
   @override
-  void dispose() {
-    _cardNumberController.dispose();
-    _expiryController.dispose();
-    _cvvController.dispose();
-    _holderNameController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _serviceAmount = widget.service['price'] ?? 100.0;
+    _calculateInstallments();
+  }
+
+  void _calculateInstallments() {
+    final maxInstallments = widget.workshop['accepts_installment'] == true ? 12 : 1;
+    _installmentOptions = PagBankService.calculateInstallmentOptions(
+      amount: _serviceAmount,
+      maxInstallments: maxInstallments,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text('Pagamento'),
         backgroundColor: const Color(0xFF00C977),
@@ -60,15 +65,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildServiceInfo(),
+              // Resumo do serviço
+              _buildServiceSummary(),
               const SizedBox(height: 24),
-              _buildPaymentMethodSelection(),
+              
+              // Método de pagamento
+              _buildPaymentMethod(),
               const SizedBox(height: 24),
-              if (_selectedPaymentMethod == PaymentService.paymentTypeCreditCard)
-                _buildCreditCardForm(),
-              if (_selectedPaymentMethod == PaymentService.paymentTypePix)
-                _buildPixInfo(),
-              const SizedBox(height: 24),
+              
+              // Parcelamento
+              if (widget.workshop['accepts_installment'] == true)
+                _buildInstallmentOptions(),
+              
+              // Dados do cartão
+              if (_selectedPaymentMethod == 'credit_card')
+                _buildCardForm(),
+              
+              const SizedBox(height: 32),
+              
+              // Botão de pagamento
               _buildPaymentButton(),
             ],
           ),
@@ -77,320 +92,356 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  Widget _buildServiceInfo() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Resumo do Pagamento',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Serviço:'),
-                Text(
-                  widget.serviceName,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Oficina:'),
-                Text(
-                  widget.workshopName,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-            const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Total:',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  'R\$ ${widget.amount.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF00C977),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentMethodSelection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Forma de Pagamento',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        _buildPaymentMethodOption(
-          PaymentService.paymentTypePix,
-          'PIX',
-          'Pagamento instantâneo',
-          Icons.qr_code,
-        ),
-        const SizedBox(height: 12),
-        _buildPaymentMethodOption(
-          PaymentService.paymentTypeCreditCard,
-          'Cartão de Crédito',
-          'Visa, Mastercard, Elo',
-          Icons.credit_card,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPaymentMethodOption(
-    String value,
-    String title,
-    String subtitle,
-    IconData icon,
-  ) {
-    final isSelected = _selectedPaymentMethod == value;
-    
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedPaymentMethod = value;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: isSelected ? const Color(0xFF00C977) : Colors.grey.shade300,
-            width: isSelected ? 2 : 1,
-          ),
-          borderRadius: BorderRadius.circular(12),
-          color: isSelected ? const Color(0xFF00C977).withOpacity(0.1) : Colors.white,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? const Color(0xFF00C977) : Colors.grey,
-              size: 24,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? const Color(0xFF00C977) : Colors.black,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: Colors.grey,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Radio<String>(
-              value: value,
-              groupValue: _selectedPaymentMethod,
-              onChanged: (val) {
-                setState(() {
-                  _selectedPaymentMethod = val!;
-                });
-              },
-              activeColor: const Color(0xFF00C977),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCreditCardForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Dados do Cartão',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _cardNumberController,
-          decoration: const InputDecoration(
-            labelText: 'Número do Cartão',
-            hintText: '1234 5678 9012 3456',
-            prefixIcon: Icon(Icons.credit_card),
-          ),
-          keyboardType: TextInputType.number,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(19),
-            CardNumberInputFormatter(),
-          ],
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Número do cartão é obrigatório';
-            }
-            if (!PaymentService.validateCardData({'number': value})) {
-              return 'Número do cartão inválido';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _expiryController,
-                decoration: const InputDecoration(
-                  labelText: 'Validade',
-                  hintText: 'MM/AA',
-                  prefixIcon: Icon(Icons.calendar_today),
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(4),
-                  ExpiryDateInputFormatter(),
-                ],
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Data de validade é obrigatória';
-                  }
-                  if (!PaymentService.validateCardData({'expiry': value})) {
-                    return 'Data de validade inválida';
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _cvvController,
-                decoration: const InputDecoration(
-                  labelText: 'CVV',
-                  hintText: '123',
-                  prefixIcon: Icon(Icons.lock),
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(4),
-                ],
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'CVV é obrigatório';
-                  }
-                  if (value.length < 3) {
-                    return 'CVV deve ter pelo menos 3 dígitos';
-                  }
-                  return null;
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _holderNameController,
-          decoration: const InputDecoration(
-            labelText: 'Nome no Cartão',
-            hintText: 'João Silva',
-            prefixIcon: Icon(Icons.person),
-          ),
-          textCapitalization: TextCapitalization.words,
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Nome no cartão é obrigatório';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        CheckboxListTile(
-          value: _saveCard,
-          onChanged: (value) {
-            setState(() {
-              _saveCard = value ?? false;
-            });
-          },
-          title: const Text('Salvar cartão para compras futuras'),
-          controlAffinity: ListTileControlAffinity.leading,
-          activeColor: const Color(0xFF00C977),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPixInfo() {
+  Widget _buildServiceSummary() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF00C977).withOpacity(0.1),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF00C977).withOpacity(0.3),
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.qr_code,
-            size: 48,
-            color: Color(0xFF00C977),
-          ),
-          const SizedBox(height: 16),
           const Text(
-            'PIX - Pagamento Instantâneo',
+            'Resumo do Serviço',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF00C977),
             ),
           ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Serviço:'),
+              Text(
+                widget.service['name'] ?? 'Serviço',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Oficina:'),
+              Text(
+                widget.workshop['name'] ?? 'Oficina',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Valor:'),
+              Text(
+                'R\$ ${_serviceAmount.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Color(0xFF00C977),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentMethod() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           const Text(
-            'Escaneie o QR Code ou copie o código PIX para pagar',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
+            'Método de Pagamento',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPaymentOption(
+                  'credit_card',
+                  'Cartão de Crédito',
+                  Icons.credit_card,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildPaymentOption(
+                  'pix',
+                  'PIX',
+                  Icons.qr_code,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentOption(String value, String title, IconData icon) {
+    final isSelected = _selectedPaymentMethod == value;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedPaymentMethod = value),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF00C977).withOpacity(0.1) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF00C977) : Colors.grey[300]!,
+            width: 2,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? const Color(0xFF00C977) : Colors.grey[600],
+              size: 24,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF00C977) : Colors.grey[700],
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInstallmentOptions() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Parcelamento',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              childAspectRatio: 2.5,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: _installmentOptions.length,
+            itemBuilder: (context, index) {
+              final option = _installmentOptions[index];
+              final isSelected = _selectedInstallments == option['installments'];
+              
+              return GestureDetector(
+                onTap: () => setState(() => _selectedInstallments = option['installments']),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFF00C977) : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isSelected ? const Color(0xFF00C977) : Colors.grey[300]!,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '${option['installments']}x',
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.grey[700],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'R\$ ${option['amount'].toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.grey[600],
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardForm() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Dados do Cartão',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _cardNumberController,
+            decoration: const InputDecoration(
+              labelText: 'Número do Cartão',
+              hintText: '1234 5678 9012 3456',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(19),
+            ],
+            onChanged: (value) {
+              _cardNumberController.text = PagBankService.formatCardNumber(value);
+            },
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Número do cartão é obrigatório';
+              }
+              if (value.replaceAll(' ', '').length < 13) {
+                return 'Número do cartão inválido';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _expiryDateController,
+                  decoration: const InputDecoration(
+                    labelText: 'Validade',
+                    hintText: 'MM/AA',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
+                  onChanged: (value) {
+                    _expiryDateController.text = PagBankService.formatExpiryDate(value);
+                  },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Validade é obrigatória';
+                    }
+                    if (value.length != 5) {
+                      return 'Formato inválido';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  controller: _cvvController,
+                  decoration: const InputDecoration(
+                    labelText: 'CVV',
+                    hintText: '123',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'CVV é obrigatório';
+                    }
+                    if (value.length < 3) {
+                      return 'CVV inválido';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _cardholderNameController,
+            decoration: const InputDecoration(
+              labelText: 'Nome no Cartão',
+              hintText: 'João Silva',
+              border: OutlineInputBorder(),
+            ),
+            textCapitalization: TextCapitalization.words,
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Nome no cartão é obrigatório';
+              }
+              return null;
+            },
           ),
         ],
       ),
@@ -398,10 +449,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Widget _buildPaymentButton() {
+    final selectedOption = _installmentOptions.firstWhere(
+      (option) => option['installments'] == _selectedInstallments,
+    );
+    
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _loading ? null : _processPayment,
+        onPressed: _isLoading ? null : _processPayment,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF00C977),
           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -409,16 +464,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-        child: _loading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : Text(
-                _selectedPaymentMethod == PaymentService.paymentTypePix
-                    ? 'Gerar PIX'
-                    : 'Pagar com Cartão',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+        child: _isLoading
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
                   color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : Text(
+                'Pagar R\$ ${selectedOption['amount'].toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
       ),
@@ -428,160 +488,64 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _processPayment() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _loading = true);
+    setState(() => _isLoading = true);
 
     try {
-      Map<String, dynamic>? cardData;
-      if (_selectedPaymentMethod == PaymentService.paymentTypeCreditCard) {
-        cardData = {
-          'number': _cardNumberController.text,
-          'expiry': _expiryController.text,
-          'cvv': _cvvController.text,
-          'holder_name': _holderNameController.text,
-        };
+      Map<String, dynamic> result;
+      
+      if (_selectedPaymentMethod == 'credit_card') {
+        result = await PagBankService.processCreditCardPayment(
+          sessionId: 'session_${DateTime.now().millisecondsSinceEpoch}',
+          cardNumber: _cardNumberController.text,
+          expiryDate: _expiryDateController.text,
+          cvv: _cvvController.text,
+          cardholderName: _cardholderNameController.text,
+          customerId: 'cus_KM5SA01GI', // TODO: Obter do usuário logado
+          amount: _serviceAmount,
+          installments: _selectedInstallments,
+        );
+      } else {
+        result = await PagBankService.processPixPayment(
+          sessionId: 'session_${DateTime.now().millisecondsSinceEpoch}',
+          customerId: 'cus_KM5SA01GI', // TODO: Obter do usuário logado
+          amount: _serviceAmount,
+        );
       }
-
-      final result = await PaymentService.processPayment(
-        bookingId: widget.bookingId,
-        paymentMethod: _selectedPaymentMethod,
-        amount: widget.amount,
-        cardData: cardData,
-      );
 
       if (result['success']) {
-        if (_selectedPaymentMethod == PaymentService.paymentTypePix) {
-          setState(() {
-            _pixCode = result['pixCode'];
-            _pixQrCode = result['pixQrCode'];
-          });
-          _showPixDialog();
-        } else {
-          _showSuccessDialog();
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message']),
+            backgroundColor: const Color(0xFF00C977),
+          ),
+        );
+        Navigator.pop(context, true);
       } else {
-        _showErrorDialog(result['error'] ?? 'Erro ao processar pagamento');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error']),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (e) {
-      _showErrorDialog('Erro inesperado: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao processar pagamento: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      setState(() => _loading = false);
+      setState(() => _isLoading = false);
     }
   }
 
-  void _showPixDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('PIX Gerado'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_pixQrCode != null)
-              Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                ),
-                child: const Center(
-                  child: Text('QR Code aqui'),
-                ),
-              ),
-            const SizedBox(height: 16),
-            const Text('Código PIX:'),
-            SelectableText(
-              _pixCode ?? '',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Copie o código e cole no seu app de pagamento',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Fechar'),
-          ),
-          ElevatedButton(
-            onPressed: _checkPaymentStatus,
-            child: const Text('Verificar Pagamento'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSuccessDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Pagamento Aprovado!'),
-        content: const Text('Seu pagamento foi processado com sucesso.'),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context, true);
-            },
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showErrorDialog(String error) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Erro no Pagamento'),
-        content: Text(error),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _checkPaymentStatus() async {
-    // TODO: Implementar verificação de status do pagamento
-    _showSuccessDialog();
-  }
-}
-
-// Formatters para os campos do cartão
-class CardNumberInputFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final text = newValue.text;
-    final formatted = PaymentService.formatCardNumber(text);
-    return TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
-    );
-  }
-}
-
-class ExpiryDateInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final text = newValue.text;
-    final formatted = PaymentService.formatExpiryDate(text);
-    return TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
-    );
+  void dispose() {
+    _cardNumberController.dispose();
+    _expiryDateController.dispose();
+    _cvvController.dispose();
+    _cardholderNameController.dispose();
+    super.dispose();
   }
 }

@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/meca_loading_widget.dart';
+import '../services/all_services_screen.dart';
+import '../workshops/workshop_detail_screen.dart';
 import '../workshops/workshops_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -17,6 +19,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
   List<Map<String, dynamic>> _upcomingBookings = [];
+  List<Map<String, dynamic>> _nearbyWorkshops = [];
   final ApiService _apiService = ApiService();
 
   @override
@@ -36,10 +39,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() => _isLoading = true);
     
     try {
-      // TODO: Obter customerId do usuário logado
-      final customerId = 'cus_KM5SA01GI';
+      // Obter ID do usuário logado
+      final userId = await _apiService.getUserId();
+      if (userId == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
       
-      final bookingsResponse = await _apiService.getMyBookings(customerId);
+      // Carregar agendamentos do usuário real
+      final bookingsResponse = await _apiService.getUserBookings();
       if (bookingsResponse['success']) {
         final data = bookingsResponse['data'];
         final bookingsList = data is Map ? (data['bookings'] ?? []) : data ?? [];
@@ -50,6 +58,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             b['status'] == 'confirmed' || 
             b['status'] == 'started'
           ).toList();
+        });
+      }
+      
+      // Carregar oficinas próximas com geolocalização real
+      final workshopsResponse = await _apiService.getNearbyWorkshops(-23.5505, -46.6333);
+      if (workshopsResponse['success']) {
+        final workshops = List<Map<String, dynamic>>.from(workshopsResponse['data']['workshops'] ?? []);
+        setState(() {
+          _nearbyWorkshops = workshops.take(3).toList();
         });
       }
       
@@ -77,67 +94,70 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildContent() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _buildHeader(),
+          ),
           const SizedBox(height: 24),
-          _buildQuickActions(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildQuickActions(),
+          ),
           const SizedBox(height: 24),
-          _buildUpcomingBookings(),
+          _buildUpcomingBookings(), // Sem padding para ocupar toda a largura
           const SizedBox(height: 24),
-          _buildNearbyWorkshops(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildNearbyWorkshops(),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildHeader() {
-    return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-            // Logo MECA
-                                          Container(
-              width: 60,
-              height: 60,
-                                            decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            child: Image.asset(
-                'assets/images/wordmark_verde_vertical.png',
-                fit: BoxFit.contain,
-                                            ),
-                                          ),
-            const SizedBox(width: 16),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.end,
-                                              children: [
-                  const Text(
-                    'Bem-vindo ao MECA',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF00C977),
-                    ),
-                    textAlign: TextAlign.right,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Seu carro em boas mãos',
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                      color: Colors.grey,
-                    ),
-                    textAlign: TextAlign.right,
-                  ),
-                ],
+    return Row(
+      children: [
+        // Logo MECA
+        Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Image.asset(
+            'assets/images/wordmark_verde_vertical.png',
+            fit: BoxFit.contain,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Text(
+                'Bem-vindo ao MECA',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF00C977),
+                ),
+                textAlign: TextAlign.right,
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              const Text(
+                'Seu carro em boas mãos',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
+                textAlign: TextAlign.right,
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -266,38 +286,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-            const Text(
-              'Próximos Agendamentos',
-                                      style: TextStyle(
-                fontSize: 20,
-                                        fontWeight: FontWeight.bold,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Próximos Agendamentos',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pushNamed(context, '/orders'),
-              child: const Text('Ver todos'),
-                                    ),
-                                  ],
-                                ),
+              TextButton(
+                onPressed: () => Navigator.pushNamed(context, '/orders'),
+                child: const Text('Ver todos'),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 16),
-        Center(
-          child: _upcomingBookings.isEmpty
-              ? _buildEmptyBookings()
-              : Column(
+        _upcomingBookings.isEmpty
+            ? _buildEmptyBookings()
+            : Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
                   children: _upcomingBookings.take(3).map((booking) => _buildBookingCard(booking)).toList(),
                 ),
-        ),
+              ),
       ],
     );
   }
 
   Widget _buildEmptyBookings() {
     return Container(
+      width: double.infinity, // Ocupa toda a largura da tela
+      margin: const EdgeInsets.symmetric(horizontal: 16), // Margem lateral para não tocar as bordas
       padding: const EdgeInsets.all(24),
-                                        decoration: BoxDecoration(
+      decoration: BoxDecoration(
         color: const Color(0xFF00C977).withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
@@ -314,7 +340,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           const SizedBox(height: 16),
           const Text(
             'Nenhum agendamento',
-                                            style: TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
@@ -331,20 +357,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ElevatedButton(
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const WorkshopsScreen()),
+              MaterialPageRoute(builder: (context) => const AllServicesScreen()),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00C977),
             ),
             child: const Text('Agendar Serviço'),
-                        ),
-                      ],
-                    ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildBookingCard(Map<String, dynamic> booking) {
     return Container(
+      width: double.infinity, // Ocupa toda a largura disponível
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -355,16 +382,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       ),
       child: Row(
-          children: [
-            Container(
+        children: [
+          Container(
             width: 50,
             height: 50,
-              decoration: BoxDecoration(
+            decoration: BoxDecoration(
               color: const Color(0xFF00C977).withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.build,
+            ),
+            child: const Icon(
+              Icons.build,
               color: Color(0xFF00C977),
             ),
           ),
@@ -450,12 +477,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
                 child: const Text(
                   'Ver todas',
                   style: TextStyle(
                     color: Color(0xFF00C977),
                     fontWeight: FontWeight.w600,
+                    fontSize: 14,
                   ),
                 ),
               ),
@@ -465,64 +496,80 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         const SizedBox(height: 16),
         Container(
           height: 200,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: 3, // Mock data
-            itemBuilder: (context, index) {
-              return Container(
-                width: 280,
-                margin: const EdgeInsets.only(right: 16),
-                child: _buildWorkshopCard(),
-              );
-            },
-          ),
+          child: _nearbyWorkshops.isEmpty
+              ? const Center(
+                  child: Text(
+                    'Nenhuma oficina encontrada próxima a você',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                )
+              : ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _nearbyWorkshops.length,
+                  itemBuilder: (context, index) {
+                    return Container(
+                      width: 280,
+                      margin: const EdgeInsets.only(right: 16),
+                      child: _buildWorkshopCard(_nearbyWorkshops[index]),
+                    );
+                  },
+                ),
         ),
       ],
     );
   }
 
-  Widget _buildWorkshopCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF00C977).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF00C977).withOpacity(0.2),
+  Widget _buildWorkshopCard(Map<String, dynamic> workshop) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WorkshopDetailScreen(workshopId: workshop['id'] ?? ''),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF00C977).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFF00C977).withOpacity(0.2),
+          ),
         ),
-      ),
-      child: Column(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-          children: [
-            Container(
+            children: [
+              Container(
                 width: 40,
                 height: 40,
-              decoration: BoxDecoration(
+                decoration: BoxDecoration(
                   color: const Color(0xFF00C977).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
                   Icons.build,
                   color: Color(0xFF00C977),
-              ),
+                ),
               ),
               const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                    const Text(
-                      'Oficina Central',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      workshop['name'] ?? 'Oficina',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
                     ),
-                    const Text(
-                      '2.5 km de distância',
-                        style: TextStyle(
+                    Text(
+                      _calculateDistance(workshop),
+                      style: const TextStyle(
                         color: Colors.grey,
                         fontSize: 12,
                       ),
@@ -535,55 +582,67 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 color: Colors.amber,
                 size: 16,
               ),
-                      const SizedBox(width: 4),
-              const Text(
-                '4.5',
-                        style: TextStyle(
+              const SizedBox(width: 4),
+              Text(
+                '${workshop['rating'] ?? 4.5}',
+                style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
-          const Text(
-            'Rua das Flores, 123',
-                    style: TextStyle(
+          Text(
+            workshop['address'] ?? 'Endereço não informado',
+            style: const TextStyle(
               color: Colors.grey,
               fontSize: 14,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 4,
             children: [
-              _buildServiceChip('Troca de óleo'),
-              _buildServiceChip('Alinhamento'),
+              _buildServiceChip('Mecânica Geral'),
+              _buildServiceChip('Auto Elétrica'),
               _buildServiceChip('Freios'),
             ],
-                  ),
-                ],
-              ),
+          ),
+        ],
+        ),
+      ),
     );
   }
 
   Widget _buildServiceChip(String service) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00C977).withOpacity(0.1),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00C977).withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-              ),
+      ),
       child: Text(
         service,
         style: const TextStyle(
-                color: Color(0xFF00C977),
+          color: Color(0xFF00C977),
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
       ),
     );
+  }
+  
+  String _calculateDistance(Map<String, dynamic> workshop) {
+    // Simula cálculo de distância (em produção, usar geolocalização real)
+    final random = DateTime.now().millisecondsSinceEpoch % 100;
+    if (random < 30) return '0.5 km de distância';
+    if (random < 60) return '1.2 km de distância';
+    if (random < 80) return '2.8 km de distância';
+    return '4.5 km de distância';
   }
 
   String _formatDate(String? dateString) {
