@@ -52,6 +52,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
+      if (!mounted) return;
       setState(() {
         _currentPosition = position;
       });
@@ -61,6 +62,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
   }
 
   Future<void> _loadServiceDetails() async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = '';
@@ -69,9 +71,10 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     try {
       // Carregar detalhes do serviço
       final serviceResult = await _apiService.getServiceDetails(widget.serviceId);
+      if (!mounted) return;
       if (serviceResult['success']) {
         setState(() {
-          _service = serviceResult['data'];
+          _service = Map<String, dynamic>.from(serviceResult['data'] ?? {});
         });
       } else {
         setState(() {
@@ -81,65 +84,38 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         return;
       }
 
-      // Carregar oficinas que oferecem este serviço
-      if (_currentPosition != null) {
-        final workshopsResult = await _apiService.getNearbyWorkshops(
-          _currentPosition!.latitude,
-          _currentPosition!.longitude,
-        );
-        
-        if (workshopsResult['success']) {
-          List<dynamic> allWorkshops = workshopsResult['data']['workshops'] ?? [];
-          
-          // Todas as oficinas podem oferecer qualquer serviço
-          List<Map<String, dynamic>> serviceWorkshops = [];
-          
-          for (var workshop in allWorkshops) {
-            // Calcular distância
-            if (workshop['latitude'] != null && workshop['longitude'] != null) {
-              double distance = Geolocator.distanceBetween(
-                _currentPosition!.latitude,
-                _currentPosition!.longitude,
-                double.parse(workshop['latitude'].toString()),
-                double.parse(workshop['longitude'].toString()),
-              ) / 1000; // Converter para km
-              
-              workshop['distance'] = distance;
-            } else {
-              workshop['distance'] = 0.0;
-            }
-            
-            serviceWorkshops.add(Map<String, dynamic>.from(workshop));
-          }
-          
-          // Ordenar por distância
-          serviceWorkshops.sort((a, b) {
-            final distanceA = a['distance'] ?? 0.0;
-            final distanceB = b['distance'] ?? 0.0;
-            return distanceA.compareTo(distanceB);
-          });
-          
-          setState(() {
-            _workshops = serviceWorkshops;
-            _loading = false;
-          });
-        } else {
-          setState(() {
-            _error = 'Erro ao carregar oficinas';
-            _loading = false;
-          });
-        }
-      } else {
+      // Carregar oficinas que oferecem este serviço (mesmo sem localização)
+      final workshopsResult = await _apiService.getWorkshopsByService(
+        widget.serviceId,
+        lat: _currentPosition?.latitude,
+        lng: _currentPosition?.longitude,
+        radiusKm: _currentPosition != null ? 50.0 : null,
+      );
+
+      if (!mounted) return;
+      if (workshopsResult['success']) {
+        final list = (workshopsResult['data'] as List?) ?? [];
         setState(() {
-          _error = 'Localização não disponível';
+          _workshops = list.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
+        });
+      } else {
+        // Não definir erro se falhar ao carregar oficinas, apenas mostrar lista vazia
+        print('Aviso: Não foi possível carregar oficinas: ${workshopsResult['error']}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Erro ao carregar detalhes do serviço: ${e.toString()}';
+        _loading = false;
+      });
+      print('Erro detalhado ao carregar serviço: $e');
+    } finally {
+      if (!mounted) return;
+      if (!_error.isNotEmpty) {
+        setState(() {
           _loading = false;
         });
       }
-    } catch (e) {
-      setState(() {
-        _error = 'Erro de conexão: ${e.toString()}';
-        _loading = false;
-      });
     }
   }
 
@@ -329,91 +305,6 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     );
   }
 
-  Widget _buildServiceInfo() {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF00C977).withOpacity(0.2),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Informações do Serviço',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          
-          if (_service!['requirements'] != null) ...[
-            const Text(
-              'Requisitos:',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ...(_service!['requirements'] as List).map<Widget>((requirement) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle,
-                      color: Color(0xFF00C977),
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        requirement,
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-            const SizedBox(height: 16),
-          ],
-          
-          if (_service!['notes'] != null) ...[
-            const Text(
-              'Observações:',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _service!['notes'],
-              style: const TextStyle(fontSize: 14),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 
   Widget _buildWorkshopsSection() {
     return Column(
@@ -536,11 +427,28 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                     color: const Color(0xFF00C977).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(
-                    Icons.build,
-                    color: Color(0xFF00C977),
-                    size: 24,
-                  ),
+                  child: (workshop['logo_url'] != null && 
+                          workshop['logo_url'].toString().isNotEmpty && 
+                          workshop['logo_url'].toString().startsWith('http'))
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            workshop['logo_url'].toString(),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(
+                                Icons.build,
+                                color: Color(0xFF00C977),
+                                size: 24,
+                              );
+                            },
+                          ),
+                        )
+                      : const Icon(
+                          Icons.build,
+                          color: Color(0xFF00C977),
+                          size: 24,
+                        ),
                 ),
                 const SizedBox(width: 16),
                 
@@ -644,3 +552,14 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
+

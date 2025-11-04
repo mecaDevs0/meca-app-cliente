@@ -43,6 +43,7 @@ dependencies:
   cached_network_image: ^3.3.1
   image_picker: ^1.0.4
   lottie: ^3.1.0
+  url_launcher: ^6.2.3
 
 dev_dependencies:
   flutter_test:

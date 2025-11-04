@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -11,6 +12,7 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  final ApiService _apiService = ApiService();
   bool _pushNotifications = true;
   bool _emailNotifications = true;
   bool _smsNotifications = false;
@@ -18,6 +20,37 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _bookingReminders = true;
   bool _serviceUpdates = true;
   bool _promotions = false;
+  bool _isLoading = false;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationSettings();
+  }
+
+  Future<void> _loadNotificationSettings() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await _apiService.getNotificationSettings();
+      if (result['success'] == true && result['data'] != null) {
+        final settings = result['data'] as Map<String, dynamic>;
+        setState(() {
+          _pushNotifications = settings['push_notifications'] ?? true;
+          _emailNotifications = settings['email_notifications'] ?? true;
+          _smsNotifications = settings['sms_notifications'] ?? false;
+          _marketingNotifications = settings['marketing_notifications'] ?? false;
+          _bookingReminders = settings['booking_reminders'] ?? true;
+          _serviceUpdates = settings['service_updates'] ?? true;
+          _promotions = settings['promotions'] ?? false;
+        });
+      }
+    } catch (e) {
+      print('Erro ao carregar configurações: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +85,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               onPressed: () => Navigator.pop(context),
             ),
           ),
-          body: SingleChildScrollView(
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
+              : SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,7 +205,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _saveSettings,
+        onPressed: _isSaving ? null : _saveSettings,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF00C977),
           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -178,25 +213,72 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-        child: const Text(
-          'Salvar Configurações',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
+        child: _isSaving
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Text(
+                'Salvar Configurações',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
       ),
     );
   }
 
-  void _saveSettings() {
-    // Aqui você salvaria as configurações no backend
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Configurações salvas com sucesso!'),
-        backgroundColor: Color(0xFF00C977),
-      ),
-    );
+  Future<void> _saveSettings() async {
+    if (_isSaving) return;
+    
+    setState(() => _isSaving = true);
+    
+    try {
+      final result = await _apiService.updateNotificationSettings({
+        'push_notifications': _pushNotifications,
+        'email_notifications': _emailNotifications,
+        'sms_notifications': _smsNotifications,
+        'marketing_notifications': _marketingNotifications,
+        'booking_reminders': _bookingReminders,
+        'service_updates': _serviceUpdates,
+        'promotions': _promotions,
+      });
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Configurações salvas com sucesso!'),
+            backgroundColor: Color(0xFF00C977),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao salvar: ${result['error'] ?? 'Erro desconhecido'}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao salvar configurações: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 }

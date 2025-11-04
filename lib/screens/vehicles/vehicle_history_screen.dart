@@ -41,7 +41,15 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
       
       if (result['success']) {
         setState(() {
-          _maintenanceHistory = List<Map<String, dynamic>>.from(result['data']['maintenanceHistory'] ?? []);
+          // A API retorna data diretamente como lista
+          final data = result['data'];
+          if (data is List) {
+            _maintenanceHistory = List<Map<String, dynamic>>.from(data);
+          } else if (data is Map && data['maintenanceHistory'] != null) {
+            _maintenanceHistory = List<Map<String, dynamic>>.from(data['maintenanceHistory'] ?? []);
+          } else {
+            _maintenanceHistory = [];
+          }
           _loading = false;
         });
       } else {
@@ -60,7 +68,9 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
+      backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.white,
       appBar: AppBar(
         title: Text(
           'Histórico - ${widget.vehicle['brand']} ${widget.vehicle['model']}',
@@ -184,7 +194,7 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
             children: [
               _buildStatCard('Serviços', _maintenanceHistory.length.toString()),
               const SizedBox(width: 16),
-              _buildStatCard('Total Gasto', _calculateTotalSpent()),
+              _buildStatCard('Total Investido', _calculateTotalSpent()),
             ],
           ),
         ],
@@ -287,7 +297,13 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
   }
 
   Widget _buildHistoryCard(Map<String, dynamic> record) {
-    final completionDate = DateTime.tryParse(record['completion_date'] ?? '');
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    // Tentar múltiplos formatos de data
+    DateTime? completionDate;
+    final dateStr = record['completion_date']?.toString() ?? record['completed_at']?.toString() ?? record['created_at']?.toString() ?? '';
+    if (dateStr.isNotEmpty) {
+      completionDate = DateTime.tryParse(dateStr);
+    }
     final formattedDate = completionDate != null 
         ? DateFormat('dd/MM/yyyy').format(completionDate)
         : 'Data não disponível';
@@ -295,7 +311,7 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -349,7 +365,7 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    'R\$ ${(record['price_paid'] ?? 0).toStringAsFixed(2)}',
+                    'R\$ ${_formatPrice(record['price_paid'] ?? record['price'] ?? 0)}',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -369,19 +385,19 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
               children: [
                 Text(
                   record['service_name'] ?? 'Serviço',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF252940),
+                    color: isDarkMode ? Colors.white : const Color(0xFF252940),
                   ),
                 ),
                 const SizedBox(height: 8),
                 if (record['service_description'] != null) ...[
                   Text(
                     record['service_description'],
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey,
+                      color: isDarkMode ? Colors.grey[400] : Colors.grey,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -406,12 +422,15 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
   }
 
   Widget _buildNotesSection(String title, String content) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+          color: isDarkMode ? Colors.grey[800]! : Colors.grey.shade200,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -429,7 +448,7 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
             content,
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey[700],
+              color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
             ),
           ),
         ],
@@ -437,11 +456,52 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
     );
   }
 
+  String _formatPrice(dynamic price) {
+    if (price == null) return '0.00';
+    if (price is String) {
+      final parsed = double.tryParse(price);
+      return parsed?.toStringAsFixed(2) ?? '0.00';
+    }
+    if (price is num) {
+      return price.toDouble().toStringAsFixed(2);
+    }
+    return '0.00';
+  }
+
   String _calculateTotalSpent() {
     double total = 0;
     for (var record in _maintenanceHistory) {
-      total += (record['price_paid'] ?? 0).toDouble();
+      final pricePaid = record['price_paid'] ?? record['price'] ?? 0;
+      if (pricePaid != null && pricePaid != 0) {
+        // Converter para double corretamente, tratando tanto String quanto num
+        try {
+          if (pricePaid is String) {
+            // Remover qualquer formatação (R$, espaços, etc)
+            final cleanPrice = pricePaid.replaceAll(RegExp(r'[^\d,.-]'), '').replaceAll(',', '.').trim();
+            final parsed = double.tryParse(cleanPrice);
+            if (parsed != null && parsed > 0) {
+              total += parsed;
+            }
+          } else if (pricePaid is num) {
+            final price = pricePaid.toDouble();
+            if (price > 0) {
+              total += price;
+            }
+          } else {
+            // Tentar converter como String caso não seja nem String nem num
+            final priceStr = pricePaid.toString();
+            final cleanPrice = priceStr.replaceAll(RegExp(r'[^\d,.-]'), '').replaceAll(',', '.').trim();
+            final parsed = double.tryParse(cleanPrice);
+            if (parsed != null && parsed > 0) {
+              total += parsed;
+            }
+          }
+        } catch (e) {
+          // Ignorar erros de conversão e continuar
+          print('Erro ao converter preço: $pricePaid - $e');
+        }
+      }
     }
-    return 'R\$ ${total.toStringAsFixed(2)}';
+    return total > 0 ? 'R\$ ${total.toStringAsFixed(2)}' : 'R\$ 0,00';
   }
 }

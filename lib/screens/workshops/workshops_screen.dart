@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
+import '../../services/theme_service.dart';
 import '../../widgets/meca_loading_widget.dart';
+import '../notifications/recent_notifications_screen.dart';
 import 'workshop_detail_screen.dart';
 
 class WorkshopsScreen extends StatefulWidget {
@@ -18,7 +21,6 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   List<dynamic> _filteredWorkshops = [];
   bool _loading = false;
   String _error = '';
-  Position? _currentPosition;
   
   // Filtros
   final TextEditingController _searchController = TextEditingController();
@@ -49,13 +51,11 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         return;
       }
 
-      Position position = await Geolocator.getCurrentPosition(
+      await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
       
-      setState(() {
-        _currentPosition = position;
-      });
+      // Posição obtida - não precisa armazenar
     } catch (e) {
       print('Erro ao obter localização: $e');
     }
@@ -109,14 +109,24 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         timeLimit: const Duration(seconds: 10),
       );
       
+      // Buscar TODAS as oficinas (sem limite de raio)
       final result = await _apiService.getNearbyWorkshops(
         position.latitude,
         position.longitude,
+        10000.0, // Raio muito grande para pegar todas (em km)
       );
       
       if (!mounted) return;
              if (result['success']) {
-               List<dynamic> workshops = result['data']['workshops'] ?? [];
+               final data = result['data'];
+               List<dynamic> workshops = [];
+               
+               // Adaptar resposta para diferentes formatos
+               if (data is Map) {
+                 workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
+               } else if (data is List) {
+                 workshops = data;
+               }
                
                // Calcular distâncias e adicionar aos dados
                for (var workshop in workshops) {
@@ -174,70 +184,62 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
       backgroundColor: isDarkMode ? const Color(0xFF0A0A0A) : const Color(0xFFF8F9FA),
       body: CustomScrollView(
         slivers: [
-          // AppBar melhorado
+          // AppBar melhorado com título na mesma linha dos botões
           SliverAppBar(
-            expandedHeight: 50,
-            floating: false,
             pinned: true,
             backgroundColor: const Color(0xFF00C977),
-            flexibleSpace: FlexibleSpaceBar(
-              title: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                child: Row(
-                  children: [
-                    const Text(
-                      'Oficinas Próximas',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const Spacer(),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.filter_list, color: Colors.white, size: 16),
-                        padding: const EdgeInsets.all(6),
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                        onPressed: () {
-                          _showFilterModal();
-                        },
-                      ),
-                    ),
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              'Oficinas Próximas',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                letterSpacing: 0.3,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withOpacity(0.25),
+                    offset: const Offset(0, 1),
+                    blurRadius: 2,
+                  ),
+                ],
+              ),
+            ),
+            centerTitle: true,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.filter_list, color: Colors.white, size: 20),
+                onPressed: () {
+                  _showFilterModal();
+                },
+              ),
+              const SizedBox(width: 4),
+            ],
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF00C977),
+                    Color(0xFF00B369),
+                    Color(0xFF00A85C),
                   ],
                 ),
               ),
-              background: Container(
-                decoration: const BoxDecoration(
+              child: Container(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                     colors: [
-                      Color(0xFF00C977),
-                      Color(0xFF00B369),
-                      Color(0xFF00A85C),
+                      Colors.white.withOpacity(0.15),
+                      Colors.transparent,
                     ],
-                  ),
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.white.withOpacity(0.1),
-                        Colors.transparent,
-                      ],
-                    ),
                   ),
                 ),
               ),
@@ -414,14 +416,14 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                           ),
                         ],
                       ),
-                      child: workshop['logo'] != null && 
-                             workshop['logo'].isNotEmpty && 
-                             workshop['logo'] != '' &&
-                             workshop['logo'].startsWith('http')
+                      child: workshop['logo_url'] != null && 
+                             workshop['logo_url'].isNotEmpty && 
+                             workshop['logo_url'] != '' &&
+                             workshop['logo_url'].startsWith('http')
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(20),
                               child: Image.network(
-                                workshop['logo'],
+                                workshop['logo_url'],
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) {
                                   return const Icon(
@@ -494,10 +496,10 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                     const SizedBox(width: 4),
                                     Text(
                                       '${workshop['rating'] ?? 4.5}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
-                                        color: Color(0xFF1A1A1A),
+                                        color: isDarkMode ? Colors.white : const Color(0xFF1A1A1A),
                                       ),
                                     ),
                                   ],
@@ -522,10 +524,10 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                     const SizedBox(width: 4),
                                     Text(
                                       distance > 0 ? '${distance.toStringAsFixed(1)} km' : 'Distância não disponível',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
-                                        color: Color(0xFF00C977),
+                                        color: isDarkMode ? const Color(0xFF00C977) : const Color(0xFF00C977),
                                       ),
                                     ),
                                   ],
@@ -545,19 +547,28 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     children: (workshop['services'] as List).take(3).map((service) {
+                      // Capitalizar primeira letra de cada palavra
+                      final serviceName = service.toString();
+                      final capitalizedService = serviceName.split(' ').map((word) {
+                        if (word.isEmpty) return word;
+                        return word[0].toUpperCase() + (word.length > 1 ? word.substring(1).toLowerCase() : '');
+                      }).join(' ');
+                      
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF00C977).withOpacity(0.1),
+                          color: isDarkMode 
+                              ? const Color(0xFF00C977).withOpacity(0.15)
+                              : const Color(0xFF00C977).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: const Color(0xFF00C977).withOpacity(0.2),
                           ),
                         ),
                         child: Text(
-                          service,
-                          style: const TextStyle(
-                            color: Color(0xFF00C977),
+                          capitalizedService,
+                          style: TextStyle(
+                            color: const Color(0xFF00C977),
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -594,15 +605,6 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     );
   }
   
-  String _calculateDistance(Map<String, dynamic> workshop) {
-    // Simula cálculo de distância (em produção, usar geolocalização real)
-    final random = DateTime.now().millisecondsSinceEpoch % 100;
-    if (random < 30) return '0.5 km';
-    if (random < 60) return '1.2 km';
-    if (random < 80) return '2.8 km';
-    return '4.5 km';
-  }
-  
   void _applyFilters() {
     setState(() {
       _filteredWorkshops = _workshops.where((workshop) {
@@ -633,18 +635,24 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         // Filtro por distância
         if (_selectedDistance != 'Todos') {
           final distance = workshop['distance'] ?? 0.0;
+          double distanceValue = 0.0;
+          if (distance is num) {
+            distanceValue = distance.toDouble();
+          } else if (distance is String) {
+            distanceValue = double.tryParse(distance.replaceAll(' km', '').trim()) ?? 0.0;
+          }
           switch (_selectedDistance) {
             case 'Até 1km':
-              if (distance > 1.0) return false;
+              if (distanceValue > 1.0) return false;
               break;
             case 'Até 5km':
-              if (distance > 5.0) return false;
+              if (distanceValue > 5.0) return false;
               break;
             case 'Até 10km':
-              if (distance > 10.0) return false;
+              if (distanceValue > 10.0) return false;
               break;
             case 'Até 20km':
-              if (distance > 20.0) return false;
+              if (distanceValue > 20.0) return false;
               break;
           }
         }
@@ -652,18 +660,24 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         // Filtro por avaliação
         if (_selectedRating != 'Todos') {
           final rating = workshop['rating'] ?? 0.0;
+          double ratingValue = 0.0;
+          if (rating is num) {
+            ratingValue = rating.toDouble();
+          } else if (rating is String) {
+            ratingValue = double.tryParse(rating) ?? 0.0;
+          }
           switch (_selectedRating) {
             case '5 estrelas':
-              if (rating < 5.0) return false;
+              if (ratingValue < 5.0) return false;
               break;
             case '4+ estrelas':
-              if (rating < 4.0) return false;
+              if (ratingValue < 4.0) return false;
               break;
             case '3+ estrelas':
-              if (rating < 3.0) return false;
+              if (ratingValue < 3.0) return false;
               break;
             case '2+ estrelas':
-              if (rating < 2.0) return false;
+              if (ratingValue < 2.0) return false;
               break;
           }
         }
@@ -682,14 +696,22 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
       _filteredWorkshops.sort((a, b) {
         switch (_sortBy) {
           case 'distancia':
-            return _calculateDistance(a).compareTo(_calculateDistance(b));
+            final distanceA = a['distance'] ?? 0.0;
+            final distanceB = b['distance'] ?? 0.0;
+            if (distanceA is num && distanceB is num) {
+              return distanceA.toDouble().compareTo(distanceB.toDouble());
+            }
+            return 0;
           case 'avaliacao':
             final ratingA = a['rating'] ?? 0.0;
             final ratingB = b['rating'] ?? 0.0;
-            return ratingB.compareTo(ratingA);
+            if (ratingA is num && ratingB is num) {
+              return ratingB.toDouble().compareTo(ratingA.toDouble());
+            }
+            return 0;
           case 'nome':
-            final nameA = (a['name'] ?? '').toString();
-            final nameB = (b['name'] ?? '').toString();
+            final nameA = (a['name'] ?? '').toString().toLowerCase();
+            final nameB = (b['name'] ?? '').toString().toLowerCase();
             return nameA.compareTo(nameB);
           default:
             return 0;
@@ -703,236 +725,326 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.7,
-          decoration: BoxDecoration(
-            color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-          children: [
-            // Handle
-            Container(
-              margin: const EdgeInsets.only(top: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.7,
+            decoration: BoxDecoration(
+              color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Filtros',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+            child: Column(
+              children: [
+                // Handle
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedService = 'Todos';
-                        _selectedDistance = 'Todos';
-                        _selectedRating = 'Todos';
-                        _selectedInstallment = 'Todos';
-                        _sortBy = 'distancia';
-                      });
-                      _applyFilters();
-                      Navigator.pop(context);
-                    },
-                    child: const Text(
-                      'Limpar',
-                      style: TextStyle(color: Color(0xFF00C977)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Filtros
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Seção de Ordenação
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey[200]!),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Ordenar por',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF00C977),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildSortOption('Distância', 'distancia'),
-                          _buildSortOption('Avaliação', 'avaliacao'),
-                          _buildSortOption('Nome', 'nome'),
-                        ],
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 20),
-                    
-                    // Seção de Filtros
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey[200]!),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Filtrar por',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF00C977),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          
-                          // Serviço
-                          _buildFilterSection(
-                            'Serviço',
-                            _selectedService,
-                            ['Todos', 'Revisão para venda/compra de veículo', 'Revisões Preventivas', 'Serviços de direção hidráulica/elétrica', 'Serviços de escapamento', 'Serviços de motor e câmbio', 'Serviços para carros antigos (restauração)', 'Sistema de arrefecimento (radiador e bomba d\'água)', 'Sistema de Embreagem', 'Troca de correia dentada e correias auxiliares', 'Troca de óleo e filtros'],
-                            (value) {
-                              setState(() => _selectedService = value);
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          // Distância
-                          _buildFilterSection(
-                            'Distância',
-                            _selectedDistance,
-                            ['Todos', 'Até 1km', 'Até 5km', 'Até 10km', 'Até 20km'],
-                            (value) {
-                              setState(() => _selectedDistance = value);
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          // Avaliação
-                          _buildFilterSection(
-                            'Avaliação',
-                            _selectedRating,
-                            ['Todos', '5 estrelas', '4+ estrelas', '3+ estrelas', '2+ estrelas'],
-                            (value) {
-                              setState(() => _selectedRating = value);
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          // Parcelamento
-                          _buildFilterSection(
-                            'Aceita Parcelamento',
-                            _selectedInstallment,
-                            ['Todos', 'Aceita parcelamento', 'Não aceita parcelamento'],
-                            (value) {
-                              setState(() => _selectedInstallment = value);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 20),
-                  ],
                 ),
-              ),
-            ),
-            // Botões
-            Container(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF00C977)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                // Header
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Filtros',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
                       ),
-                      child: const Text('Cancelar'),
+                      TextButton(
+                        onPressed: () {
+                          setModalState(() {
+                            _selectedService = 'Todos';
+                            _selectedDistance = 'Todos';
+                            _selectedRating = 'Todos';
+                            _selectedInstallment = 'Todos';
+                            _sortBy = 'distancia';
+                          });
+                          setState(() {
+                            _selectedService = 'Todos';
+                            _selectedDistance = 'Todos';
+                            _selectedRating = 'Todos';
+                            _selectedInstallment = 'Todos';
+                            _sortBy = 'distancia';
+                          });
+                          _applyFilters();
+                          Navigator.pop(context);
+                        },
+                        child: const Text(
+                          'Limpar',
+                          style: TextStyle(color: Color(0xFF00C977)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Filtros
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Seção de Ordenação
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey[50],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isDarkMode ? Colors.grey[700]! : Colors.grey[200]!,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Ordenar por',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDarkMode ? Colors.white : const Color(0xFF00C977),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              _buildSortOption('Distância', 'distancia', isDarkMode, () {
+                                setModalState(() {
+                                  _sortBy = 'distancia';
+                                });
+                                setState(() {
+                                  _sortBy = 'distancia';
+                                });
+                              }),
+                              _buildSortOption('Avaliação', 'avaliacao', isDarkMode, () {
+                                setModalState(() {
+                                  _sortBy = 'avaliacao';
+                                });
+                                setState(() {
+                                  _sortBy = 'avaliacao';
+                                });
+                              }),
+                              _buildSortOption('Nome', 'nome', isDarkMode, () {
+                                setModalState(() {
+                                  _sortBy = 'nome';
+                                });
+                                setState(() {
+                                  _sortBy = 'nome';
+                                });
+                              }),
+                            ],
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 20),
+                        
+                        // Seção de Filtros
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey[50],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isDarkMode ? Colors.grey[700]! : Colors.grey[200]!,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Filtrar por',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDarkMode ? Colors.white : const Color(0xFF00C977),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              
+                              // Serviço
+                              _buildFilterSection(
+                                'Serviço',
+                                _selectedService,
+                                ['Todos', 'Revisão para venda/compra de veículo', 'Revisões Preventivas', 'Serviços de direção hidráulica/elétrica', 'Serviços de escapamento', 'Serviços de motor e câmbio', 'Serviços para carros antigos (restauração)', 'Sistema de arrefecimento (radiador e bomba d\'água)', 'Sistema de Embreagem', 'Troca de correia dentada e correias auxiliares', 'Troca de óleo e filtros'],
+                                isDarkMode,
+                                (value) {
+                                  setModalState(() {
+                                    _selectedService = value;
+                                  });
+                                  setState(() {
+                                    _selectedService = value;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              // Distância
+                              _buildFilterSection(
+                                'Distância',
+                                _selectedDistance,
+                                ['Todos', 'Até 1km', 'Até 5km', 'Até 10km', 'Até 20km'],
+                                isDarkMode,
+                                (value) {
+                                  setModalState(() {
+                                    _selectedDistance = value;
+                                  });
+                                  setState(() {
+                                    _selectedDistance = value;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              // Avaliação
+                              _buildFilterSection(
+                                'Avaliação',
+                                _selectedRating,
+                                ['Todos', '5 estrelas', '4+ estrelas', '3+ estrelas', '2+ estrelas'],
+                                isDarkMode,
+                                (value) {
+                                  setModalState(() {
+                                    _selectedRating = value;
+                                  });
+                                  setState(() {
+                                    _selectedRating = value;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              // Parcelamento
+                              _buildFilterSection(
+                                'Aceita Parcelamento',
+                                _selectedInstallment,
+                                ['Todos', 'Aceita parcelamento', 'Não aceita parcelamento'],
+                                isDarkMode,
+                                (value) {
+                                  setModalState(() {
+                                    _selectedInstallment = value;
+                                  });
+                                  setState(() {
+                                    _selectedInstallment = value;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 20),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        _applyFilters();
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C977),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                // Botões
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF00C977)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text('Cancelar'),
+                        ),
                       ),
-                      child: const Text(
-                        'Aplicar',
-                        style: TextStyle(color: Colors.white),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            _applyFilters();
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00C977),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text(
+                            'Aplicar',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      );
-      },
+          );
+        },
+      ),
     );
   }
   
-  Widget _buildSortOption(String title, String value) {
+  Future<int> _getUnreadCount() async {
+    try {
+      final result = await _apiService.getNotifications(limit: 100, read: false);
+      if (result['success'] == true) {
+        final notifications = (result['data'] as List?) ?? [];
+        return notifications.length;
+      }
+    } catch (e) {
+      print('Erro ao buscar contagem de notificações: $e');
+    }
+    return 0;
+  }
+
+  Widget _buildSortOption(String title, String value, bool isDarkMode, VoidCallback onTap) {
     final isSelected = _sortBy == value;
-    return GestureDetector(
-      onTap: () {
-        setState(() => _sortBy = value);
-      },
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00C977).withOpacity(0.1) : Colors.transparent,
+          color: isSelected 
+              ? const Color(0xFF00C977).withOpacity(0.15) 
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? const Color(0xFF00C977) : Colors.grey[300]!,
-            width: 1,
+            color: isSelected 
+                ? const Color(0xFF00C977) 
+                : (isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
+            width: isSelected ? 2 : 1,
           ),
+          boxShadow: isSelected ? [
+            BoxShadow(
+              color: const Color(0xFF00C977).withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ] : null,
         ),
         child: Row(
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-              color: isSelected ? const Color(0xFF00C977) : Colors.grey[400],
+              color: isSelected 
+                  ? const Color(0xFF00C977) 
+                  : (isDarkMode ? Colors.grey[400] : Colors.grey[400]!),
               size: 20,
             ),
             const SizedBox(width: 12),
             Text(
               title,
               style: TextStyle(
-                color: isSelected ? const Color(0xFF00C977) : Colors.grey[600],
-                fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
+                color: isSelected 
+                    ? const Color(0xFF00C977) 
+                    : (isDarkMode ? Colors.white70 : Colors.grey[600]!),
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                fontSize: 15,
               ),
             ),
           ],
@@ -941,45 +1053,93 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     );
   }
   
-  Widget _buildFilterSection(String title, String selectedValue, List<String> options, Function(String) onChanged) {
+  Widget _buildFilterSection(String title, String selectedValue, List<String> options, bool isDarkMode, Function(String) onChanged) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
+            color: isDarkMode ? Colors.white : Colors.black87,
           ),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: options.map((option) {
-            final isSelected = selectedValue == option;
-            return GestureDetector(
-              onTap: () => onChanged(option),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFF00C977) : Colors.grey[200],
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isSelected ? const Color(0xFF00C977) : Colors.grey[300]!,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final cardWidth = (constraints.maxWidth - 8) / 2; // 2 cards por linha com 8px de espaçamento
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: options.map((option) {
+                final isSelected = selectedValue == option;
+                // Capitalizar primeira letra de cada palavra do nome do serviço
+                final displayOption = option == 'Todos' 
+                    ? option 
+                    : option.split(' ').map((word) {
+                        if (word.isEmpty) return word;
+                        return word[0].toUpperCase() + (word.length > 1 ? word.substring(1).toLowerCase() : '');
+                      }).join(' ');
+                
+                return SizedBox(
+                  width: cardWidth,
+                  child: InkWell(
+                    onTap: () {
+                      onChanged(option);
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      width: cardWidth,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected 
+                            ? const Color(0xFF00C977) 
+                            : (isDarkMode ? const Color(0xFF2A2A2A) : Colors.white),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected 
+                              ? const Color(0xFF00C977) 
+                              : (isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
+                          width: isSelected ? 2 : 1.5,
+                        ),
+                        boxShadow: isSelected ? [
+                          BoxShadow(
+                            color: const Color(0xFF00C977).withOpacity(0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ] : null,
+                      ),
+                      child: Text(
+                        displayOption,
+                        textAlign: TextAlign.center,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isSelected 
+                              ? Colors.white 
+                              : (isDarkMode ? Colors.white70 : Colors.grey[700]!),
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          fontSize: 13,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                child: Text(
-                  option,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.grey[700],
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                ),
-              ),
+                );
+              }).toList(),
             );
-          }).toList(),
+          },
         ),
       ],
     );
   }
 }
+
+
+
+
+
+
+

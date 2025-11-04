@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/api_service.dart';
 import '../../utils/colors.dart';
 
 class ReviewScreen extends StatefulWidget {
@@ -16,8 +17,59 @@ class ReviewScreen extends StatefulWidget {
 }
 
 class _ReviewScreenState extends State<ReviewScreen> {
+  final ApiService _apiService = ApiService();
   int _rating = 5;
   final _commentController = TextEditingController();
+  bool _isSubmitting = false;
+
+  Future<void> _submitRating() async {
+    if (_rating < 1 || _rating > 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, selecione uma nota de 1 a 5'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final result = await _apiService.submitRating(
+        bookingId: widget.bookingId,
+        workshopId: widget.workshopId,
+        rating: _rating,
+        comment: _commentController.text.trim().isEmpty ? null : _commentController.text.trim(),
+      );
+
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Avaliação enviada com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pop(true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro: ${result['error'] ?? 'Erro ao enviar avaliação'}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isSubmitting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,20 +124,24 @@ class _ReviewScreenState extends State<ReviewScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Avaliação enviada!')),
-                  );
-                  Navigator.of(context).pop();
-                },
+                onPressed: _isSubmitting ? null : _submitRating,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: const Text(
-                  'Enviar Avaliação',
-                  style: TextStyle(fontSize: 18, color: Colors.white),
-                ),
+                child: _isSubmitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'Enviar Avaliação',
+                        style: TextStyle(fontSize: 18, color: Colors.white),
+                      ),
               ),
             ),
           ],

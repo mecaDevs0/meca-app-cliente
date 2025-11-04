@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 import '../../services/api_service.dart';
-import '../../services/plate_search_service.dart';
+import '../../services/notification_service.dart';
 
 class BookingScreen extends StatefulWidget {
   final String serviceId;
@@ -28,7 +30,7 @@ class BookingScreen extends StatefulWidget {
 
 class _BookingScreenState extends State<BookingScreen> {
   final ApiService _apiService = ApiService();
-  final PlateSearchService _plateService = PlateSearchService();
+  final NotificationService _notificationService = NotificationService();
   
   List<Map<String, dynamic>> _vehicles = [];
   Map<String, dynamic>? _selectedVehicle;
@@ -37,6 +39,9 @@ class _BookingScreenState extends State<BookingScreen> {
   final TextEditingController _observationsController = TextEditingController();
   bool _isLoading = false;
   bool _isCreatingBooking = false;
+  List<File> _uploadedImages = [];
+  final ImagePicker _imagePicker = ImagePicker();
+  bool _showAllVehicles = false; // Controla se mostra todos os veículos ou apenas 5
   
   // Serviços da oficina
   List<Map<String, dynamic>> _workshopServices = [];
@@ -68,10 +73,43 @@ class _BookingScreenState extends State<BookingScreen> {
       final result = await _apiService.getUserVehicles();
       
       if (result['success']) {
+        final vehiclesList = (result['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        
+        // Remover duplicatas baseado no ID
+        final uniqueVehicles = <String, Map<String, dynamic>>{};
+        for (var vehicle in vehiclesList) {
+          final id = vehicle['id']?.toString() ?? '';
+          if (id.isNotEmpty && !uniqueVehicles.containsKey(id)) {
+            uniqueVehicles[id] = vehicle;
+          }
+        }
+        
+        // Ordenar: favoritos primeiro, depois padrão, depois os demais
+        final sortedVehicles = uniqueVehicles.values.toList();
+        sortedVehicles.sort((a, b) {
+          final aFavorite = (a['is_favorite'] == true || a['is_favorite'] == 'true') ? 1 : 0;
+          final bFavorite = (b['is_favorite'] == true || b['is_favorite'] == 'true') ? 1 : 0;
+          if (aFavorite != bFavorite) return bFavorite.compareTo(aFavorite);
+          
+          final aDefault = a['is_default'] == true ? 1 : 0;
+          final bDefault = b['is_default'] == true ? 1 : 0;
+          if (aDefault != bDefault) return bDefault.compareTo(aDefault);
+          
+          return 0;
+        });
+        
         setState(() {
-          _vehicles = List<Map<String, dynamic>>.from(result['data'] ?? []);
+          _vehicles = sortedVehicles;
+          // Pré-selecionar veículo favorito ou padrão
           if (_vehicles.isNotEmpty) {
-            _selectedVehicle = _vehicles.first;
+            final favoriteVehicle = _vehicles.firstWhere(
+              (v) => (v['is_favorite'] == true || v['is_favorite'] == 'true'),
+              orElse: () => _vehicles.firstWhere(
+                (v) => v['is_default'] == true,
+                orElse: () => _vehicles.first,
+              ),
+            );
+            _selectedVehicle = favoriteVehicle;
           }
         });
       } else {
@@ -125,13 +163,74 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _selectTime() async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: const TimeOfDay(hour: 9, minute: 0),
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecione uma data primeiro'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Buscar horários disponíveis da oficina
+    final availableHoursResult = await _apiService.getAvailableHours(
+      widget.workshopId,
+      _selectedDate!,
     );
+
+    List<String> availableTimes = [];
     
-    if (picked != null) {
-      setState(() => _selectedTime = picked);
+    if (availableHoursResult['success'] && availableHoursResult['data'] != null) {
+      final data = availableHoursResult['data'];
+      if (data is List) {
+        availableTimes = data.cast<String>();
+      } else if (data['available_hours'] is List) {
+        availableTimes = List<String>.from(data['available_hours']);
+      }
+    }
+
+    // Se não houver horários disponíveis específicos, gerar horários padrão
+    if (availableTimes.isEmpty) {
+      for (int hour = 8; hour <= 18; hour++) {
+        for (int minute = 0; minute < 60; minute += 30) {
+          availableTimes.add('${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}');
+        }
+      }
+    }
+
+    // Mostrar diálogo de seleção de horário
+    final selectedTimeStr = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Selecione um horário'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: availableTimes.length,
+            itemBuilder: (context, index) {
+              final timeStr = availableTimes[index];
+              return ListTile(
+                title: Text(timeStr),
+                onTap: () => Navigator.pop(context, timeStr),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    if (selectedTimeStr != null) {
+      final parts = selectedTimeStr.split(':');
+      if (parts.length == 2) {
+        setState(() {
+          _selectedTime = TimeOfDay(
+            hour: int.parse(parts[0]),
+            minute: int.parse(parts[1]),
+          );
+        });
+      }
     }
   }
 
@@ -184,6 +283,24 @@ class _BookingScreenState extends State<BookingScreen> {
       final result = await _apiService.createBooking(bookingData);
       
       if (result['success'] == true) {
+        final bookingId = result['data']['id'] ?? result['data']['booking_id'];
+        
+        // Fazer upload das imagens se houver
+        if (_uploadedImages.isNotEmpty && bookingId != null) {
+          await _uploadImages(bookingId);
+        }
+        
+        // Agendar lembretes de notificação
+        try {
+          await _notificationService.scheduleBookingReminders(
+            workshopName: widget.workshopName,
+            serviceName: widget.serviceName,
+            scheduledDate: appointmentDateTime,
+          );
+        } catch (e) {
+          print('Erro ao agendar lembretes: $e');
+        }
+        
         _showSnackBar('Agendamento criado com sucesso!', isError: false);
         
         // Navegar para tela de agendamentos
@@ -414,10 +531,15 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
+            isExpanded: true,
             items: _workshopServices.map((service) {
               return DropdownMenuItem<Map<String, dynamic>>(
                 value: service,
-                child: Text(service['name'] ?? 'Serviço'),
+                child: Text(
+                  service['name'] ?? 'Serviço',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
               );
             }).toList(),
             onChanged: (Map<String, dynamic>? service) {
@@ -432,6 +554,12 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildVehicleSelectionCard(bool isDarkMode) {
+    // Limitar a 5 veículos inicialmente, ou mostrar todos se expandido
+    final displayedVehicles = _showAllVehicles 
+        ? _vehicles 
+        : _vehicles.take(5).toList();
+    final hasMoreVehicles = _vehicles.length > 5;
+    
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -467,7 +595,68 @@ class _BookingScreenState extends State<BookingScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          ..._vehicles.map((vehicle) => _buildVehicleOption(vehicle, isDarkMode)),
+          if (_vehicles.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.directions_car_outlined,
+                      size: 48,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Nenhum veículo cadastrado',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/my-vehicles');
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text('Adicionar Veículo'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF00C977),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else ...[
+            ...displayedVehicles.map((vehicle) => _buildVehicleOption(vehicle, isDarkMode)),
+            if (hasMoreVehicles) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showAllVehicles = !_showAllVehicles;
+                    });
+                  },
+                  icon: Icon(
+                    _showAllVehicles ? Icons.expand_less : Icons.expand_more,
+                    color: const Color(0xFF00C977),
+                  ),
+                  label: Text(
+                    _showAllVehicles 
+                        ? 'Ver menos' 
+                        : 'Ver mais (${_vehicles.length - 5} veículos)',
+                    style: const TextStyle(
+                      color: Color(0xFF00C977),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -606,6 +795,7 @@ class _BookingScreenState extends State<BookingScreen> {
     return GestureDetector(
       onTap: _selectDate,
       child: Container(
+        height: 70, // Altura fixa para igualar ao horário
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[100],
@@ -619,6 +809,8 @@ class _BookingScreenState extends State<BookingScreen> {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               'Data',
@@ -629,16 +821,20 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              _selectedDate != null
-                  ? DateFormat('dd/MM/yyyy').format(_selectedDate!)
-                  : 'Selecionar data',
-              style: TextStyle(
-                fontSize: 16,
-                color: _selectedDate != null 
-                    ? (isDarkMode ? Colors.white : Colors.black)
-                    : Colors.grey[600],
-                fontWeight: FontWeight.w500,
+            Flexible(
+              child: Text(
+                _selectedDate != null
+                    ? DateFormat('dd/MM/yyyy').format(_selectedDate!)
+                    : 'Selecionar data',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: _selectedDate != null 
+                      ? (isDarkMode ? Colors.white : Colors.black)
+                      : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
           ],
@@ -651,6 +847,7 @@ class _BookingScreenState extends State<BookingScreen> {
     return GestureDetector(
       onTap: _selectTime,
       child: Container(
+        height: 70, // Altura fixa igual ao campo de data
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[100],
@@ -664,6 +861,8 @@ class _BookingScreenState extends State<BookingScreen> {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               'Horário',
@@ -674,16 +873,20 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              _selectedTime != null
-                  ? _selectedTime!.format(context)
-                  : 'Selecionar horário',
-              style: TextStyle(
-                fontSize: 16,
-                color: _selectedTime != null 
-                    ? (isDarkMode ? Colors.white : Colors.black)
-                    : Colors.grey[600],
-                fontWeight: FontWeight.w500,
+            Flexible(
+              child: Text(
+                _selectedTime != null
+                    ? _selectedTime!.format(context)
+                    : 'Selecionar horário',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: _selectedTime != null 
+                      ? (isDarkMode ? Colors.white : Colors.black)
+                      : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
           ],
@@ -753,6 +956,78 @@ class _BookingScreenState extends State<BookingScreen> {
               fillColor: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[50],
             ),
           ),
+          const SizedBox(height: 16),
+          // Botões de upload de foto
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _takePhoto,
+                  icon: const Icon(Icons.camera_alt, size: 20),
+                  label: const Text('Tirar Foto'),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF00C977)),
+                    foregroundColor: const Color(0xFF00C977),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _selectImage,
+                  icon: const Icon(Icons.photo_library, size: 20),
+                  label: const Text('Galeria'),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF00C977)),
+                    foregroundColor: const Color(0xFF00C977),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // Exibir imagens selecionadas
+          if (_uploadedImages.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text(
+              'Fotos selecionadas:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: List.generate(_uploadedImages.length, (index) {
+                return Stack(
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        image: DecorationImage(
+                          image: FileImage(_uploadedImages[index]),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: -5,
+                      right: -5,
+                      child: IconButton(
+                        icon: const Icon(Icons.close, size: 20, color: Colors.red),
+                        onPressed: () => _removeImage(index),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ),
+          ],
         ],
       ),
     );
@@ -792,9 +1067,87 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
+  Future<void> _takePhoto() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+      
+      if (image != null) {
+        setState(() {
+          _uploadedImages.add(File(image.path));
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao capturar foto: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _selectImage() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+      
+      if (image != null) {
+        setState(() {
+          _uploadedImages.add(File(image.path));
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao selecionar imagem: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _uploadedImages.removeAt(index);
+    });
+  }
+
+  Future<void> _uploadImages(String bookingId) async {
+    for (var imageFile in _uploadedImages) {
+      try {
+        final result = await _apiService.uploadBookingImage(bookingId, imageFile);
+        if (!result['success']) {
+          print('Erro ao fazer upload da imagem: ${result['error']}');
+        }
+      } catch (e) {
+        print('Erro ao fazer upload da imagem: $e');
+      }
+    }
+  }
+
   @override
   void dispose() {
     _observationsController.dispose();
     super.dispose();
   }
 }
+
+
+
+
+
+
+
+
+
+
+

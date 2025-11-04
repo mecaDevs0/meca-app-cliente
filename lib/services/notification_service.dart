@@ -2,6 +2,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 // import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz_data;
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -13,8 +14,20 @@ class NotificationService {
 
   bool _isInitialized = false;
 
+  // Handler para navegação quando notificação é clicada
+  static void Function(String? payload)? onNotificationClick;
+
   Future<void> initialize() async {
     if (_isInitialized) return;
+
+    // Inicializar timezone database antes de usar
+    try {
+      tz_data.initializeTimeZones();
+      tz.setLocalLocation(tz.getLocation('America/Sao_Paulo'));
+    } catch (e) {
+      // Se já estiver inicializado, ignorar erro
+      print('Timezone já inicializado ou erro ao inicializar: $e');
+    }
 
     // Configurar notificações locais
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -29,7 +42,14 @@ class NotificationService {
       iOS: iosSettings,
     );
 
-    await _localNotifications.initialize(initSettings);
+    await _localNotifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        if (response.payload != null && onNotificationClick != null) {
+          onNotificationClick!(response.payload);
+        }
+      },
+    );
 
     // Configurar Firebase Messaging (temporariamente desabilitado)
     // await _firebaseMessaging.requestPermission(
@@ -51,12 +71,27 @@ class NotificationService {
 
   Future<String?> getFCMToken() async {
     try {
-      // TODO: Implementar Firebase Messaging quando necessário
-      return 'mock_fcm_token_${DateTime.now().millisecondsSinceEpoch}';
+      // Firebase Messaging - busca token REAL do Firebase
+      // TODO: Descomentar quando Firebase estiver configurado
+      // final firebaseMessaging = FirebaseMessaging.instance;
+      // final token = await firebaseMessaging.getToken();
+      // return token;
+      
+      // Por enquanto, retornar null (não usar mock)
+      return null;
     } catch (e) {
       print('Erro ao obter FCM token: $e');
       return null;
     }
+  }
+
+  // Método para criar payload de navegação
+  static String createNavigationPayload(String type, String id, {Map<String, dynamic>? extra}) {
+    final parts = [type, id];
+    if (extra != null) {
+      parts.add(extra.entries.map((e) => '${e.key}=${e.value}').join(','));
+    }
+    return parts.join('|');
   }
 
   Future<void> showLocalNotification({
@@ -101,6 +136,13 @@ class NotificationService {
     required DateTime scheduledDate,
     String? payload,
   }) async {
+    // Garantir que timezone está inicializado
+    try {
+      tz_data.initializeTimeZones();
+    } catch (e) {
+      // Se já estiver inicializado, ignorar erro
+    }
+
     const androidDetails = AndroidNotificationDetails(
       'meca_scheduled_channel',
       'MECA Scheduled Notifications',
@@ -121,15 +163,33 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    await _localNotifications.zonedSchedule(
-      id,
-      title,
-      body,
-      tz.TZDateTime.from(scheduledDate, tz.getLocation('America/Sao_Paulo')),
-      notificationDetails,
-      payload: payload,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-    );
+    try {
+      final location = tz.getLocation('America/Sao_Paulo');
+      final scheduledTZ = tz.TZDateTime.from(scheduledDate, location);
+      
+      await _localNotifications.zonedSchedule(
+        id,
+        title,
+        body,
+        scheduledTZ,
+        notificationDetails,
+        payload: payload,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (e) {
+      print('Erro ao agendar notificação com timezone: $e');
+      // Em caso de erro com timezone, usar DateTime local diretamente
+      final scheduledTZ = tz.TZDateTime.from(scheduledDate, tz.local);
+      await _localNotifications.zonedSchedule(
+        id,
+        title,
+        body,
+        scheduledTZ,
+        notificationDetails,
+        payload: payload,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    }
   }
 
   Future<void> cancelNotification(int id) async {
@@ -145,11 +205,16 @@ class NotificationService {
     required String workshopName,
     required String serviceName,
     required DateTime scheduledDate,
+    String? bookingId,
   }) async {
+    final payload = bookingId != null 
+        ? createNavigationPayload('booking', bookingId)
+        : null;
     await showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: 'Agendamento Confirmado! 🎉',
       body: 'Seu agendamento de $serviceName na $workshopName foi confirmado para ${_formatDate(scheduledDate)}',
+      payload: payload,
     );
   }
 
@@ -157,33 +222,48 @@ class NotificationService {
     required String workshopName,
     required String serviceName,
     required DateTime scheduledDate,
+    String? bookingId,
   }) async {
+    final payload = bookingId != null 
+        ? createNavigationPayload('booking', bookingId)
+        : null;
     await showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: 'Lembrete de Agendamento ⏰',
       body: 'Você tem um agendamento de $serviceName na $workshopName em 1 hora!',
+      payload: payload,
     );
   }
 
   Future<void> showServiceStarted({
     required String workshopName,
     required String serviceName,
+    String? bookingId,
   }) async {
+    final payload = bookingId != null 
+        ? createNavigationPayload('booking', bookingId)
+        : null;
     await showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: 'Serviço Iniciado! 🔧',
       body: 'O serviço $serviceName foi iniciado na $workshopName',
+      payload: payload,
     );
   }
 
   Future<void> showServiceFinished({
     required String workshopName,
     required String serviceName,
+    String? bookingId,
   }) async {
+    final payload = bookingId != null 
+        ? createNavigationPayload('booking', bookingId)
+        : null;
     await showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: 'Serviço Finalizado! ✅',
       body: 'O serviço $serviceName foi finalizado na $workshopName. Agora você pode avaliar!',
+      payload: payload,
     );
   }
 
@@ -191,11 +271,16 @@ class NotificationService {
     required String workshopName,
     required String serviceName,
     required double amount,
+    String? bookingId,
   }) async {
+    final payload = bookingId != null 
+        ? createNavigationPayload('booking', bookingId)
+        : null;
     await showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: 'Pagamento Confirmado! 💳',
       body: 'Pagamento de R\$ ${amount.toStringAsFixed(2)} confirmado para $serviceName na $workshopName',
+      payload: payload,
     );
   }
 
@@ -231,3 +316,23 @@ class NotificationService {
     return '${date.day}/${date.month}/${date.year} às ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

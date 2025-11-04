@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/meca_loading_widget.dart';
+import '../notifications/recent_notifications_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({Key? key}) : super(key: key);
@@ -27,7 +28,10 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     _tabController.addListener(() {
       final statuses = ['pendente_oficina', 'confirmado', 'finalizado_cliente'];
       setState(() {
-        _currentStatus = statuses[_tabController.index];
+        final index = _tabController.index;
+        if (index >= 0 && index < statuses.length) {
+          _currentStatus = statuses[index];
+        }
       });
       _loadBookings();
     });
@@ -38,14 +42,61 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     if (!mounted) return;
     setState(() => _loading = true);
     
-    final result = await _apiService.getMyBookings('cus_01K83MVXK5RDQA6R079DXP2C56'); // ID do usuário logado
+    final result = await _apiService.getBookings();
     
     if (!mounted) return;
     
     if (result['success']) {
       var bookings = (result['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       
-      bookings = bookings.where((b) => b['status'] == _currentStatus).toList();
+      // Filtrar por status - mapear corretamente
+      bookings = bookings.where((b) {
+        final bookingStatus = b['status'] ?? '';
+        
+        if (_currentStatus == 'pendente_oficina') {
+          return bookingStatus == 'pendente_oficina' || bookingStatus == 'pending';
+        } else if (_currentStatus == 'confirmado') {
+          return bookingStatus == 'confirmado' || 
+                 bookingStatus == 'confirmado_oficina' || 
+                 bookingStatus == 'confirmed';
+        } else if (_currentStatus == 'finalizado_cliente') {
+          return bookingStatus == 'finalizado_cliente' || 
+                 bookingStatus == 'concluido' || 
+                 bookingStatus == 'completed';
+        }
+        
+        return b['status'] == _currentStatus;
+      }).toList();
+      
+      // Ordenar agendamentos pendentes por data mais próxima da atual
+      if (_currentStatus == 'pendente_oficina') {
+        bookings.sort((a, b) {
+          // Tentar ambos os campos possíveis de data
+          final dateA = a['appointment_date'] ?? a['scheduled_date'];
+          final dateB = b['appointment_date'] ?? b['scheduled_date'];
+          
+          // Se ambos têm data, ordenar por data crescente (mais próximo primeiro)
+          if (dateA != null && dateB != null) {
+            try {
+              final dateAObj = DateTime.parse(dateA);
+              final dateBObj = DateTime.parse(dateB);
+              return dateAObj.compareTo(dateBObj);
+            } catch (e) {
+              // Se houver erro ao parsear, manter ordem original
+              return 0;
+            }
+          }
+          
+          // Se apenas A tem data, A vem primeiro
+          if (dateA != null && dateB == null) return -1;
+          
+          // Se apenas B tem data, B vem primeiro
+          if (dateA == null && dateB != null) return 1;
+          
+          // Se nenhum tem data, manter ordem original
+          return 0;
+        });
+      }
       
       // Carregar dados dos veículos
       await _loadVehicleData(bookings);
@@ -68,13 +119,90 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       final vehiclesResult = await _apiService.getUserVehicles();
       if (vehiclesResult['success']) {
         final vehicles = (vehiclesResult['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        
+        // Remover duplicatas baseado no ID antes de adicionar ao Map
+        final uniqueVehicles = <String, Map<String, dynamic>>{};
         for (var vehicle in vehicles) {
+          final id = vehicle['id']?.toString() ?? '';
+          if (id.isNotEmpty && !uniqueVehicles.containsKey(id)) {
+            uniqueVehicles[id] = vehicle;
+          }
+        }
+        
+        // Adicionar ao _vehicleData
+        for (var vehicle in uniqueVehicles.values) {
           _vehicleData[vehicle['id']] = vehicle;
         }
       }
     } catch (e) {
       print('Erro ao carregar dados dos veículos: $e');
     }
+  }
+
+  Widget _buildNotificationButton(BuildContext context) {
+    return FutureBuilder<int>(
+      future: _getUnreadCount(),
+      builder: (context, snapshot) {
+        final unreadCount = snapshot.data ?? 0;
+        
+        return Stack(
+          children: [
+            IconButton(
+              icon: const Icon(
+                Icons.notifications,
+                color: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const RecentNotificationsScreen(),
+                  ),
+                );
+              },
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : '$unreadCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<int> _getUnreadCount() async {
+    try {
+      final result = await _apiService.getNotifications(limit: 100, read: false);
+      if (result['success'] == true) {
+        final notifications = (result['data'] as List?) ?? [];
+        return notifications.length;
+      }
+    } catch (e) {
+      print('Erro ao buscar contagem de notificações: $e');
+    }
+    return 0;
   }
 
   String _getVehicleDisplayName(Map<String, dynamic> booking) {
@@ -122,6 +250,11 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 );
               },
             ),
+            actions: [
+              Builder(
+                builder: (context) => _buildNotificationButton(context),
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               title: const Text(
                 'Meus Agendamentos',
@@ -374,7 +507,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 const SizedBox(height: 15),
 
                 // Services
-                if (booking['product_id'] != null)
+                if (booking['customer_notes'] != null && (booking['customer_notes'] as String).isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
@@ -382,12 +515,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      'Serviço ID: ${booking['product_id']}',
+                      booking['customer_notes'],
                       style: const TextStyle(
                         color: Color(0xFF00C977),
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 const SizedBox(height: 15),
@@ -423,6 +558,31 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   }
 
   Map<String, dynamic> _getStatusConfig(String status) {
+    // Normalizar o status para minúsculas e remover espaços
+    final normalizedStatus = status.toString().toLowerCase().trim();
+    
+    // Mapear status da API para status de exibição
+    final statusMap = {
+      'pendente_oficina': 'pending',
+      'pendente': 'pending',
+      'pending': 'pending',
+      'confirmado': 'confirmed',
+      'confirmado_oficina': 'confirmed',
+      'confirmed': 'confirmed',
+      'em_andamento': 'in_progress',
+      'em andamento': 'in_progress',
+      'in_progress': 'in_progress',
+      'finalizado_cliente': 'completed',
+      'finalizado': 'completed',
+      'concluido': 'completed',
+      'concluído': 'completed',
+      'completed': 'completed',
+      'cancelado': 'cancelled',
+      'cancelled': 'cancelled',
+    };
+    
+    final mappedStatus = statusMap[normalizedStatus] ?? normalizedStatus;
+    
     final configs = {
       'pending': {
         'label': 'Pendente',
@@ -451,7 +611,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       },
     };
     
-    return configs[status] ?? configs['pending']!;
+    return configs[mappedStatus] ?? configs['pending']!;
   }
 
   @override
@@ -485,3 +645,15 @@ class _FuturisticTabBarDelegate extends SliverPersistentHeaderDelegate {
     return false;
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+

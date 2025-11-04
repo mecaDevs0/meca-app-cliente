@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
-import '../auth/login_screen.dart';
+import '../notifications/recent_notifications_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -14,6 +14,8 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
+  bool _hasError = false;
+  String? _errorMessage;
   Map<String, dynamic>? _customerData;
   final ApiService _apiService = ApiService();
 
@@ -24,26 +26,84 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadCustomerData() async {
+    if (!mounted) return;
+    
     setState(() => _isLoading = true);
     
     try {
       // Obter dados reais do perfil do usuário
       final result = await _apiService.getUserProfile();
       
+      if (!mounted) return;
+      
       if (result['success']) {
         setState(() {
           _customerData = result['data'];
+          _hasError = false;
+          _errorMessage = null;
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar perfil: ${result['error']}')),
-        );
+        if (!mounted) return;
+        
+        // Tratar erro de forma mais amigável
+        String errorMessage = result['error'] ?? 'Erro ao carregar perfil';
+        
+        // Simplificar mensagens de erro técnicas
+        if (errorMessage.contains('401') || 
+            errorMessage.contains('Token') || 
+            errorMessage.contains('não fornecido') ||
+            errorMessage.contains('expirado')) {
+          errorMessage = 'Sessão expirada. Por favor, faça login novamente.';
+          // Redirecionar para login após 2 segundos
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) {
+              Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+            }
+          });
+        } else if (errorMessage.contains('Connection refused') ||
+                   errorMessage.contains('não está acessível') ||
+                   errorMessage.contains('SocketException')) {
+          errorMessage = 'Servidor não está acessível. Verifique sua conexão com a internet.';
+        } else if (errorMessage.contains('timeout') ||
+                   errorMessage.contains('Tempo de conexão')) {
+          errorMessage = 'Tempo de conexão esgotado. Verifique sua internet e tente novamente.';
+        } else if (errorMessage.contains('Sem conexão') ||
+                   errorMessage.contains('Failed host lookup')) {
+          errorMessage = 'Sem conexão com a internet. Verifique sua rede.';
+        } else if (errorMessage.contains('DioException') || 
+            errorMessage.contains('status code')) {
+          errorMessage = 'Erro ao conectar com o servidor. Verifique sua conexão e tente novamente.';
+        } else if (errorMessage.contains('500')) {
+          errorMessage = 'Erro no servidor. Tente novamente em alguns instantes.';
+        }
+        
+        setState(() {
+          _hasError = true;
+          _errorMessage = errorMessage;
+        });
       }
       
     } catch (e) {
+      if (!mounted) return;
+      
       print('Erro ao carregar dados do cliente: $e');
+      
+      String errorMessage = 'Erro ao conectar com o servidor';
+      if (e.toString().contains('Connection refused') || 
+          e.toString().contains('connection error')) {
+        errorMessage = 'Servidor não está acessível. Verifique sua conexão com a internet.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage = 'Tempo de conexão esgotado. Verifique sua internet.';
+      }
+      
+      setState(() {
+        _hasError = true;
+        _errorMessage = errorMessage;
+      });
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -53,10 +113,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final isDark = themeService.isDarkMode;
     
     return Scaffold(
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        title: Text(
+          'Meu Perfil',
+          style: TextStyle(
+            color: isDark ? Colors.white : const Color(0xFF252940),
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+        actions: [
+          _buildNotificationButton(context, themeService),
+        ],
+      ),
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
-            : _buildContent(isDark),
+            : _hasError
+                ? _buildErrorScreen(isDark)
+                : _buildContent(isDark),
+      ),
+    );
+  }
+
+  Widget _buildErrorScreen(bool isDark) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Erro ao carregar perfil',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage ?? 'Ocorreu um erro inesperado',
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadCustomerData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Tentar novamente'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00C977),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _forceLogout,
+              icon: const Icon(Icons.logout),
+              label: const Text('Sair da conta'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: isDark ? Colors.white : Colors.black,
+                side: BorderSide(color: isDark ? Colors.grey[600]! : Colors.grey[400]!),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -83,17 +224,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildHeader() {
     return Row(
-                  children: [
-                    Container(
+      children: [
+        Container(
           width: 60,
           height: 60,
-                      decoration: BoxDecoration(
+          decoration: BoxDecoration(
             color: const Color(0xFF00C977).withOpacity(0.1),
             borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: const Icon(
-                        Icons.person,
-                        color: Color(0xFF00C977),
+          ),
+          child: const Icon(
+            Icons.person,
+            color: Color(0xFF00C977),
             size: 30,
           ),
         ),
@@ -103,17 +244,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${_customerData?['first_name'] ?? ''} ${_customerData?['last_name'] ?? ''}',
-                style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                '${_customerData?['firstName'] ?? _customerData?['first_name'] ?? ''} ${_customerData?['lastName'] ?? _customerData?['last_name'] ?? ''}',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
               const SizedBox(height: 4),
               Text(
                 _customerData?['email'] ?? '',
-                style: const TextStyle(
-                  color: Colors.grey,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                   fontSize: 16,
                 ),
               ),
@@ -131,24 +273,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildProfileCard() {
     return Card(
-            child: Padding(
+      child: Padding(
         padding: const EdgeInsets.all(16),
-              child: Column(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-            const Text(
+          children: [
+            Text(
               'Informações Pessoais',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 16),
-            _buildInfoRow(Icons.person, 'Nome', '${_customerData?['first_name'] ?? ''} ${_customerData?['last_name'] ?? ''}'),
+            _buildInfoRow(Icons.person, 'Nome', '${_customerData?['firstName'] ?? _customerData?['first_name'] ?? ''} ${_customerData?['lastName'] ?? _customerData?['last_name'] ?? ''}'),
             _buildInfoRow(Icons.email, 'Email', _customerData?['email'] ?? ''),
             _buildInfoRow(Icons.phone, 'Telefone', _customerData?['phone'] ?? ''),
-            _buildInfoRow(Icons.location_on, 'Endereço', _customerData?['address'] ?? ''),
-            _buildInfoRow(Icons.badge, 'CPF', _customerData?['cpf'] ?? ''),
+            if (_customerData?['cpf'] != null)
+              _buildInfoRow(Icons.badge, 'CPF', _customerData?['cpf'] ?? ''),
           ],
         ),
       ),
@@ -168,19 +311,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                     fontSize: 14,
                   ),
                 ),
-                  Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                    ),
-                  ),
-                ],
+              ],
             ),
           ),
         ],
@@ -192,11 +336,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Configurações',
           style: TextStyle(
             fontSize: 18,
-              fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 16),
@@ -249,7 +394,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             const Text(
               'Aparência',
-        style: TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
@@ -300,16 +445,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'Sair da Conta',
           style: TextStyle(
             fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ),
     );
   }
 
-  void _editProfile() {
-    Navigator.pushNamed(context, '/edit-profile');
+  Future<void> _editProfile() async {
+    final result = await Navigator.pushNamed(context, '/edit-profile');
+    if (result == true) {
+      // Recarregar dados do perfil se houve atualização
+      await _loadCustomerData();
+    }
+  }
+
+  Widget _buildNotificationButton(BuildContext context, ThemeService themeService) {
+    return FutureBuilder<int>(
+      future: _getUnreadCount(),
+      builder: (context, snapshot) {
+        final unreadCount = snapshot.data ?? 0;
+        
+        return Stack(
+          children: [
+            IconButton(
+              icon: Icon(
+                Icons.notifications,
+                color: themeService.isDarkMode ? Colors.white : const Color(0xFF252940),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const RecentNotificationsScreen(),
+                  ),
+                );
+              },
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : '$unreadCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<int> _getUnreadCount() async {
+    try {
+      final result = await _apiService.getNotifications(limit: 100, read: false);
+      if (result['success'] == true) {
+        final notifications = (result['data'] as List?) ?? [];
+        return notifications.length;
+      }
+    } catch (e) {
+      print('Erro ao buscar contagem de notificações: $e');
+    }
+    return 0;
   }
 
   void _showNotificationsSettings() {
@@ -367,11 +582,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 'Segunda a Sexta: 8h às 18h',
               ),
               const SizedBox(height: 12),
-              _buildContactInfo(
-                Icons.location_on,
-                'Endereço',
-                'Rua das Oficinas, 123\nSão Paulo - SP',
-              ),
               const SizedBox(height: 16),
               const Text(
                 'FAQ Rápido:',
@@ -449,15 +659,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
-              );
+              _forceLogout();
             },
             child: const Text('Sair'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _forceLogout() async {
+    try {
+      await _apiService.logout();
+    } catch (_) {}
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
   }
 }

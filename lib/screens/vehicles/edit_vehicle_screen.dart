@@ -3,14 +3,16 @@ import 'package:flutter/services.dart';
 
 import '../../services/api_service.dart';
 
-class AddVehicleScreen extends StatefulWidget {
-  const AddVehicleScreen({Key? key}) : super(key: key);
+class EditVehicleScreen extends StatefulWidget {
+  final Map<String, dynamic> vehicle;
+
+  const EditVehicleScreen({Key? key, required this.vehicle}) : super(key: key);
 
   @override
-  State<AddVehicleScreen> createState() => _AddVehicleScreenState();
+  State<EditVehicleScreen> createState() => _EditVehicleScreenState();
 }
 
-class _AddVehicleScreenState extends State<AddVehicleScreen> {
+class _EditVehicleScreenState extends State<EditVehicleScreen> {
   final _formKey = GlobalKey<FormState>();
   final _plateController = TextEditingController();
   final _brandController = TextEditingController();
@@ -23,6 +25,18 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
   String? _selectedFuel;
 
   @override
+  void initState() {
+    super.initState();
+    // Preencher campos com dados do veículo
+    _plateController.text = widget.vehicle['plate'] ?? '';
+    _brandController.text = widget.vehicle['brand'] ?? '';
+    _modelController.text = widget.vehicle['model'] ?? '';
+    _yearController.text = widget.vehicle['year']?.toString() ?? '';
+    _colorController.text = widget.vehicle['color'] ?? '';
+    _selectedFuel = widget.vehicle['fuel'] ?? widget.vehicle['fuel_type'];
+  }
+
+  @override
   void dispose() {
     _plateController.dispose();
     _brandController.dispose();
@@ -31,63 +45,6 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
     _colorController.dispose();
     _fuelController.dispose();
     super.dispose();
-  }
-
-  // Busca por placa - API REAL na EC2
-  Future<void> _searchVehicleByPlate() async {
-    final plate = _plateController.text.trim().toUpperCase();
-    
-    if (plate.length < 7) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⚠️ Digite uma placa válida (7 ou 8 caracteres)'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-    
-    setState(() => _loading = true);
-    
-    try {
-      final result = await _apiService.searchVehicleByPlate(plate);
-      
-      if (result['success'] == true && result['data'] != null) {
-        final data = result['data'] as Map<String, dynamic>;
-        
-        setState(() {
-          _brandController.text = data['brand'] ?? '';
-          _modelController.text = data['model'] ?? '';
-          _yearController.text = data['year']?.toString() ?? '';
-          _colorController.text = data['color'] ?? '';
-          _selectedFuel = data['fuel'] ?? 'Flex';
-          _fuelController.text = _selectedFuel ?? '';
-        });
-        
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-            content: Text('✅ Dados do veículo preenchidos automaticamente!'),
-            backgroundColor: Color(0xFF00C977),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Não foi possível encontrar dados para esta placa. Preencha manualmente.'),
-        backgroundColor: Colors.orange,
-      ),
-    );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao buscar placa: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      setState(() => _loading = false);
-    }
   }
 
   Future<void> _saveVehicle() async {
@@ -127,22 +84,25 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
       'color': _colorController.text,
     };
 
-    final result = await _apiService.addVehicle(vehicleData);
+    final result = await _apiService.updateVehicle(
+      widget.vehicle['id'].toString(),
+      vehicleData,
+    );
 
     setState(() => _loading = false);
 
     if (result['success']) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✅ Veículo adicionado com sucesso!'),
+          content: Text('✅ Veículo atualizado com sucesso!'),
           backgroundColor: Color(0xFF00C977),
         ),
       );
-      Navigator.pop(context);
+      Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['error'] ?? 'Erro ao adicionar veículo'),
+          content: Text(result['error'] ?? 'Erro ao atualizar veículo'),
           backgroundColor: Colors.red,
         ),
       );
@@ -153,7 +113,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Adicionar Veículo'),
+        title: const Text('Editar Veículo'),
         backgroundColor: const Color(0xFF00C977),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -168,26 +128,17 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
               // Placa
               TextFormField(
                 controller: _plateController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Placa do Veículo',
                   hintText: 'Ex: ABC1234',
-                  prefixIcon: const Icon(Icons.directions_car),
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.search),
-                    onPressed: _searchVehicleByPlate,
-                  ),
+                  prefixIcon: Icon(Icons.directions_car),
+                  border: OutlineInputBorder(),
                 ),
                 textCapitalization: TextCapitalization.characters,
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9]')),
                   LengthLimitingTextInputFormatter(7),
                 ],
-                onChanged: (value) {
-                  if (value.length == 7) {
-                    _searchVehicleByPlate();
-                  }
-                },
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Por favor, insira a placa do veículo';
@@ -222,7 +173,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                 controller: _modelController,
                 decoration: const InputDecoration(
                   labelText: 'Modelo',
-                  prefixIcon: Icon(Icons.model_training),
+                  prefixIcon: Icon(Icons.directions_car),
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) {
@@ -281,67 +232,50 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                 value: _selectedFuel,
                 decoration: const InputDecoration(
                   labelText: 'Combustível',
-                  prefixIcon: Icon(Icons.local_gas_station, color: Color(0xFF00C977)),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(15)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(15)),
-                    borderSide: BorderSide(color: Color(0xFF00C977), width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.local_gas_station),
+                  border: OutlineInputBorder(),
                 ),
                 items: const [
                   DropdownMenuItem(value: 'Gasolina', child: Text('Gasolina')),
                   DropdownMenuItem(value: 'Etanol', child: Text('Etanol')),
                   DropdownMenuItem(value: 'Flex', child: Text('Flex')),
                   DropdownMenuItem(value: 'Diesel', child: Text('Diesel')),
-                  DropdownMenuItem(value: 'GNV', child: Text('GNV')),
                   DropdownMenuItem(value: 'Elétrico', child: Text('Elétrico')),
                   DropdownMenuItem(value: 'Híbrido', child: Text('Híbrido')),
                 ],
                 onChanged: (value) {
                   setState(() {
                     _selectedFuel = value;
-                    _fuelController.text = value ?? '';
                   });
-                },
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor, selecione o tipo de combustível';
-                  }
-                  return null;
                 },
               ),
               const SizedBox(height: 30),
-              
-              SizedBox(height: 40),
               
               // Botão Salvar
               ElevatedButton(
                 onPressed: _loading ? null : _saveVehicle,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF00C977),
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(vertical: 15),
+                  backgroundColor: const Color(0xFF00C977),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  elevation: 3,
                 ),
                 child: _loading
-                    ? SizedBox(
-                        height: 20,
+                    ? const SizedBox(
                         width: 20,
+                        height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          color: Colors.white,
                         ),
                       )
-                    : Text(
-                        'Adicionar Veículo',
+                    : const Text(
+                        'Salvar Alterações',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
               ),
@@ -352,4 +286,5 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
     );
   }
 }
+
 

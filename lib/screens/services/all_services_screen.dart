@@ -20,9 +20,9 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
   
   // Filtros e pesquisa
   final TextEditingController _searchController = TextEditingController();
-  String _selectedCategory = 'Todos';
-  String _selectedPriceRange = 'Todos';
-  String _selectedDuration = 'Todos';
+  List<String> _selectedCategories = [];
+  List<String> _selectedPriceRanges = [];
+  List<String> _selectedDurations = [];
   String _sortBy = 'nome';
 
   @override
@@ -40,8 +40,18 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
     try {
       final result = await _apiService.getServices();
       if (result['success']) {
+        final data = result['data'];
+        List<dynamic> services = [];
+        
+        // Adaptar resposta para diferentes formatos
+        if (data is List) {
+          services = data;
+        } else if (data is Map) {
+          services = data['services'] ?? data['data'] ?? [];
+        }
+        
         setState(() {
-          _services = List<Map<String, dynamic>>.from(result['data'] ?? []);
+          _services = List<Map<String, dynamic>>.from(services);
           _filteredServices = List.from(_services);
           _loading = false;
         });
@@ -73,50 +83,60 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
           }
         }
 
-        // Filtro por categoria
-        if (_selectedCategory != 'Todos') {
-          final category = service['category'] ?? '';
-          if (category != _selectedCategory) {
+        // Filtro por categoria (múltipla seleção)
+        if (_selectedCategories.isNotEmpty) {
+          final category = (service['category'] ?? '').toString();
+          if (!_selectedCategories.contains(category)) {
             return false;
           }
         }
 
-        // Filtro por faixa de preço
-        if (_selectedPriceRange != 'Todos') {
+        // Filtro por faixa de preço (múltipla seleção)
+        if (_selectedPriceRanges.isNotEmpty) {
           final price = double.tryParse(service['price']?.toString() ?? '0') ?? 0;
-          switch (_selectedPriceRange) {
-            case 'Até R\$ 50':
-              if (price > 50) return false;
-              break;
-            case 'R\$ 50 - R\$ 100':
-              if (price < 50 || price > 100) return false;
-              break;
-            case 'R\$ 100 - R\$ 200':
-              if (price < 100 || price > 200) return false;
-              break;
-            case 'Acima de R\$ 200':
-              if (price < 200) return false;
-              break;
+          bool matchesPriceRange = false;
+          for (var priceRange in _selectedPriceRanges) {
+            switch (priceRange) {
+              case 'Até R\$ 50':
+                if (price <= 50) matchesPriceRange = true;
+                break;
+              case 'R\$ 50 - R\$ 100':
+                if (price >= 50 && price <= 100) matchesPriceRange = true;
+                break;
+              case 'R\$ 100 - R\$ 200':
+                if (price >= 100 && price <= 200) matchesPriceRange = true;
+                break;
+              case 'Acima de R\$ 200':
+                if (price > 200) matchesPriceRange = true;
+                break;
+            }
+            if (matchesPriceRange) break;
           }
+          if (!matchesPriceRange) return false;
         }
 
-        // Filtro por duração
-        if (_selectedDuration != 'Todos') {
+        // Filtro por duração (múltipla seleção)
+        if (_selectedDurations.isNotEmpty) {
           final duration = int.tryParse(service['duration']?.toString() ?? '0') ?? 0;
-          switch (_selectedDuration) {
-            case 'Até 30 min':
-              if (duration > 30) return false;
-              break;
-            case '30 - 60 min':
-              if (duration < 30 || duration > 60) return false;
-              break;
-            case '60 - 120 min':
-              if (duration < 60 || duration > 120) return false;
-              break;
-            case 'Acima de 120 min':
-              if (duration < 120) return false;
-              break;
+          bool matchesDuration = false;
+          for (var durationRange in _selectedDurations) {
+            switch (durationRange) {
+              case 'Até 30 min':
+                if (duration <= 30) matchesDuration = true;
+                break;
+              case '30 - 60 min':
+                if (duration >= 30 && duration <= 60) matchesDuration = true;
+                break;
+              case '60 - 120 min':
+                if (duration >= 60 && duration <= 120) matchesDuration = true;
+                break;
+              case 'Acima de 120 min':
+                if (duration > 120) matchesDuration = true;
+                break;
+            }
+            if (matchesDuration) break;
           }
+          if (!matchesDuration) return false;
         }
 
         return true;
@@ -281,11 +301,11 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          _buildFilterChip('Categoria', _selectedCategory),
+          _buildFilterChip('Categoria', _selectedCategories.isEmpty ? 'Todos' : '${_selectedCategories.length} selecionado${_selectedCategories.length > 1 ? 's' : ''}'),
           const SizedBox(width: 8),
-          _buildFilterChip('Preço', _selectedPriceRange),
+          _buildFilterChip('Preço', _selectedPriceRanges.isEmpty ? 'Todos' : '${_selectedPriceRanges.length} selecionado${_selectedPriceRanges.length > 1 ? 's' : ''}'),
           const SizedBox(width: 8),
-          _buildFilterChip('Duração', _selectedDuration),
+          _buildFilterChip('Duração', _selectedDurations.isEmpty ? 'Todos' : '${_selectedDurations.length} selecionado${_selectedDurations.length > 1 ? 's' : ''}'),
           const SizedBox(width: 8),
           _buildFilterChip('Ordenar', _getSortLabel()),
         ],
@@ -382,9 +402,9 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
                   TextButton(
                     onPressed: () {
                       setState(() {
-                        _selectedCategory = 'Todos';
-                        _selectedPriceRange = 'Todos';
-                        _selectedDuration = 'Todos';
+                        _selectedCategories = [];
+                        _selectedPriceRanges = [];
+                        _selectedDurations = [];
                         _sortBy = 'nome';
                       });
                       _applyFilters();
@@ -407,32 +427,50 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
                   children: [
                     _buildFilterSection(
                       'Categoria',
-                      _selectedCategory,
-                      ['Todos', 'Mecânica', 'Elétrica', 'Freios', 'Suspensão', 'Motor'],
+                      _selectedCategories,
+                      ['Mecânica', 'Elétrica', 'Freios', 'Suspensão', 'Motor'],
                       (value) {
-                        setState(() => _selectedCategory = value);
+                        setState(() {
+                          if (_selectedCategories.contains(value)) {
+                            _selectedCategories.remove(value);
+                          } else {
+                            _selectedCategories.add(value);
+                          }
+                        });
                       },
                     ),
                     const SizedBox(height: 20),
                     _buildFilterSection(
                       'Faixa de Preço',
-                      _selectedPriceRange,
-                      ['Todos', 'Até R\$ 50', 'R\$ 50 - R\$ 100', 'R\$ 100 - R\$ 200', 'Acima de R\$ 200'],
+                      _selectedPriceRanges,
+                      ['Até R\$ 50', 'R\$ 50 - R\$ 100', 'R\$ 100 - R\$ 200', 'Acima de R\$ 200'],
                       (value) {
-                        setState(() => _selectedPriceRange = value);
+                        setState(() {
+                          if (_selectedPriceRanges.contains(value)) {
+                            _selectedPriceRanges.remove(value);
+                          } else {
+                            _selectedPriceRanges.add(value);
+                          }
+                        });
                       },
                     ),
                     const SizedBox(height: 20),
                     _buildFilterSection(
                       'Duração',
-                      _selectedDuration,
-                      ['Todos', 'Até 30 min', '30 - 60 min', '60 - 120 min', 'Acima de 120 min'],
+                      _selectedDurations,
+                      ['Até 30 min', '30 - 60 min', '60 - 120 min', 'Acima de 120 min'],
                       (value) {
-                        setState(() => _selectedDuration = value);
+                        setState(() {
+                          if (_selectedDurations.contains(value)) {
+                            _selectedDurations.remove(value);
+                          } else {
+                            _selectedDurations.add(value);
+                          }
+                        });
                       },
                     ),
                     const SizedBox(height: 20),
-                    _buildFilterSection(
+                    _buildSortSection(
                       'Ordenar por',
                       _sortBy,
                       ['nome', 'preco', 'duracao'],
@@ -472,7 +510,7 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       child: const Text(
-                        'Aplicar',
+                        'Aplicar Filtros',
                         style: TextStyle(color: Colors.white),
                       ),
                     ),
@@ -489,10 +527,12 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
 
   Widget _buildFilterSection(
     String title,
-    String selectedValue,
+    List<String> selectedValues,
     List<String> options,
     Function(String) onChanged,
   ) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -508,26 +548,112 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
           spacing: 8,
           runSpacing: 8,
           children: options.map((option) {
-            final isSelected = option == selectedValue;
+            // Primeira letra maiúscula
+            String displayOption = option.isEmpty ? '' : option[0].toUpperCase() + option.substring(1);
+            final isSelected = selectedValues.contains(option);
+            
+            // Cor dinâmica baseada no tema
+            Color backgroundColor = isSelected
+                ? const Color(0xFF00C977)
+                : (isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey.shade100);
+            Color textColor = isSelected
+                ? Colors.white
+                : (isDarkMode ? Colors.grey[300]! : Colors.grey[700]!);
+            Color borderColor = isSelected
+                ? const Color(0xFF00C977)
+                : (isDarkMode ? Colors.grey[700]! : Colors.grey.shade300);
+            
             return GestureDetector(
               onTap: () => onChanged(option),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFF00C977)
-                      : Colors.grey.shade100,
+                  color: backgroundColor,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isSelected
-                        ? const Color(0xFF00C977)
-                        : Colors.grey.shade300,
+                    color: borderColor,
                   ),
                 ),
                 child: Text(
-                  option,
+                  displayOption,
                   style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.grey[700],
+                    color: textColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSortSection(
+    String title,
+    String selectedValue,
+    List<String> options,
+    Function(String) onChanged,
+  ) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((option) {
+            // Primeira letra maiúscula e nomes amigáveis
+            String displayOption = option;
+            switch (option) {
+              case 'nome':
+                displayOption = 'Nome';
+                break;
+              case 'preco':
+                displayOption = 'Preço';
+                break;
+              case 'duracao':
+                displayOption = 'Duração';
+                break;
+            }
+            final isSelected = option == selectedValue;
+            
+            // Cor dinâmica baseada no tema
+            Color backgroundColor = isSelected
+                ? const Color(0xFF00C977)
+                : (isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey.shade100);
+            Color textColor = isSelected
+                ? Colors.white
+                : (isDarkMode ? Colors.grey[300]! : Colors.grey[700]!);
+            Color borderColor = isSelected
+                ? const Color(0xFF00C977)
+                : (isDarkMode ? Colors.grey[700]! : Colors.grey.shade300);
+            
+            return GestureDetector(
+              onTap: () => onChanged(option),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: backgroundColor,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: borderColor,
+                  ),
+                ),
+                child: Text(
+                  displayOption,
+                  style: TextStyle(
+                    color: textColor,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
@@ -712,3 +838,18 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

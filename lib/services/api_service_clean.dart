@@ -81,7 +81,7 @@ class ApiService {
       } else {
         // Fallback para API FIPE
         print('⚠️ Tentando fallback com API FIPE...');
-        final fipeResult = await PlateSearchService.searchVehicleByPlateFIPE(plate);
+        final fipeResult = await PlateSearchService.searchVehicleByPlate(plate);
         return fipeResult;
       }
     } catch (e) {
@@ -324,4 +324,12 @@ class ApiService {
     return 'Erro inesperado: ${error.toString()}';
   }
 }
+
+
+
+
+
+
+
+
 

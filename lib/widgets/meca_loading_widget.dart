@@ -21,8 +21,6 @@ class _MecaLoadingWidgetState extends State<MecaLoadingWidget>
     with TickerProviderStateMixin {
   late AnimationController _rotationController;
   late AnimationController _scaleController;
-  late Animation<double> _rotationAnimation;
-  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
@@ -37,22 +35,6 @@ class _MecaLoadingWidgetState extends State<MecaLoadingWidget>
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
-    
-    _rotationAnimation = Tween<double>(
-      begin: 0,
-      end: 1,
-    ).animate(CurvedAnimation(
-      parent: _rotationController,
-      curve: Curves.linear,
-    ));
-    
-    _scaleAnimation = Tween<double>(
-      begin: 0.8,
-      end: 1.2,
-    ).animate(CurvedAnimation(
-      parent: _scaleController,
-      curve: Curves.easeInOut,
-    ));
     
     _startAnimations();
   }
@@ -155,3 +137,13 @@ class MecaEnterLoadingWidget extends StatelessWidget {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+

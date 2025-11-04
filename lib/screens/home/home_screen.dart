@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
@@ -39,35 +40,106 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() => _isLoading = true);
     
     try {
-      // Obter ID do usuário logado
-      final userId = await _apiService.getUserId();
-      if (userId == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-      
       // Carregar agendamentos do usuário real
-      final bookingsResponse = await _apiService.getUserBookings();
+      final bookingsResponse = await _apiService.getBookings();
       if (bookingsResponse['success']) {
         final data = bookingsResponse['data'];
-        final bookingsList = data is Map ? (data['bookings'] ?? []) : data ?? [];
+        final bookingsList = data is List ? data : (data is Map ? (data['bookings'] ?? data['data'] ?? []) : []);
         final bookings = List<Map<String, dynamic>>.from(bookingsList);
+        
+        // Filtrar apenas agendamentos futuros ou pendentes e ordenar por data
+        final now = DateTime.now();
+        final upcoming = bookings.where((b) {
+          final status = b['status'] ?? '';
+          final isPendingOrConfirmed = status == 'pendente_oficina' || 
+                                      status == 'confirmed' || 
+                                      status == 'confirmado' ||
+                                      status == 'em_andamento' ||
+                                      status == 'in_progress';
+          
+          if (!isPendingOrConfirmed) return false;
+          
+          // Verificar se é agendamento futuro
+          final appointmentDate = b['appointment_date'] ?? b['scheduled_date'];
+          if (appointmentDate != null) {
+            try {
+              final date = DateTime.parse(appointmentDate);
+              return date.isAfter(now) || date.isAtSameMomentAs(now);
+            } catch (e) {
+              return true; // Se não conseguir parsear, incluir para não perder dados
+            }
+          }
+          
+          return true; // Incluir se não tiver data
+        }).toList();
+        
+        // Ordenar por data mais próxima primeiro
+        upcoming.sort((a, b) {
+          final dateA = a['appointment_date'] ?? a['scheduled_date'];
+          final dateB = b['appointment_date'] ?? b['scheduled_date'];
+          
+          if (dateA == null && dateB == null) return 0;
+          if (dateA == null) return 1;
+          if (dateB == null) return -1;
+          
+          try {
+            final dateAObj = DateTime.parse(dateA);
+            final dateBObj = DateTime.parse(dateB);
+            return dateAObj.compareTo(dateBObj);
+          } catch (e) {
+            return 0;
+          }
+        });
+        
         setState(() {
-          _upcomingBookings = bookings.where((b) => 
-            b['status'] == 'pending' || 
-            b['status'] == 'confirmed' || 
-            b['status'] == 'started'
-          ).toList();
+          _upcomingBookings = upcoming.take(3).toList(); // Pegar apenas os 3 mais próximos
         });
       }
       
       // Carregar oficinas próximas com geolocalização real
-      final workshopsResponse = await _apiService.getNearbyWorkshops(-23.5505, -46.6333);
-      if (workshopsResponse['success']) {
-        final workshops = List<Map<String, dynamic>>.from(workshopsResponse['data']['workshops'] ?? []);
-        setState(() {
-          _nearbyWorkshops = workshops.take(3).toList();
-        });
+      try {
+        Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        );
+        
+        final workshopsResponse = await _apiService.getNearbyWorkshops(
+          position.latitude,
+          position.longitude,
+          10.0
+        );
+        
+        if (workshopsResponse['success']) {
+          final data = workshopsResponse['data'];
+          List<dynamic> workshops = [];
+          
+          // Adaptar resposta
+          if (data is Map) {
+            workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
+          } else if (data is List) {
+            workshops = data;
+          }
+          
+          setState(() {
+            _nearbyWorkshops = List<Map<String, dynamic>>.from(workshops).take(3).toList();
+          });
+        }
+      } catch (e) {
+        print('Erro ao obter localização: $e');
+        // Fallback para coordenadas padrão (São Paulo)
+        final workshopsResponse = await _apiService.getNearbyWorkshops(-23.5505, -46.6333, 10.0);
+        if (workshopsResponse['success']) {
+          final data = workshopsResponse['data'];
+          List<dynamic> workshops = [];
+          if (data is Map) {
+            workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
+          } else if (data is List) {
+            workshops = data;
+          }
+          setState(() {
+            _nearbyWorkshops = List<Map<String, dynamic>>.from(workshops).take(3).toList();
+          });
+        }
       }
       
     } catch (e) {
@@ -196,10 +268,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 subtitle: 'Novo agendamento',
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const WorkshopsScreen()),
+                  MaterialPageRoute(builder: (context) => const AllServicesScreen()),
                 ),
               ),
-                                          ),
+            ),
                                         ],
                                       ),
         const SizedBox(height: 16),
@@ -370,80 +442,120 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildBookingCard(Map<String, dynamic> booking) {
-    return Container(
-      width: double.infinity, // Ocupa toda a largura disponível
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF00C977).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF00C977).withOpacity(0.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
+    final status = booking['status'] ?? '';
+    final appointmentDate = booking['appointment_date'] ?? booking['scheduled_date'];
+    final formattedDate = appointmentDate != null 
+        ? _formatDate(appointmentDate)
+        : 'Data não definida';
+    
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/order-detail',
+              arguments: booking,
+            );
+          },
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF00C977).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+              color: themeService.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFF00C977).withOpacity(0.2),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: const Icon(
-              Icons.build,
-              color: Color(0xFF00C977),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  booking['service']?['name'] ?? 'Serviço',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF00C977), Color(0xFF00B369)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.calendar_today,
+                    color: Colors.white,
+                    size: 24,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  booking['workshop']?['name'] ?? 'Oficina',
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        booking['service_name'] ?? booking['service']?['name'] ?? 'Serviço',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: themeService.isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        booking['workshop_name'] ?? booking['workshop']?['name'] ?? 'Oficina',
+                        style: TextStyle(
+                          color: themeService.isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 14,
+                            color: const Color(0xFF00C977),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            formattedDate,
+                            style: TextStyle(
+                              color: const Color(0xFF00C977),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatDate(booking['scheduled_date']),
-                  style: const TextStyle(
-                    color: Color(0xFF00C977),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(status).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _getStatusText(status),
+                    style: TextStyle(
+                      color: _getStatusColor(status),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: _getStatusColor(booking['status']).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              _getStatusText(booking['status']),
-              style: TextStyle(
-                color: _getStatusColor(booking['status']),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -656,36 +768,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Color _getStatusColor(String? status) {
-    switch (status) {
-      case 'pending':
-        return Colors.orange;
-      case 'confirmed':
-        return Colors.blue;
-      case 'started':
-        return Colors.purple;
-      case 'finished':
-        return Colors.green;
-      case 'cancelled':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
+    // Mapear status da API para cores
+    final statusMap = {
+      'pendente_oficina': Colors.orange,
+      'confirmado': Colors.blue,
+      'confirmado_oficina': Colors.blue,
+      'em_andamento': Colors.purple,
+      'in_progress': Colors.purple,
+      'finalizado_cliente': Colors.green,
+      'completed': Colors.green,
+      'cancelado': Colors.red,
+      'cancelled': Colors.red,
+    };
+    
+    final mappedStatus = statusMap[status] ?? statusMap['pendente_oficina'] ?? Colors.grey;
+    return mappedStatus;
   }
 
   String _getStatusText(String? status) {
-    switch (status) {
-      case 'pending':
-        return 'Pendente';
-      case 'confirmed':
-        return 'Confirmado';
-      case 'started':
-        return 'Iniciado';
-      case 'finished':
-        return 'Finalizado';
-      case 'cancelled':
-        return 'Cancelado';
-      default:
-        return 'Desconhecido';
-    }
+    // Mapear status da API para texto
+    final statusMap = {
+      'pendente_oficina': 'Pendente',
+      'confirmado': 'Confirmado',
+      'confirmado_oficina': 'Confirmado',
+      'em_andamento': 'Em Andamento',
+      'in_progress': 'Em Andamento',
+      'finalizado_cliente': 'Finalizado',
+      'completed': 'Finalizado',
+      'cancelado': 'Cancelado',
+      'cancelled': 'Cancelado',
+    };
+    
+    return statusMap[status] ?? 'Pendente';
   }
 }

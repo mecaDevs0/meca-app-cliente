@@ -28,18 +28,32 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   }
 
   Future<void> _loadWorkshopDetails() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
     
-    final result = await _apiService.getWorkshopDetails(widget.workshopId);
-    
-    if (result['success']) {
+    try {
+      final result = await _apiService.getWorkshopDetails(widget.workshopId);
+      
+      if (!mounted) return;
+      
+      if (result['success']) {
+        setState(() {
+          _workshop = result['data']?['workshop'] ?? result['data'] ?? {};
+          _loading = false;
+          _error = '';
+        });
+      } else {
+        setState(() {
+          _error = result['error'] ?? 'Erro ao carregar oficina';
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _workshop = result['data']['workshop'];
-        _loading = false;
-      });
-    } else {
-      setState(() {
-        _error = result['error'] ?? 'Erro ao carregar oficina';
+        _error = 'Erro ao carregar oficina: $e';
         _loading = false;
       });
     }
@@ -101,7 +115,6 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
   Widget _buildWorkshopDetails() {
     if (_workshop == null) return const SizedBox();
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return CustomScrollView(
       slivers: [
@@ -715,4 +728,13 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     return days[day] ?? day;
   }
 }
+
+
+
+
+
+
+
+
+
 

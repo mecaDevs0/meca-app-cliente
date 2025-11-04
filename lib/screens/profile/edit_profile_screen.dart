@@ -14,14 +14,14 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _firstNameController = TextEditingController();
-  final _lastNameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _cpfController = TextEditingController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _cpfController = TextEditingController();
   final ApiService _apiService = ApiService();
-  
+
   bool _isLoading = false;
   bool _isSaving = false;
 
@@ -43,81 +43,93 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _loadProfileData() async {
     setState(() => _isLoading = true);
-    
     try {
-      // Obter dados reais do perfil do usuário
       final result = await _apiService.getUserProfile();
-      
-      if (result['success']) {
-        final userData = result['data'];
-        setState(() {
-          _firstNameController.text = userData['first_name'] ?? '';
-          _lastNameController.text = userData['last_name'] ?? '';
-          _emailController.text = userData['email'] ?? '';
-          _phoneController.text = userData['phone'] ?? '';
-        });
+      if (result['success'] == true) {
+        final userData = result['data'] as Map<String, dynamic>;
+        
+        // Debug: imprimir dados recebidos
+        print('🔍 Dados do perfil recebidos: $userData');
+        
+        // Tentar diferentes formatos de campos
+        _firstNameController.text = (userData['first_name'] ?? userData['firstName'] ?? userData['name'] ?? '').toString();
+        _lastNameController.text = (userData['last_name'] ?? userData['lastName'] ?? '').toString();
+        _emailController.text = (userData['email'] ?? '').toString();
+        _phoneController.text = (userData['phone'] ?? userData['phone_number'] ?? '').toString();
+        
+        // Tentar múltiplos formatos para CPF
+        final cpfValue = userData['cpf'] ?? 
+                        userData['document'] ?? 
+                        userData['cpf_number'] ?? 
+                        userData['document_number'] ?? 
+                        '';
+        
+        _cpfController.text = cpfValue.toString();
+        
+        // Debug: imprimir CPF encontrado
+        print('🔍 CPF encontrado: ${_cpfController.text}');
+        
+        // Forçar atualização do estado após setar valores
+        if (mounted) {
+          setState(() {});
+        }
       } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erro ao carregar perfil: ${result['error']}')),
         );
       }
     } catch (e) {
-      print('Erro ao carregar dados do perfil: $e');
+      if (!mounted) return;
+      print('❌ Erro ao carregar perfil: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erro ao carregar perfil: $e')),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-    
     setState(() => _isSaving = true);
-    
     try {
       final result = await _apiService.updateProfile({
         'firstName': _firstNameController.text.trim(),
         'lastName': _lastNameController.text.trim().isEmpty ? null : _lastNameController.text.trim(),
         'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+        // CPF não é enviado pois é disabled (somente leitura)
       });
-      
-      if (result['success']) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Perfil atualizado com sucesso!'),
-              backgroundColor: Color(0xFF00C977),
-            ),
-          );
-          // Recarregar dados do perfil após atualização
-          await _loadProfileData();
-          Navigator.pop(context);
-        }
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Perfil atualizado com sucesso!'),
+            backgroundColor: Color(0xFF00C977),
+          ),
+        );
+        await _loadProfileData();
+        Navigator.pop(context, true);
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro: ${result['error']}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao atualizar perfil: $e'),
+            content: Text('Erro: ${result['error']}'),
             backgroundColor: Colors.red,
           ),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao atualizar perfil: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -126,20 +138,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return Scaffold(
-          backgroundColor: themeService.isDarkMode 
-              ? const Color(0xFF121212) 
-              : const Color(0xFFFAFAFA),
+          backgroundColor: themeService.isDarkMode ? const Color(0xFF121212) : const Color(0xFFFAFAFA),
           appBar: AppBar(
             elevation: 0,
-            backgroundColor: themeService.isDarkMode 
-                ? const Color(0xFF1E1E1E) 
-                : Colors.white,
+            backgroundColor: themeService.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
             title: Text(
               'Editar Perfil',
               style: TextStyle(
-                color: themeService.isDarkMode 
-                    ? Colors.white 
-                    : const Color(0xFF252940),
+                color: themeService.isDarkMode ? Colors.white : const Color(0xFF252940),
                 fontWeight: FontWeight.bold,
                 fontSize: 24,
               ),
@@ -147,9 +153,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             leading: IconButton(
               icon: Icon(
                 Icons.arrow_back,
-                color: themeService.isDarkMode 
-                    ? Colors.white 
-                    : const Color(0xFF252940),
+                color: themeService.isDarkMode ? Colors.white : const Color(0xFF252940),
               ),
               onPressed: () => Navigator.pop(context),
             ),
@@ -191,9 +195,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           label: 'Nome',
                           icon: Icons.person,
                           validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Por favor, insira seu nome';
-                            }
+                            if (value == null || value.isEmpty) return 'Por favor, insira seu nome';
                             return null;
                           },
                         ),
@@ -203,9 +205,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           label: 'Sobrenome',
                           icon: Icons.person_outline,
                           validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Por favor, insira seu sobrenome';
-                            }
+                            if (value == null || value.isEmpty) return 'Por favor, insira seu sobrenome';
                             return null;
                           },
                         ),
@@ -216,12 +216,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           icon: Icons.email,
                           keyboardType: TextInputType.emailAddress,
                           validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Por favor, insira seu email';
-                            }
-                            if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                              return 'Por favor, insira um email válido';
-                            }
+                            if (value == null || value.isEmpty) return 'Por favor, insira seu email';
+                            if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) return 'Por favor, insira um email válido';
                             return null;
                           },
                         ),
@@ -233,9 +229,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           keyboardType: TextInputType.phone,
                           inputFormatters: [PhoneInputFormatter()],
                           validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Por favor, insira seu telefone';
-                            }
+                            if (value == null || value.isEmpty) return 'Por favor, insira seu telefone';
                             return null;
                           },
                         ),
@@ -251,13 +245,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             FilteringTextInputFormatter.digitsOnly,
                             LengthLimitingTextInputFormatter(11),
                           ],
+                          enabled: false,
                           validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Por favor, insira seu CPF';
-                            }
-                            if (value.length < 11) {
-                              return 'CPF deve ter 11 dígitos';
-                            }
+                            // CPF é disabled, não precisa validar
                             return null;
                           },
                         ),
@@ -291,11 +281,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
     int maxLines = 1,
+    bool enabled = true,
   }) {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return TextFormField(
           controller: controller,
+          enabled: enabled,
           style: TextStyle(color: themeService.isDarkMode ? Colors.white : Colors.black),
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
@@ -305,9 +297,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             labelText: label,
             prefixIcon: Icon(icon, color: const Color(0xFF00C977)),
             filled: true,
-            fillColor: themeService.isDarkMode 
-                ? const Color(0xFF1E1E1E) 
-                : Colors.white,
+            fillColor: themeService.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
@@ -325,6 +315,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               borderSide: const BorderSide(
                 color: Color(0xFF00C977),
                 width: 2,
+              ),
+            ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: themeService.isDarkMode ? Colors.grey[800]! : Colors.grey[400]!,
               ),
             ),
             labelStyle: TextStyle(
@@ -369,3 +365,5 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 }
+
+

@@ -116,45 +116,45 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               Expanded(
                 flex: 2,
                 child: Padding(
-                padding: const EdgeInsets.fromLTRB(40, 20, 40, 10),
-                child: Column(
+                  padding: const EdgeInsets.fromLTRB(40, 20, 40, 10),
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
+                    children: [
+                      Container(
                         width: 80,
                         height: 80,
-                      decoration: BoxDecoration(
+                        decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
+                          boxShadow: [
+                            BoxShadow(
                               color: Colors.white.withOpacity(0.4),
                               blurRadius: 25,
                               spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
                           borderRadius: BorderRadius.circular(30),
-                        child: Image.asset(
-                          'assets/logos/icone_branco.png',
-                          fit: BoxFit.contain,
+                          child: Image.asset(
+                            'assets/logos/icone_branco.png',
+                            fit: BoxFit.contain,
+                          ),
                         ),
                       ),
-                    ),
                       const SizedBox(height: 15),
-                    const Text(
-                      'MECA',
-                      style: TextStyle(
+                      const Text(
+                        'MECA',
+                        style: TextStyle(
                           fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                           letterSpacing: 4,
                         ),
                       ),
                       const SizedBox(height: 5),
-                    Text(
-                      'Seu carro em boas mãos',
-                      style: TextStyle(
+                      Text(
+                        'Seu carro em boas mãos',
+                        style: TextStyle(
                           fontSize: 12,
                           color: Colors.white.withOpacity(0.8),
                           letterSpacing: 1,
@@ -166,51 +166,51 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               ),
               
               // Tab Bar for Login/Register
-                        Container(
+              Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20),
-                          decoration: BoxDecoration(
+                decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8), // Aumenta altura vertical
-                          child: TabBar(
-                            controller: _tabController,
-                            indicator: BoxDecoration(
-                    borderRadius: BorderRadius.circular(30),
-                    color: Colors.white,
-                              boxShadow: [
-                                BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                            indicatorSize: TabBarIndicatorSize.tab,
-                  indicatorPadding: const EdgeInsets.all(4),
-                  dividerColor: Colors.transparent, // Remove a barra horizontal preta
-                  labelColor: const Color(0xFF00C977),
-                  unselectedLabelColor: Colors.white,
-                            labelStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                            unselectedLabelStyle: const TextStyle(
-                    fontWeight: FontWeight.normal,
-                              fontSize: 16,
-                            ),
-                            tabs: const [
-                              Tab(text: 'Entrar'),
-                              Tab(text: 'Cadastrar'),
-                            ],
-                          ),
-                          ),
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: TabBar(
+                    controller: _tabController,
+                    indicator: BoxDecoration(
+                      borderRadius: BorderRadius.circular(30),
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          spreadRadius: 2,
                         ),
+                      ],
+                    ),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    indicatorPadding: const EdgeInsets.all(4),
+                    dividerColor: Colors.transparent,
+                    labelColor: const Color(0xFF00C977),
+                    unselectedLabelColor: Colors.white,
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.normal,
+                      fontSize: 16,
+                    ),
+                    tabs: const [
+                      Tab(text: 'Entrar'),
+                      Tab(text: 'Cadastrar'),
+                    ],
+                  ),
+                ),
+              ),
 
               // Form Section
               Expanded(
-                flex: 2, // Aumentado de 1 para 2 para ocupar 50% da tela
+                flex: 2,
                 child: Container(
                   margin: const EdgeInsets.only(top: 20),
                   padding: const EdgeInsets.all(20),
@@ -219,7 +219,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
                   ),
                   child: Form(
-                          key: _formKey,
+                    key: _formKey,
                     child: TabBarView(
                       controller: _tabController,
                       children: [
@@ -256,9 +256,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   prefixIcon: const Icon(Icons.lock),
                                   filled: true,
                                   fillColor: Colors.white,
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
                                     ),
                                     onPressed: () {
                                       setState(() {
@@ -278,18 +278,18 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   return null;
                                 },
                               ),
-                                const SizedBox(height: 10),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton(
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
+                              const SizedBox(height: 10),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
                                       MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
-                                      );
-                                    },
-                                    child: const Text(
-                                      'Esqueceu a senha?',
+                                    );
+                                  },
+                                  child: const Text(
+                                    'Esqueceu a senha?',
                                     style: TextStyle(color: Color(0xFF00C977)),
                                   ),
                                 ),
@@ -298,15 +298,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               _isLoading
                                   ? const MecaApiLoadingWidget(message: 'Entrando...')
                                   : SizedBox(
-                                width: double.infinity,
+                                      width: double.infinity,
                                       height: 50,
-                                child: ElevatedButton(
+                                      child: ElevatedButton(
                                         onPressed: _handleSubmit,
-                                  style: ElevatedButton.styleFrom(
+                                        style: ElevatedButton.styleFrom(
                                           backgroundColor: const Color(0xFF00C977),
                                           elevation: 3,
                                           shadowColor: const Color(0xFF00C977).withOpacity(0.3),
-                                    shape: RoundedRectangleBorder(
+                                          shape: RoundedRectangleBorder(
                                             borderRadius: BorderRadius.circular(25),
                                           ),
                                         ),
@@ -461,5 +461,5 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         ),
       ),
     );
-  }
-}
+  }}
+

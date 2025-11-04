@@ -717,3 +717,17 @@ class _ScheduleNegotiationScreenState extends State<ScheduleNegotiationScreen> {
     }
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

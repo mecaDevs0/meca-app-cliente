@@ -9,14 +9,21 @@ import '../profile/profile_screen.dart';
 import '../workshops/workshops_screen.dart';
 
 class CoreScreen extends StatefulWidget {
-  const CoreScreen({Key? key}) : super(key: key);
+  final int? initialIndex;
+  final int? ordersInitialTab;
+
+  const CoreScreen({
+    Key? key,
+    this.initialIndex,
+    this.ordersInitialTab,
+  }) : super(key: key);
 
   @override
   State<CoreScreen> createState() => _CoreScreenState();
 }
 
 class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateMixin {
-  int _currentIndex = 0;
+  late int _currentIndex;
   late PageController _pageController;
   
   final List<Widget> _pages = [
@@ -29,6 +36,7 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex ?? 0;
     _pageController = PageController(initialPage: _currentIndex);
   }
 
@@ -92,5 +100,18 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
       },
     );
   }
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
