@@ -194,42 +194,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Row(
       children: [
         // Logo MECA
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-          ),
+        Expanded(
           child: Image.asset(
-            'assets/images/wordmark_verde_vertical.png',
+            'assets/logos/wordmark_verde.png',
             fit: BoxFit.contain,
+            height: 40,
           ),
         ),
         const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              const Text(
-                'Bem-vindo ao MECA',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF00C977),
-                ),
-                textAlign: TextAlign.right,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Seu carro em boas mãos',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
-                textAlign: TextAlign.right,
-              ),
-            ],
+        const Text(
+          'Seu carro em boas mãos',
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.grey,
           ),
+          textAlign: TextAlign.right,
         ),
       ],
     );

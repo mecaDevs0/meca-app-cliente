@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
-import '../../services/theme_service.dart';
 import '../../widgets/meca_loading_widget.dart';
-import '../notifications/recent_notifications_screen.dart';
 import 'workshop_detail_screen.dart';
 
 class WorkshopsScreen extends StatefulWidget {
@@ -990,19 +987,6 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         },
       ),
     );
-  }
-  
-  Future<int> _getUnreadCount() async {
-    try {
-      final result = await _apiService.getNotifications(limit: 100, read: false);
-      if (result['success'] == true) {
-        final notifications = (result['data'] as List?) ?? [];
-        return notifications.length;
-      }
-    } catch (e) {
-      print('Erro ao buscar contagem de notificações: $e');
-    }
-    return 0;
   }
 
   Widget _buildSortOption(String title, String value, bool isDarkMode, VoidCallback onTap) {
