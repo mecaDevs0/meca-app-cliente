@@ -963,8 +963,13 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                       Expanded(
                         child: ElevatedButton(
                           onPressed: () {
-                            _applyFilters();
+                            setState(() {
+                              // Aplicar filtros e atualizar estado
+                              _applyFilters();
+                            });
                             Navigator.pop(context);
+                            // Recarregar lista após aplicar filtros
+                            setState(() {});
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00C977),

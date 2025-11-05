@@ -517,7 +517,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                         color: isDarkMode ? Colors.white : Colors.black,
                                       ),
                                     ),
-                                    if (serviceDuration > 0)
+                                    if (serviceDuration != null && serviceDuration > 0)
                                       Text(
                                         '$serviceDuration minutos',
                                         style: TextStyle(
@@ -529,7 +529,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 ),
                               ],
                             ),
-                            if (servicePrice > 0)
+                            if (servicePrice != null && servicePrice > 0)
                               Text(
                                 'R\$ ${(servicePrice / 100).toStringAsFixed(2)}',
                                 style: const TextStyle(
@@ -1165,14 +1165,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   bool _shouldShowPrice(Map<String, dynamic> booking) {
-    // Só exibir preço se a oficina forneceu tempo E preço
-    final hasPrice = (booking['service_price'] != null && booking['service_price'] > 0) ||
-                     (booking['total'] != null && booking['total'] > 0) ||
-                     (booking['estimated_price'] != null && booking['estimated_price'] > 0);
+    // Só exibir preço se a oficina forneceu tempo E preço (não null, não vazio, não 0)
+    final price = booking['service_price'] ?? booking['total'] ?? booking['estimated_price'] ?? 0;
+    final hasPrice = price != null && price != 0 && price.toString().trim().isNotEmpty;
     
-    final hasDuration = booking['service_duration'] != null || 
-                       booking['duration'] != null ||
-                       booking['duration_minutes'] != null;
+    final duration = booking['service_duration'] ?? booking['duration'] ?? booking['duration_minutes'] ?? 0;
+    final hasDuration = duration != null && duration != 0 && duration.toString().trim().isNotEmpty;
     
     return hasPrice && hasDuration;
   }

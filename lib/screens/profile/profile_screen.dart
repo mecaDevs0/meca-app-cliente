@@ -290,8 +290,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _buildInfoRow(Icons.person, 'Nome', '${_customerData?['firstName'] ?? _customerData?['first_name'] ?? ''} ${_customerData?['lastName'] ?? _customerData?['last_name'] ?? ''}'),
             _buildInfoRow(Icons.email, 'Email', _customerData?['email'] ?? ''),
             _buildInfoRow(Icons.phone, 'Telefone', _customerData?['phone'] ?? ''),
-            if (_customerData?['cpf'] != null)
-              _buildInfoRow(Icons.badge, 'CPF', _customerData?['cpf'] ?? ''),
+            _buildInfoRow(Icons.badge, 'CPF', _customerData?['cpf'] ?? _customerData?['document'] ?? _customerData?['cpf_number'] ?? _customerData?['document_number'] ?? 'Não informado'),
           ],
         ),
       ),

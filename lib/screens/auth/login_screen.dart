@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../services/api_service.dart';
 import '../../utils/phone_formatter.dart';
+import '../../utils/cpf_formatter.dart';
 import '../../widgets/meca_loading_widget.dart';
 import 'forgot_password_screen.dart';
 
@@ -19,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _cpfController = TextEditingController();
   final ApiService _apiService = ApiService();
   
   bool _isLogin = true;
@@ -44,6 +46,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     _passwordController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
+    _cpfController.dispose();
     super.dispose();
   }
 
@@ -65,6 +68,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         _emailController.text,
         _passwordController.text,
         _phoneController.text.replaceAll(RegExp(r'\D'), ''),
+        _cpfController.text.replaceAll(RegExp(r'\D'), ''),
       );
     }
 
@@ -387,6 +391,34 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   }
                                   if (value.replaceAll(RegExp(r'\D'), '').length < 10) {
                                     return 'Por favor, insira um telefone válido com DDD';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+                              TextFormField(
+                                style: const TextStyle(color: Colors.black),
+                                controller: _cpfController,
+                                decoration: const InputDecoration(
+                                  labelText: 'CPF *',
+                                  prefixIcon: Icon(Icons.badge),
+                                  hintText: '000.000.000-00',
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  CpfFormatter(),
+                                  LengthLimitingTextInputFormatter(14), // 000.000.000-00 = 14 caracteres
+                                ],
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Por favor, insira seu CPF';
+                                  }
+                                  // Remove pontos e traços para contar apenas dígitos
+                                  final digitsOnly = value.replaceAll(RegExp(r'\D'), '');
+                                  if (digitsOnly.length != 11) {
+                                    return 'CPF deve ter 11 dígitos';
                                   }
                                   return null;
                                 },

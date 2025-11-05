@@ -59,13 +59,14 @@ class ApiService {
   }
 
   // Registro
-  Future<Map<String, dynamic>> register(String firstName, String email, String password, String phone) async {
+  Future<Map<String, dynamic>> register(String firstName, String email, String password, String phone, String cpf) async {
     try {
       final response = await _dio.post('/auth/register', data: {
         'firstName': firstName,
         'email': email,
         'password': password,
         'phone': phone,
+        'cpf': cpf,
       });
       
       if (response.data != null && response.data['success'] == true) {
@@ -382,6 +383,8 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
     await prefs.remove('user_id');
+    // Limpar todos os dados do usuário para evitar cache
+    await prefs.clear();
   }
 
   // Verificar se usuário está logado

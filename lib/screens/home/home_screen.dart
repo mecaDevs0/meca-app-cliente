@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/meca_loading_widget.dart';
-import '../services/all_services_screen.dart';
+import '../services/services_screen.dart';
 import '../workshops/workshop_detail_screen.dart';
 import '../workshops/workshops_screen.dart';
 
@@ -268,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 subtitle: 'Novo agendamento',
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const AllServicesScreen()),
+                      MaterialPageRoute(builder: (context) => const ServicesScreen()),
                 ),
               ),
             ),
@@ -429,7 +429,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ElevatedButton(
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const AllServicesScreen()),
+                      MaterialPageRoute(builder: (context) => const ServicesScreen()),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00C977),

@@ -227,7 +227,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
-      backgroundColor: isDarkMode ? const Color(0xFF0A0A0A) : Colors.grey[50],
+      backgroundColor: isDarkMode ? const Color(0xFF0A0A0A) : Colors.white,
       body: CustomScrollView(
         slivers: [
           // AppBar melhorado
@@ -395,6 +395,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   Widget _buildBookingCard(Map<String, dynamic> booking) {
     final status = booking['status'] ?? 'pending';
     final statusConfig = _getStatusConfig(status);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
@@ -402,10 +403,15 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF1A1A1A),
-            const Color(0xFF2A2A2A),
-          ],
+          colors: isDarkMode
+              ? [
+                  const Color(0xFF1A1A1A),
+                  const Color(0xFF2A2A2A),
+                ]
+              : [
+                  Colors.white,
+                  Colors.grey.shade50,
+                ],
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
@@ -443,10 +449,10 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                     Expanded(
                       child: Text(
                         booking['workshop_name'] ?? 'Oficina',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: isDarkMode ? Colors.white : Colors.black87,
                         ),
                       ),
                     ),
@@ -472,22 +478,22 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 // Date & Time
                 Row(
                   children: [
-                    Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade400),
+                    Icon(Icons.calendar_today, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
                     const SizedBox(width: 8),
                     Text(
                       booking['appointment_date'] != null
                           ? DateFormat('dd/MM/yyyy').format(DateTime.parse(booking['appointment_date']))
                           : 'Data não definida',
-                      style: TextStyle(color: Colors.grey.shade300),
+                      style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
                     ),
                     const SizedBox(width: 15),
-                    Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                    Icon(Icons.access_time, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
                     const SizedBox(width: 8),
                     Text(
                       booking['appointment_date'] != null
                           ? DateFormat('HH:mm').format(DateTime.parse(booking['appointment_date']))
                           : '00:00',
-                      style: TextStyle(color: Colors.grey.shade300),
+                      style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
                     ),
                   ],
                 ),
@@ -496,11 +502,11 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 // Vehicle
                 Row(
                   children: [
-                    Icon(Icons.directions_car, size: 16, color: Colors.grey[600]),
+                    Icon(Icons.directions_car, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
                     const SizedBox(width: 8),
                     Text(
                       _getVehicleDisplayName(booking),
-                      style: TextStyle(color: Colors.grey.shade300),
+                      style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
                     ),
                   ],
                 ),
@@ -535,7 +541,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                       Text(
                         'Total',
                         style: TextStyle(
-                          color: Colors.grey[700],
+                          color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
                           fontSize: 16,
                         ),
                       ),
@@ -634,8 +640,9 @@ class _FuturisticTabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      color: const Color(0xFF0A0A0A),
+      color: isDarkMode ? const Color(0xFF0A0A0A) : Colors.white,
       child: tabBar,
     );
   }

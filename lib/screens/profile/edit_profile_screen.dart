@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
 import '../../utils/phone_formatter.dart';
+import '../../utils/cpf_formatter.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({Key? key}) : super(key: key);
@@ -24,6 +25,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _canEditCpf = false; // Se CPF pode ser editado
 
   @override
   void initState() {
@@ -64,14 +66,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         userData['document_number'] ?? 
                         '';
         
-        _cpfController.text = cpfValue.toString();
+        // Formatar CPF se tiver valor (000.000.000-00)
+        String cpfFormatted = cpfValue.toString().replaceAll(RegExp(r'\D'), '');
+        if (cpfFormatted.length == 11) {
+          cpfFormatted = '${cpfFormatted.substring(0, 3)}.${cpfFormatted.substring(3, 6)}.${cpfFormatted.substring(6, 9)}-${cpfFormatted.substring(9)}';
+        }
+        
+        _cpfController.text = cpfFormatted;
         
         // Debug: imprimir CPF encontrado
         print('🔍 CPF encontrado: ${_cpfController.text}');
         
+        // Determinar se CPF pode ser editado (se estiver vazio ou null)
+        final canEditCpf = cpfValue == null || 
+                          cpfValue.toString().trim().isEmpty || 
+                          cpfValue.toString() == 'null' ||
+                          cpfFormatted.isEmpty;
+        
         // Forçar atualização do estado após setar valores
         if (mounted) {
-          setState(() {});
+          setState(() {
+            _canEditCpf = canEditCpf;
+          });
         }
       } else {
         if (!mounted) return;
@@ -98,7 +114,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'firstName': _firstNameController.text.trim(),
         'lastName': _lastNameController.text.trim().isEmpty ? null : _lastNameController.text.trim(),
         'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-        // CPF não é enviado pois é disabled (somente leitura)
+        'cpf': _canEditCpf ? _cpfController.text.trim().replaceAll(RegExp(r'\D'), '') : null,
       });
 
       if (!mounted) return;
@@ -238,16 +254,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         const SizedBox(height: 16),
                         _buildTextField(
                           controller: _cpfController,
-                          label: 'CPF',
+                          label: _canEditCpf ? 'CPF *' : 'CPF',
                           icon: Icons.badge,
                           keyboardType: TextInputType.number,
                           inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(11),
+                            CpfFormatter(),
+                            LengthLimitingTextInputFormatter(14), // 000.000.000-00 = 14 caracteres
                           ],
-                          enabled: false,
+                          enabled: _canEditCpf,
                           validator: (value) {
-                            // CPF é disabled, não precisa validar
+                            if (_canEditCpf && (value == null || value.isEmpty)) {
+                              return 'Por favor, insira seu CPF';
+                            }
+                            if (_canEditCpf && value != null) {
+                              // Remove pontos e traços para contar apenas dígitos
+                              final digitsOnly = value.replaceAll(RegExp(r'\D'), '');
+                              if (digitsOnly.length != 11) {
+                                return 'CPF deve ter 11 dígitos';
+                              }
+                            }
                             return null;
                           },
                         ),
