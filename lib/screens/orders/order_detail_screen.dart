@@ -1297,3 +1297,967 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 }
+
+                      children: [
+                        Icon(
+                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Icons.notifications_active 
+                              : Icons.notifications_off,
+                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Colors.white
+                              : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                    ? 'Lembretes Ativados'
+                                    : 'Ativar Lembretes',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                      ? Colors.white
+                                      : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                    ? 'Você receberá notificações 1 dia antes, no dia e 1 hora antes'
+                                    : 'Receba notificações 1 dia antes, no dia e 1 hora antes',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                      ? Colors.white.withOpacity(0.9)
+                                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Icons.toggle_on
+                              : Icons.toggle_off,
+                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Colors.white
+                              : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
+                          size: 32,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+
+
+  Future<void> _rateService() async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReviewScreen(
+          bookingId: widget.booking['id'],
+          workshopId: widget.booking['workshop_id'] ?? widget.booking['oficina_id'] ?? '',
+        ),
+      ),
+    ).then((result) async {
+      if (result == true) {
+        // Recarregar dados do agendamento
+        if (mounted) {
+          setState(() {
+            // Forçar rebuild para atualizar UI
+          });
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Avaliação enviada com sucesso!'),
+            backgroundColor: Color(0xFF00C977),
+          ),
+        );
+      }
+    });
+  }
+
+
+  Future<void> _viewEvidence() async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BookingEvidenceScreen(
+          bookingId: widget.booking['id'],
+          booking: widget.booking,
+        ),
+      ),
+    );
+  }
+
+  bool _shouldShowPrice(Map<String, dynamic> booking) {
+    // Só exibir preço se a oficina forneceu tempo E preço (não null, não vazio, não 0)
+    final price = booking['service_price'] ?? booking['total'] ?? booking['estimated_price'] ?? 0;
+    final hasPrice = price != null && price != 0 && price.toString().trim().isNotEmpty;
+    
+    final duration = booking['service_duration'] ?? booking['duration'] ?? booking['duration_minutes'] ?? 0;
+    final hasDuration = duration != null && duration != 0 && duration.toString().trim().isNotEmpty;
+    
+    return hasPrice && hasDuration;
+  }
+
+  String _formatPrice(Map<String, dynamic> booking) {
+    final price = booking['total'] ?? 
+                  booking['service_price'] ?? 
+                  booking['estimated_price'] ?? 
+                  0;
+    
+    // Se o preço está em centavos (valor muito alto), dividir por 100
+    if (price is int && price > 10000) {
+      return (price / 100).toStringAsFixed(2);
+    }
+    
+    // Se o preço está como String, converter
+    if (price is String) {
+      final parsed = double.tryParse(price);
+      return parsed?.toStringAsFixed(2) ?? '0.00';
+    }
+    
+    // Se já está em formato double
+    if (price is num) {
+      return price.toDouble().toStringAsFixed(2);
+    }
+    
+    return '0.00';
+  }
+
+  bool _shouldShowReminderButton() {
+    // Só mostrar se o agendamento está confirmado ou pendente e tem data futura
+    final status = widget.booking['status'] ?? '';
+    final isConfirmedOrPending = status == 'confirmado' || 
+                                 status == 'confirmed' || 
+                                 status == 'confirmado_oficina' ||
+                                 status == 'pendente_oficina';
+    
+    if (!isConfirmedOrPending) return false;
+    
+    final appointmentDate = widget.booking['appointment_date'] ?? widget.booking['scheduled_date'];
+    if (appointmentDate == null) return false;
+    
+    try {
+      final date = DateTime.parse(appointmentDate);
+      return date.isAfter(DateTime.now());
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _toggleReminder(bool enabled) async {
+    try {
+      final bookingId = widget.booking['id']?.toString() ?? '';
+      if (bookingId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ID do agendamento não encontrado'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      final result = await _apiService.toggleBookingReminder(bookingId, enabled);
+      
+      if (result['success']) {
+        setState(() {
+          _bookingDetails = _bookingDetails ?? {};
+          _bookingDetails!['reminder_enabled'] = enabled;
+          widget.booking['reminder_enabled'] = enabled;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              enabled
+                  ? 'Lembretes ativados! Você receberá notificações 1 dia antes, no dia e 1 hora antes do agendamento.'
+                  : 'Lembretes desativados',
+            ),
+            backgroundColor: const Color(0xFF00C977),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        
+        // Se ativou, agendar as notificações locais também
+        if (enabled) {
+          final appointmentDateStr = _bookingDetails?['appointment_date'] ?? 
+                                    widget.booking['appointment_date'] ?? 
+                                    widget.booking['scheduled_date'] ?? '';
+          
+          if (appointmentDateStr.isNotEmpty) {
+            final appointmentDate = DateTime.tryParse(appointmentDateStr);
+            
+            if (appointmentDate != null) {
+              await _notificationService.scheduleBookingReminders(
+                workshopName: _bookingDetails?['workshop_name'] ?? 
+                             widget.booking['workshop_name'] ?? 
+                             widget.booking['workshop']?['name'] ?? 
+                             'Oficina',
+                serviceName: _bookingDetails?['service_name'] ?? 
+                           widget.booking['service_name'] ?? 
+                           widget.booking['service']?['name'] ?? 
+                           'Serviço',
+                scheduledDate: appointmentDate,
+              );
+            }
+          }
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erro ao atualizar lembretes'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao atualizar lembretes: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
+
+                      children: [
+                        Icon(
+                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Icons.notifications_active 
+                              : Icons.notifications_off,
+                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Colors.white
+                              : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                    ? 'Lembretes Ativados'
+                                    : 'Ativar Lembretes',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                      ? Colors.white
+                                      : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                    ? 'Você receberá notificações 1 dia antes, no dia e 1 hora antes'
+                                    : 'Receba notificações 1 dia antes, no dia e 1 hora antes',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                      ? Colors.white.withOpacity(0.9)
+                                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Icons.toggle_on
+                              : Icons.toggle_off,
+                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Colors.white
+                              : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
+                          size: 32,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+
+
+  Future<void> _rateService() async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReviewScreen(
+          bookingId: widget.booking['id'],
+          workshopId: widget.booking['workshop_id'] ?? widget.booking['oficina_id'] ?? '',
+        ),
+      ),
+    ).then((result) async {
+      if (result == true) {
+        // Recarregar dados do agendamento
+        if (mounted) {
+          setState(() {
+            // Forçar rebuild para atualizar UI
+          });
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Avaliação enviada com sucesso!'),
+            backgroundColor: Color(0xFF00C977),
+          ),
+        );
+      }
+    });
+  }
+
+
+  Future<void> _viewEvidence() async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BookingEvidenceScreen(
+          bookingId: widget.booking['id'],
+          booking: widget.booking,
+        ),
+      ),
+    );
+  }
+
+  bool _shouldShowPrice(Map<String, dynamic> booking) {
+    // Só exibir preço se a oficina forneceu tempo E preço (não null, não vazio, não 0)
+    final price = booking['service_price'] ?? booking['total'] ?? booking['estimated_price'] ?? 0;
+    final hasPrice = price != null && price != 0 && price.toString().trim().isNotEmpty;
+    
+    final duration = booking['service_duration'] ?? booking['duration'] ?? booking['duration_minutes'] ?? 0;
+    final hasDuration = duration != null && duration != 0 && duration.toString().trim().isNotEmpty;
+    
+    return hasPrice && hasDuration;
+  }
+
+  String _formatPrice(Map<String, dynamic> booking) {
+    final price = booking['total'] ?? 
+                  booking['service_price'] ?? 
+                  booking['estimated_price'] ?? 
+                  0;
+    
+    // Se o preço está em centavos (valor muito alto), dividir por 100
+    if (price is int && price > 10000) {
+      return (price / 100).toStringAsFixed(2);
+    }
+    
+    // Se o preço está como String, converter
+    if (price is String) {
+      final parsed = double.tryParse(price);
+      return parsed?.toStringAsFixed(2) ?? '0.00';
+    }
+    
+    // Se já está em formato double
+    if (price is num) {
+      return price.toDouble().toStringAsFixed(2);
+    }
+    
+    return '0.00';
+  }
+
+  bool _shouldShowReminderButton() {
+    // Só mostrar se o agendamento está confirmado ou pendente e tem data futura
+    final status = widget.booking['status'] ?? '';
+    final isConfirmedOrPending = status == 'confirmado' || 
+                                 status == 'confirmed' || 
+                                 status == 'confirmado_oficina' ||
+                                 status == 'pendente_oficina';
+    
+    if (!isConfirmedOrPending) return false;
+    
+    final appointmentDate = widget.booking['appointment_date'] ?? widget.booking['scheduled_date'];
+    if (appointmentDate == null) return false;
+    
+    try {
+      final date = DateTime.parse(appointmentDate);
+      return date.isAfter(DateTime.now());
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _toggleReminder(bool enabled) async {
+    try {
+      final bookingId = widget.booking['id']?.toString() ?? '';
+      if (bookingId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ID do agendamento não encontrado'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      final result = await _apiService.toggleBookingReminder(bookingId, enabled);
+      
+      if (result['success']) {
+        setState(() {
+          _bookingDetails = _bookingDetails ?? {};
+          _bookingDetails!['reminder_enabled'] = enabled;
+          widget.booking['reminder_enabled'] = enabled;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              enabled
+                  ? 'Lembretes ativados! Você receberá notificações 1 dia antes, no dia e 1 hora antes do agendamento.'
+                  : 'Lembretes desativados',
+            ),
+            backgroundColor: const Color(0xFF00C977),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        
+        // Se ativou, agendar as notificações locais também
+        if (enabled) {
+          final appointmentDateStr = _bookingDetails?['appointment_date'] ?? 
+                                    widget.booking['appointment_date'] ?? 
+                                    widget.booking['scheduled_date'] ?? '';
+          
+          if (appointmentDateStr.isNotEmpty) {
+            final appointmentDate = DateTime.tryParse(appointmentDateStr);
+            
+            if (appointmentDate != null) {
+              await _notificationService.scheduleBookingReminders(
+                workshopName: _bookingDetails?['workshop_name'] ?? 
+                             widget.booking['workshop_name'] ?? 
+                             widget.booking['workshop']?['name'] ?? 
+                             'Oficina',
+                serviceName: _bookingDetails?['service_name'] ?? 
+                           widget.booking['service_name'] ?? 
+                           widget.booking['service']?['name'] ?? 
+                           'Serviço',
+                scheduledDate: appointmentDate,
+              );
+            }
+          }
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erro ao atualizar lembretes'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao atualizar lembretes: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
+
+                      children: [
+                        Icon(
+                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Icons.notifications_active 
+                              : Icons.notifications_off,
+                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Colors.white
+                              : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                    ? 'Lembretes Ativados'
+                                    : 'Ativar Lembretes',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                      ? Colors.white
+                                      : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                    ? 'Você receberá notificações 1 dia antes, no dia e 1 hora antes'
+                                    : 'Receba notificações 1 dia antes, no dia e 1 hora antes',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                      ? Colors.white.withOpacity(0.9)
+                                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Icons.toggle_on
+                              : Icons.toggle_off,
+                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Colors.white
+                              : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
+                          size: 32,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+
+
+  Future<void> _rateService() async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReviewScreen(
+          bookingId: widget.booking['id'],
+          workshopId: widget.booking['workshop_id'] ?? widget.booking['oficina_id'] ?? '',
+        ),
+      ),
+    ).then((result) async {
+      if (result == true) {
+        // Recarregar dados do agendamento
+        if (mounted) {
+          setState(() {
+            // Forçar rebuild para atualizar UI
+          });
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Avaliação enviada com sucesso!'),
+            backgroundColor: Color(0xFF00C977),
+          ),
+        );
+      }
+    });
+  }
+
+
+  Future<void> _viewEvidence() async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BookingEvidenceScreen(
+          bookingId: widget.booking['id'],
+          booking: widget.booking,
+        ),
+      ),
+    );
+  }
+
+  bool _shouldShowPrice(Map<String, dynamic> booking) {
+    // Só exibir preço se a oficina forneceu tempo E preço (não null, não vazio, não 0)
+    final price = booking['service_price'] ?? booking['total'] ?? booking['estimated_price'] ?? 0;
+    final hasPrice = price != null && price != 0 && price.toString().trim().isNotEmpty;
+    
+    final duration = booking['service_duration'] ?? booking['duration'] ?? booking['duration_minutes'] ?? 0;
+    final hasDuration = duration != null && duration != 0 && duration.toString().trim().isNotEmpty;
+    
+    return hasPrice && hasDuration;
+  }
+
+  String _formatPrice(Map<String, dynamic> booking) {
+    final price = booking['total'] ?? 
+                  booking['service_price'] ?? 
+                  booking['estimated_price'] ?? 
+                  0;
+    
+    // Se o preço está em centavos (valor muito alto), dividir por 100
+    if (price is int && price > 10000) {
+      return (price / 100).toStringAsFixed(2);
+    }
+    
+    // Se o preço está como String, converter
+    if (price is String) {
+      final parsed = double.tryParse(price);
+      return parsed?.toStringAsFixed(2) ?? '0.00';
+    }
+    
+    // Se já está em formato double
+    if (price is num) {
+      return price.toDouble().toStringAsFixed(2);
+    }
+    
+    return '0.00';
+  }
+
+  bool _shouldShowReminderButton() {
+    // Só mostrar se o agendamento está confirmado ou pendente e tem data futura
+    final status = widget.booking['status'] ?? '';
+    final isConfirmedOrPending = status == 'confirmado' || 
+                                 status == 'confirmed' || 
+                                 status == 'confirmado_oficina' ||
+                                 status == 'pendente_oficina';
+    
+    if (!isConfirmedOrPending) return false;
+    
+    final appointmentDate = widget.booking['appointment_date'] ?? widget.booking['scheduled_date'];
+    if (appointmentDate == null) return false;
+    
+    try {
+      final date = DateTime.parse(appointmentDate);
+      return date.isAfter(DateTime.now());
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _toggleReminder(bool enabled) async {
+    try {
+      final bookingId = widget.booking['id']?.toString() ?? '';
+      if (bookingId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ID do agendamento não encontrado'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      final result = await _apiService.toggleBookingReminder(bookingId, enabled);
+      
+      if (result['success']) {
+        setState(() {
+          _bookingDetails = _bookingDetails ?? {};
+          _bookingDetails!['reminder_enabled'] = enabled;
+          widget.booking['reminder_enabled'] = enabled;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              enabled
+                  ? 'Lembretes ativados! Você receberá notificações 1 dia antes, no dia e 1 hora antes do agendamento.'
+                  : 'Lembretes desativados',
+            ),
+            backgroundColor: const Color(0xFF00C977),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        
+        // Se ativou, agendar as notificações locais também
+        if (enabled) {
+          final appointmentDateStr = _bookingDetails?['appointment_date'] ?? 
+                                    widget.booking['appointment_date'] ?? 
+                                    widget.booking['scheduled_date'] ?? '';
+          
+          if (appointmentDateStr.isNotEmpty) {
+            final appointmentDate = DateTime.tryParse(appointmentDateStr);
+            
+            if (appointmentDate != null) {
+              await _notificationService.scheduleBookingReminders(
+                workshopName: _bookingDetails?['workshop_name'] ?? 
+                             widget.booking['workshop_name'] ?? 
+                             widget.booking['workshop']?['name'] ?? 
+                             'Oficina',
+                serviceName: _bookingDetails?['service_name'] ?? 
+                           widget.booking['service_name'] ?? 
+                           widget.booking['service']?['name'] ?? 
+                           'Serviço',
+                scheduledDate: appointmentDate,
+              );
+            }
+          }
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erro ao atualizar lembretes'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao atualizar lembretes: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
+
+                      children: [
+                        Icon(
+                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Icons.notifications_active 
+                              : Icons.notifications_off,
+                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Colors.white
+                              : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                    ? 'Lembretes Ativados'
+                                    : 'Ativar Lembretes',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                      ? Colors.white
+                                      : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                    ? 'Você receberá notificações 1 dia antes, no dia e 1 hora antes'
+                                    : 'Receba notificações 1 dia antes, no dia e 1 hora antes',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                                      ? Colors.white.withOpacity(0.9)
+                                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Icons.toggle_on
+                              : Icons.toggle_off,
+                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                              ? Colors.white
+                              : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
+                          size: 32,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+
+
+  Future<void> _rateService() async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReviewScreen(
+          bookingId: widget.booking['id'],
+          workshopId: widget.booking['workshop_id'] ?? widget.booking['oficina_id'] ?? '',
+        ),
+      ),
+    ).then((result) async {
+      if (result == true) {
+        // Recarregar dados do agendamento
+        if (mounted) {
+          setState(() {
+            // Forçar rebuild para atualizar UI
+          });
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Avaliação enviada com sucesso!'),
+            backgroundColor: Color(0xFF00C977),
+          ),
+        );
+      }
+    });
+  }
+
+
+  Future<void> _viewEvidence() async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BookingEvidenceScreen(
+          bookingId: widget.booking['id'],
+          booking: widget.booking,
+        ),
+      ),
+    );
+  }
+
+  bool _shouldShowPrice(Map<String, dynamic> booking) {
+    // Só exibir preço se a oficina forneceu tempo E preço (não null, não vazio, não 0)
+    final price = booking['service_price'] ?? booking['total'] ?? booking['estimated_price'] ?? 0;
+    final hasPrice = price != null && price != 0 && price.toString().trim().isNotEmpty;
+    
+    final duration = booking['service_duration'] ?? booking['duration'] ?? booking['duration_minutes'] ?? 0;
+    final hasDuration = duration != null && duration != 0 && duration.toString().trim().isNotEmpty;
+    
+    return hasPrice && hasDuration;
+  }
+
+  String _formatPrice(Map<String, dynamic> booking) {
+    final price = booking['total'] ?? 
+                  booking['service_price'] ?? 
+                  booking['estimated_price'] ?? 
+                  0;
+    
+    // Se o preço está em centavos (valor muito alto), dividir por 100
+    if (price is int && price > 10000) {
+      return (price / 100).toStringAsFixed(2);
+    }
+    
+    // Se o preço está como String, converter
+    if (price is String) {
+      final parsed = double.tryParse(price);
+      return parsed?.toStringAsFixed(2) ?? '0.00';
+    }
+    
+    // Se já está em formato double
+    if (price is num) {
+      return price.toDouble().toStringAsFixed(2);
+    }
+    
+    return '0.00';
+  }
+
+  bool _shouldShowReminderButton() {
+    // Só mostrar se o agendamento está confirmado ou pendente e tem data futura
+    final status = widget.booking['status'] ?? '';
+    final isConfirmedOrPending = status == 'confirmado' || 
+                                 status == 'confirmed' || 
+                                 status == 'confirmado_oficina' ||
+                                 status == 'pendente_oficina';
+    
+    if (!isConfirmedOrPending) return false;
+    
+    final appointmentDate = widget.booking['appointment_date'] ?? widget.booking['scheduled_date'];
+    if (appointmentDate == null) return false;
+    
+    try {
+      final date = DateTime.parse(appointmentDate);
+      return date.isAfter(DateTime.now());
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _toggleReminder(bool enabled) async {
+    try {
+      final bookingId = widget.booking['id']?.toString() ?? '';
+      if (bookingId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ID do agendamento não encontrado'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      final result = await _apiService.toggleBookingReminder(bookingId, enabled);
+      
+      if (result['success']) {
+        setState(() {
+          _bookingDetails = _bookingDetails ?? {};
+          _bookingDetails!['reminder_enabled'] = enabled;
+          widget.booking['reminder_enabled'] = enabled;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              enabled
+                  ? 'Lembretes ativados! Você receberá notificações 1 dia antes, no dia e 1 hora antes do agendamento.'
+                  : 'Lembretes desativados',
+            ),
+            backgroundColor: const Color(0xFF00C977),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        
+        // Se ativou, agendar as notificações locais também
+        if (enabled) {
+          final appointmentDateStr = _bookingDetails?['appointment_date'] ?? 
+                                    widget.booking['appointment_date'] ?? 
+                                    widget.booking['scheduled_date'] ?? '';
+          
+          if (appointmentDateStr.isNotEmpty) {
+            final appointmentDate = DateTime.tryParse(appointmentDateStr);
+            
+            if (appointmentDate != null) {
+              await _notificationService.scheduleBookingReminders(
+                workshopName: _bookingDetails?['workshop_name'] ?? 
+                             widget.booking['workshop_name'] ?? 
+                             widget.booking['workshop']?['name'] ?? 
+                             'Oficina',
+                serviceName: _bookingDetails?['service_name'] ?? 
+                           widget.booking['service_name'] ?? 
+                           widget.booking['service']?['name'] ?? 
+                           'Serviço',
+                scheduledDate: appointmentDate,
+              );
+            }
+          }
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erro ao atualizar lembretes'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao atualizar lembretes: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}

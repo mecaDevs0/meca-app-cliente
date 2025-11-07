@@ -79,8 +79,7 @@ class MecaClienteApp extends StatelessWidget {
             navigatorKey: navigatorKey,
             theme: ThemeService.lightTheme,
             darkTheme: ThemeService.darkTheme,
-            themeMode: themeService.themeMode,
-            initialRoute: '/',
+            themeMode: themeService.themeMode,            initialRoute: '/',
             onGenerateRoute: (settings) {
               switch (settings.name) {
                 case '/':
