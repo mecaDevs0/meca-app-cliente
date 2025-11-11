@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../providers/notification_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/meca_loading_widget.dart';
 import '../notifications/recent_notifications_screen.dart';
@@ -196,8 +197,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     try {
       final result = await _apiService.getNotifications(limit: 100, read: false);
       if (result['success'] == true) {
-        final notifications = (result['data'] as List?) ?? [];
-        return notifications.length;
+        return NotificationProvider.extractUnreadCount(result['data']);
       }
     } catch (e) {
       print('Erro ao buscar contagem de notificações: $e');
@@ -396,6 +396,11 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     final status = booking['status'] ?? 'pending';
     final statusConfig = _getStatusConfig(status);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final attachments = (booking['customer_uploads'] is List)
+        ? List<Map<String, dynamic>>.from(booking['customer_uploads'])
+        : (booking['customerUploads'] is List)
+            ? List<Map<String, dynamic>>.from(booking['customerUploads'])
+            : <Map<String, dynamic>>[];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
@@ -531,6 +536,26 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                if (attachments.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(Icons.photo_camera_back_outlined,
+                          size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Text(
+                        attachments.length == 1
+                            ? '1 foto anexada'
+                            : '${attachments.length} fotos anexadas',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 15),
 
                 // Total - só mostra se houver preço

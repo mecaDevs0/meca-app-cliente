@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/api_service.dart';
+import '../../widgets/app_alerts.dart';
 
 class AddVehicleScreen extends StatefulWidget {
   const AddVehicleScreen({Key? key}) : super(key: key);
@@ -22,6 +23,52 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
   bool _loading = false;
   String? _selectedFuel;
 
+  static const List<String> _fuelOptions = [
+    'Gasolina',
+    'Etanol',
+    'Flex',
+    'Diesel',
+    'GNV',
+    'Elétrico',
+    'Híbrido',
+  ];
+
+  String? _normalizeFuelValue(String? value) {
+    if (value == null) return null;
+    final trimmed = value.trim();
+    // Map variações comuns retornadas pela API para opções conhecidas
+    switch (trimmed.toLowerCase()) {
+      case 'gasolina':
+      case 'gasoline':
+        return 'Gasolina';
+      case 'etanol':
+      case 'álcool':
+      case 'alcool':
+        return 'Etanol';
+      case 'flex':
+      case 'alcool / gasolina':
+      case 'álcool / gasolina':
+      case 'etanol / gasolina':
+      case 'gasolina / etanol':
+      case 'alcool/gasolina':
+        return 'Flex';
+      case 'diesel':
+        return 'Diesel';
+      case 'gnv':
+        return 'GNV';
+      case 'elétrico':
+      case 'eletrico':
+      case 'electric':
+        return 'Elétrico';
+      case 'híbrido':
+      case 'hibrido':
+      case 'hybrid':
+        return 'Híbrido';
+      default:
+        return null;
+    }
+  }
+
   @override
   void dispose() {
     _plateController.dispose();
@@ -38,11 +85,9 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
     final plate = _plateController.text.trim().toUpperCase();
     
     if (plate.length < 7) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⚠️ Digite uma placa válida (7 ou 8 caracteres)'),
-          backgroundColor: Colors.orange,
-        ),
+      AppAlerts.showWarning(
+        context,
+        message: 'Digite uma placa válida com 7 ou 8 caracteres (ex.: ABC1234 ou ABC1D23).',
       );
       return;
     }
@@ -60,30 +105,28 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
           _modelController.text = data['model'] ?? '';
           _yearController.text = data['year']?.toString() ?? '';
           _colorController.text = data['color'] ?? '';
-          _selectedFuel = data['fuel'] ?? 'Flex';
-          _fuelController.text = _selectedFuel ?? '';
+          final normalizedFuel = _normalizeFuelValue(data['fuel']?.toString());
+          _selectedFuel = normalizedFuel;
+          _fuelController.text = normalizedFuel ?? '';
         });
         
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-            content: Text('✅ Dados do veículo preenchidos automaticamente!'),
-            backgroundColor: Color(0xFF00C977),
-          ),
+        AppAlerts.showSuccess(
+          context,
+          message: 'Encontramos os dados do veículo e preenchermos automaticamente.',
+          title: 'Placa localizada',
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Não foi possível encontrar dados para esta placa. Preencha manualmente.'),
-        backgroundColor: Colors.orange,
-      ),
-    );
+        AppAlerts.showWarning(
+          context,
+          message: result['error'] ??
+              'Não encontramos dados para esta placa. Preencha as informações manualmente.',
+          title: 'Placa não encontrada',
+        );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao buscar placa: $e'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível consultar a placa agora. Tente novamente em instantes.',
       );
     } finally {
       setState(() => _loading = false);
@@ -109,11 +152,9 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
 
     if (customerId == null || customerId.isEmpty) {
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ Erro: Não foi possível identificar o usuário. Faça login novamente.'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível identificar o usuário. Faça login novamente.',
       );
       return;
     }
@@ -125,26 +166,27 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
       'model': _modelController.text,
       'year': int.tryParse(_yearController.text),
       'color': _colorController.text,
+      'fuel': _selectedFuel ?? _fuelController.text,
     };
 
     final result = await _apiService.addVehicle(vehicleData);
 
+    if (!mounted) return;
     setState(() => _loading = false);
 
     if (result['success']) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Veículo adicionado com sucesso!'),
-          backgroundColor: Color(0xFF00C977),
-        ),
+      await AppAlerts.showSuccess(
+        context,
+        message: (result['message'] ?? 'Veículo adicionado com sucesso!').toString(),
+        title: 'Tudo certo!',
       );
-      Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['error'] ?? 'Erro ao adicionar veículo'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: result['error'] ?? 'Não foi possível adicionar o veículo agora. Tente novamente.',
       );
     }
   }
@@ -278,7 +320,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
               
               // Combustível
               DropdownButtonFormField<String>(
-                value: _selectedFuel,
+                value: _fuelOptions.contains(_selectedFuel) ? _selectedFuel : null,
                 decoration: const InputDecoration(
                   labelText: 'Combustível',
                   prefixIcon: Icon(Icons.local_gas_station, color: Color(0xFF00C977)),
@@ -290,15 +332,14 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                     borderSide: BorderSide(color: Color(0xFF00C977), width: 2),
                   ),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'Gasolina', child: Text('Gasolina')),
-                  DropdownMenuItem(value: 'Etanol', child: Text('Etanol')),
-                  DropdownMenuItem(value: 'Flex', child: Text('Flex')),
-                  DropdownMenuItem(value: 'Diesel', child: Text('Diesel')),
-                  DropdownMenuItem(value: 'GNV', child: Text('GNV')),
-                  DropdownMenuItem(value: 'Elétrico', child: Text('Elétrico')),
-                  DropdownMenuItem(value: 'Híbrido', child: Text('Híbrido')),
-                ],
+                items: _fuelOptions
+                    .map(
+                      (fuel) => DropdownMenuItem(
+                        value: fuel,
+                        child: Text(fuel),
+                      ),
+                    )
+                    .toList(),
                 onChanged: (value) {
                   setState(() {
                     _selectedFuel = value;

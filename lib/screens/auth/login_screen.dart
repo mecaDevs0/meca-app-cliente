@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:provider/provider.dart';
+
+import '../../providers/notification_provider.dart';
 import '../../services/api_service.dart';
 import '../../utils/phone_formatter.dart';
 import '../../utils/cpf_formatter.dart';
+import '../../widgets/app_alerts.dart';
 import '../../widgets/meca_loading_widget.dart';
 import 'forgot_password_screen.dart';
 
@@ -76,23 +80,22 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     if (result['success']) {
       if (!_isLogin) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Conta criada com sucesso! Faça login para continuar.'),
-            backgroundColor: Color(0xFF00C977),
-            duration: Duration(seconds: 3),
-          ),
+        if (!mounted) return;
+        AppAlerts.showSuccess(
+          context,
+          message: 'Conta criada com sucesso! Faça login para continuar.',
+          title: 'Cadastro concluído',
         );
         _tabController.animateTo(0);
       } else {
+        Provider.of<NotificationProvider>(context, listen: false).clearAll();
         Navigator.pushReplacementNamed(context, '/home');
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['error'] ?? 'Ocorreu um erro inesperado. Tente novamente.'),
-          backgroundColor: Colors.red,
-        ),
+      if (!mounted) return;
+      AppAlerts.showError(
+        context,
+        message: result['error'] ?? 'Não conseguimos concluir sua solicitação agora. Tente novamente em instantes.',
       );
     }
   }
@@ -492,6 +495,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           ),
         ),
       ),
-    );  }}
+    );
+  }
+}
+
+
 
 

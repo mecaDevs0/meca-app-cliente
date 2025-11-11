@@ -5,6 +5,7 @@ import 'dart:io';
 
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
+import '../../widgets/app_alerts.dart';
 
 class BookingScreen extends StatefulWidget {
   final String serviceId;
@@ -113,14 +114,18 @@ class _BookingScreenState extends State<BookingScreen> {
           }
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar veículos: ${result['error']}')),
+        AppAlerts.showError(
+          context,
+          message: result['error'] != null
+              ? 'Não foi possível listar seus veículos: ${result['error']}'
+              : 'Não foi possível listar seus veículos agora. Tente novamente em instantes.',
         );
       }
     } catch (e) {
       print('Erro ao carregar veículos: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar veículos: $e')),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível listar seus veículos agora. Tente novamente em instantes.',
       );
     } finally {
       setState(() => _isLoading = false);
@@ -137,14 +142,18 @@ class _BookingScreenState extends State<BookingScreen> {
           _workshopServices = List<Map<String, dynamic>>.from(result['data'] ?? []);
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar serviços: ${result['error']}')),
+        AppAlerts.showError(
+          context,
+          message: result['error'] != null
+              ? 'Não foi possível carregar os serviços da oficina: ${result['error']}'
+              : 'Não foi possível carregar os serviços da oficina agora. Tente novamente.',
         );
       }
     } catch (e) {
       print('Erro ao carregar serviços: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar serviços: $e')),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível carregar os serviços da oficina agora. Tente novamente.',
       );
     }
   }
@@ -164,11 +173,10 @@ class _BookingScreenState extends State<BookingScreen> {
 
   Future<void> _selectTime() async {
     if (_selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecione uma data primeiro'),
-          backgroundColor: Colors.orange,
-        ),
+      AppAlerts.showWarning(
+        context,
+        message: 'Escolha primeiro a data do agendamento para ver os horários disponíveis.',
+        title: 'Data obrigatória',
       );
       return;
     }
@@ -235,23 +243,29 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _createBooking() async {
+    final userId = await _apiService.getUserId();
+    if (userId == null || userId.isEmpty) {
+      await _showSnackBar('Não foi possível identificar o usuário logado. Faça login novamente.', isError: true);
+      return;
+    }
+
     if (_selectedService == null) {
-      _showSnackBar('Selecione um serviço', isError: true);
+      await _showSnackBar('Selecione um serviço', isError: true);
       return;
     }
     
     if (_selectedVehicle == null) {
-      _showSnackBar('Selecione um veículo', isError: true);
+      await _showSnackBar('Selecione um veículo', isError: true);
       return;
     }
     
     if (_selectedDate == null) {
-      _showSnackBar('Selecione uma data', isError: true);
+      await _showSnackBar('Selecione uma data', isError: true);
       return;
     }
     
     if (_selectedTime == null) {
-      _showSnackBar('Selecione um horário', isError: true);
+      await _showSnackBar('Selecione um horário', isError: true);
       return;
     }
 
@@ -269,7 +283,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
       // Criar agendamento
       final Map<String, dynamic> bookingData = {
-        'customer_id': 'cus_01K83MVXK5RDQA6R079DXP2C56', // ID do usuário logado
+        'customer_id': userId,
         'vehicle_id': _selectedVehicle!['id'],
         'oficina_id': widget.workshopId,
         'product_id': _selectedService!['id'],
@@ -301,7 +315,7 @@ class _BookingScreenState extends State<BookingScreen> {
           print('Erro ao agendar lembretes: $e');
         }
         
-        _showSnackBar('Agendamento criado com sucesso!', isError: false);
+        await _showSnackBar('Agendamento criado com sucesso!', isError: false);
         
         // Navegar para tela de agendamentos
         Navigator.pushNamedAndRemoveUntil(
@@ -310,24 +324,30 @@ class _BookingScreenState extends State<BookingScreen> {
           (route) => route.settings.name == '/home',
         );
       } else {
-        _showSnackBar('Erro ao criar agendamento: ${result['message']}', isError: true);
+        await _showSnackBar('Erro ao criar agendamento: ${result['message']}', isError: true);
       }
     } catch (e) {
       print('Erro ao criar agendamento: $e');
-      _showSnackBar('Erro ao criar agendamento: $e', isError: true);
+      await _showSnackBar('Erro ao criar agendamento: $e', isError: true);
     } finally {
       setState(() => _isCreatingBooking = false);
     }
   }
 
-  void _showSnackBar(String message, {required bool isError}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
-        duration: const Duration(seconds: 3),
-      ),
-    );
+  Future<void> _showSnackBar(String message, {required bool isError}) async {
+    if (!mounted) return;
+    if (isError) {
+      await AppAlerts.showError(
+        context,
+        message: message,
+      );
+    } else {
+      await AppAlerts.showSuccess(
+        context,
+        message: message,
+        title: 'Tudo certo!',
+      );
+    }
   }
 
   @override
@@ -428,6 +448,8 @@ class _BookingScreenState extends State<BookingScreen> {
               fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
           Row(
@@ -438,47 +460,62 @@ class _BookingScreenState extends State<BookingScreen> {
                 color: Colors.grey[600],
               ),
               const SizedBox(width: 8),
-              Text(
-                widget.workshopName,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
+              Expanded(
+                child: Text(
+                  widget.workshopName,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Icon(
-                Icons.attach_money,
-                size: 16,
-                color: Colors.grey[600],
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'R\$ ${widget.servicePrice}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-              if (widget.serviceDuration.isNotEmpty) ...[
-                const SizedBox(width: 16),
-                Icon(
-                  Icons.access_time,
-                  size: 16,
-                  color: Colors.grey[600],
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  widget.serviceDuration,
-                  style: TextStyle(
-                    fontSize: 14,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.attach_money,
+                    size: 16,
                     color: Colors.grey[600],
                   ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'R\$ ${widget.servicePrice}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+              if (widget.serviceDuration.isNotEmpty)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.access_time,
+                      size: 16,
+                      color: Colors.grey[600],
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      widget.serviceDuration,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
             ],
           ),
         ],
@@ -1082,11 +1119,9 @@ class _BookingScreenState extends State<BookingScreen> {
         });
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao capturar foto: $e'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível acessar a câmera. Verifique as permissões e tente novamente.',
       );
     }
   }
@@ -1106,11 +1141,9 @@ class _BookingScreenState extends State<BookingScreen> {
         });
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao selecionar imagem: $e'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível abrir suas fotos agora. Verifique as permissões e tente novamente.',
       );
     }
   }

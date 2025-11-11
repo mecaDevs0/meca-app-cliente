@@ -22,9 +22,9 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
   
   // Filtros e pesquisa
   final TextEditingController _searchController = TextEditingController();
-  List<String> _selectedCategories = [];
-  List<String> _selectedPriceRanges = [];
-  List<String> _selectedDurations = [];
+  String _selectedCategory = 'Todos';
+  String _selectedPriceRange = 'Todos';
+  String _selectedDuration = 'Todos';
   String _sortBy = 'nome';
 
   @override

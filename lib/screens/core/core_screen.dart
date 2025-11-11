@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/theme_service.dart';
+import '../../services/api_service.dart';
+import '../../providers/notification_provider.dart';
 import '../../widgets/custom_bottom_nav.dart';
 import '../home/home_screen.dart';
 import '../orders/orders_screen.dart';
@@ -25,6 +27,7 @@ class CoreScreen extends StatefulWidget {
 class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateMixin {
   late int _currentIndex;
   late PageController _pageController;
+  final ApiService _apiService = ApiService();
   
   final List<Widget> _pages = [
     const HomeScreen(),
@@ -38,6 +41,13 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
     super.initState();
     _currentIndex = widget.initialIndex ?? 0;
     _pageController = PageController(initialPage: _currentIndex);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _refreshUnreadNotifications();
+      if (_currentIndex == _pages.length - 1) {
+        Provider.of<NotificationProvider>(context, listen: false).markProfileBadgeSeen();
+      }
+    });
   }
 
   @override
@@ -50,6 +60,12 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
     setState(() {
       _currentIndex = index;
     });
+
+    if (index == _pages.length - 1) {
+      Provider.of<NotificationProvider>(context, listen: false).markProfileBadgeSeen();
+    } else {
+      _refreshUnreadNotifications();
+    }
   }
 
   void _onNavTap(int index) {
@@ -58,6 +74,24 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
+
+    if (index == _pages.length - 1) {
+      Provider.of<NotificationProvider>(context, listen: false).markProfileBadgeSeen();
+    }
+  }
+
+  Future<void> _refreshUnreadNotifications() async {
+    final notificationProvider = Provider.of<NotificationProvider>(context, listen: false);
+    try {
+      final result = await _apiService.getNotifications(limit: 100);
+      if (result['success'] == true) {
+        final data = result['data'];
+        notificationProvider.setNotificationsFromPayload(data);
+      }
+    } catch (e) {
+      // Apenas logar no debug para evitar travamentos na UI
+      debugPrint('Erro ao atualizar notificações: $e');
+    }
   }
 
   @override
@@ -102,6 +136,10 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
   }
 
 }
+
+
+
+
 
 
 

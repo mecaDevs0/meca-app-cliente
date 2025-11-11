@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:convert';
 
 import '../../services/api_service.dart';
 import '../../widgets/meca_loading_widget.dart';
@@ -139,6 +140,16 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                  } else {
                    workshop['distance'] = 0.0;
                  }
+
+                 final addressDetails = _extractAddressDetails(workshop['address']);
+                 if (addressDetails != null) {
+                   workshop['address_details'] = addressDetails;
+                   workshop['address'] = _formatAddress(addressDetails);
+                 } else {
+                   workshop['address'] = _formatAddress(workshop['address']);
+                 }
+                 workshop['logo_url'] = workshop['logo_url'] ?? workshop['logo'];
+                 workshop['rating'] = _parseDouble(workshop['rating']);
                }
                
                setState(() {
@@ -365,7 +376,13 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   Widget _buildWorkshopCard(Map<String, dynamic> workshop) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     // Usar distância real calculada
-    final distance = workshop['distance'] ?? 0.0;
+    final distanceRaw = workshop['distance'];
+    final double distance = distanceRaw is num
+        ? distanceRaw.toDouble()
+        : distanceRaw is String
+            ? double.tryParse(distanceRaw.replaceAll(',', '.')) ?? 0.0
+            : 0.0;
+    final double ratingValue = _parseDouble(workshop['rating']) ?? 0.0;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -461,7 +478,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(
-                                  workshop['address'] ?? '',
+                                  _formatAddress(workshop['address'] ?? workshop['address_details']),
                                   style: const TextStyle(
                                     color: Colors.grey,
                                     fontSize: 14,
@@ -473,9 +490,10 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          Row(
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
                             children: [
-                              // Rating
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
@@ -492,7 +510,9 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      '${workshop['rating'] ?? 4.5}',
+                                      ratingValue > 0
+                                          ? ratingValue.toStringAsFixed(ratingValue >= 10 ? 0 : 1)
+                                          : 'N/A',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
@@ -502,8 +522,6 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              // Distance
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
@@ -520,7 +538,9 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      distance > 0 ? '${distance.toStringAsFixed(1)} km' : 'Distância não disponível',
+                                      distance > 0
+                                          ? _formatDistance(distance)
+                                          : 'Distância não disponível',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
@@ -1123,6 +1143,103 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         ),
       ],
     );
+  }
+
+  Map<String, dynamic>? _extractAddressDetails(dynamic address) {
+    if (address is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(address);
+    }
+    if (address is String) {
+      try {
+        final decoded = jsonDecode(address);
+        if (decoded is Map<String, dynamic>) {
+          return Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  double? _parseDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String && value.trim().isNotEmpty) {
+      return double.tryParse(value.trim().replaceAll(',', '.'));
+    }
+    return null;
+  }
+
+  String _formatDistance(double distance) {
+    final formatted = distance >= 10
+        ? distance.toStringAsFixed(0)
+        : distance.toStringAsFixed(1);
+    return '$formatted km';
+  }
+
+  String _formatAddress(dynamic address) {
+    if (address == null) return 'Endereço não informado';
+    if (address is String) {
+      if (address.isEmpty) return 'Endereço não informado';
+      return _sanitizeAddress(address);
+    }
+    if (address is Map) {
+      final street = address['street'] ?? address['logradouro'] ?? address['addressLine1'];
+      final number = address['number'] ?? address['numero'];
+      final neighborhood = address['neighborhood'] ?? address['bairro'];
+      final city = address['city'] ?? address['cidade'];
+      final state = address['state'] ?? address['uf'];
+      final cep = address['zip'] ?? address['cep'];
+
+      final parts = <String>[];
+      if (street != null) {
+        if (number != null) {
+          parts.add('$street, $number');
+        } else {
+          parts.add(street.toString());
+        }
+      }
+      if (neighborhood != null) {
+        parts.add(neighborhood.toString());
+      }
+      final cityState = [city, state]
+          .where((element) => element != null && element.toString().isNotEmpty)
+          .join(' - ');
+      if (cityState.isNotEmpty) {
+        parts.add(cityState);
+      }
+      if (cep != null && cep.toString().isNotEmpty) {
+        parts.add('CEP ${cep.toString()}');
+      }
+
+      if (parts.isEmpty) {
+        final rawValues = address.values
+            .whereType<String>()
+            .where((value) => value.isNotEmpty)
+            .map(_sanitizeAddress)
+            .toList();
+        if (rawValues.isEmpty) return 'Endereço não informado';
+        return rawValues.join(' • ');
+      }
+
+      return _sanitizeAddress(parts.join(' • '));
+    }
+
+    return _sanitizeAddress(address.toString());
+  }
+
+  String _sanitizeAddress(String value) {
+    return value
+        .replaceAll(RegExp(r'[\r\n]+'), ' • ')
+        .replaceAll(RegExp(r'\s{2,}'), ' ')
+        .replaceAll(RegExp(r'(•\s*){2,}'), '• ')
+        .trim();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 }
 

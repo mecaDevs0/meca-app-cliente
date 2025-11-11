@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/notification_provider.dart';
 import '../services/api_service.dart';
 import '../services/theme_service.dart';
 import '../screens/notifications/recent_notifications_screen.dart';
@@ -30,8 +31,8 @@ class NotificationAppBar extends StatelessWidget implements PreferredSizeWidget 
       final apiService = ApiService();
       final result = await apiService.getNotifications(limit: 100, read: false);
       if (result['success'] == true) {
-        final notifications = (result['data'] as List?) ?? [];
-        return notifications.length;
+        final unread = NotificationProvider.extractUnreadCount(result['data']);
+        return unread;
       }
     } catch (e) {
       print('Erro ao buscar contagem de notificações: $e');
@@ -134,6 +135,8 @@ class NotificationAppBar extends StatelessWidget implements PreferredSizeWidget 
     );
   }
 }
+
+
 
 
 

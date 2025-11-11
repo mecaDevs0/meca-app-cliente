@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../utils/colors.dart';
+import '../../widgets/app_alerts.dart';
 
 class ReviewScreen extends StatefulWidget {
   final String bookingId;
@@ -24,11 +25,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   Future<void> _submitRating() async {
     if (_rating < 1 || _rating > 5) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor, selecione uma nota de 1 a 5'),
-          backgroundColor: Colors.orange,
-        ),
+      AppAlerts.showWarning(
+        context,
+        message: 'Escolha uma nota de 1 a 5 para enviar sua avaliação.',
+        title: 'Nota obrigatória',
       );
       return;
     }
@@ -44,27 +44,23 @@ class _ReviewScreenState extends State<ReviewScreen> {
       );
 
       if (result['success']) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Avaliação enviada com sucesso!'),
-            backgroundColor: Colors.green,
-          ),
+        AppAlerts.showSuccess(
+          context,
+          message: 'Avaliação enviada com sucesso! Obrigado por compartilhar sua experiência.',
         );
         Navigator.of(context).pop(true);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro: ${result['error'] ?? 'Erro ao enviar avaliação'}'),
-            backgroundColor: Colors.red,
-          ),
+        AppAlerts.showError(
+          context,
+          message: result['error'] != null
+              ? 'Erro ao enviar avaliação: ${result['error']}'
+              : 'Não foi possível enviar sua avaliação agora. Tente novamente.',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro: $e'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível enviar sua avaliação agora. Tente novamente.',
       );
     } finally {
       setState(() => _isSubmitting = false);

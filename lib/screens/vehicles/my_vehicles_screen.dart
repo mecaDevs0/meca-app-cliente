@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
+import '../../widgets/app_alerts.dart';
 import '../../widgets/meca_loading_widget.dart';
 import 'vehicle_history_screen.dart';
 
@@ -25,7 +26,10 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
   }
 
   Future<void> _loadVehicles() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _vehicles = [];
+    });
     
     // Obter ID do cliente do perfil
     String? customerId;
@@ -41,11 +45,9 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
 
     if (customerId == null || customerId.isEmpty) {
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ Erro: Não foi possível identificar o usuário. Faça login novamente.'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível identificar sua conta. Faça login novamente para ver seus veículos.',
       );
       return;
     }
@@ -76,28 +78,22 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
       final result = await _apiService.toggleFavoriteVehicle(vehicleId, isFavorite);
       
       if (result['success']) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isFavorite ? 'Veículo adicionado aos favoritos' : 'Veículo removido dos favoritos'),
-            backgroundColor: const Color(0xFF00C977),
-            duration: const Duration(seconds: 2),
-          ),
+        AppAlerts.showSuccess(
+          context,
+          message: result['message'] ??
+              (isFavorite ? 'Veículo adicionado aos favoritos.' : 'Veículo removido dos favoritos.'),
         );
         _loadVehicles(); // Recarrega a lista
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erro ao favoritar veículo'),
-            backgroundColor: Colors.red,
-          ),
+        AppAlerts.showError(
+          context,
+          message: result['error'] ?? 'Não foi possível alterar os favoritos agora. Tente novamente em instantes.',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erro ao favoritar veículo'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível alterar os favoritos agora. Tente novamente em instantes.',
       );
     }
   }
@@ -328,7 +324,8 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => VehicleHistoryScreen(
-                                  vehicleId: vehicle['id'],
+                                  vehicleId: (vehicle['id'] ?? '').toString(),
+                                  plate: (vehicle['plate'] ?? vehicle['placa'] ?? vehicle['license_plate'] ?? '').toString(),
                                   vehicle: vehicle,
                                 ),
                               ),

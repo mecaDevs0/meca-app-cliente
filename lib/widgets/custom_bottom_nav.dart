@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/theme_service.dart';
+import '../providers/notification_provider.dart';
 
 class BottomNavItem {
   final IconData icon;
@@ -68,12 +69,14 @@ class CustomBottomNav extends StatelessWidget {
 
   Widget _buildNavItem(BuildContext context, int index, BottomNavItem item) {
     final themeService = Provider.of<ThemeService>(context);
+    final notificationProvider = Provider.of<NotificationProvider>(context);
     final isDark = themeService.isDarkMode;
     final isActive = currentIndex == index;
     
     final activeColor = const Color(0xFF00C977);
     final inactiveColor = isDark ? const Color(0xFF666666) : const Color(0xFF999999);
     final textColor = isActive ? activeColor : inactiveColor;
+    final hasUnreadNotifications = notificationProvider.unreadNotifications > 0;
     
     return GestureDetector(
       onTap: () => onTap(index),
@@ -91,10 +94,32 @@ class CustomBottomNav extends StatelessWidget {
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                isActive ? item.activeIcon : item.icon,
-                color: textColor,
-                size: 24,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    isActive ? item.activeIcon : item.icon,
+                    color: textColor,
+                    size: 24,
+                  ),
+                  if (index == items.length - 1 && hasUnreadNotifications)
+                    Positioned(
+                      right: -1,
+                      top: -1,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444),
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: 4),
@@ -112,6 +137,7 @@ class CustomBottomNav extends StatelessWidget {
     );
   }
 }
+
 
 
 

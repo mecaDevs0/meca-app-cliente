@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
+import '../../widgets/app_alerts.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({Key? key}) : super(key: key);
@@ -253,27 +254,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Configurações salvas com sucesso!'),
-            backgroundColor: Color(0xFF00C977),
-          ),
+        AppAlerts.showSuccess(
+          context,
+          message: 'Preferências de notificações salvas com sucesso.',
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao salvar: ${result['error'] ?? 'Erro desconhecido'}'),
-            backgroundColor: Colors.red,
-          ),
+        AppAlerts.showError(
+          context,
+          message: 'Erro ao salvar: ${result['error'] ?? 'Erro desconhecido'}',
         );
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao salvar configurações: $e'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível salvar suas preferências agora. Tente novamente.',
       );
     } finally {
       if (mounted) {

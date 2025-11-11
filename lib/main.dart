@@ -16,6 +16,7 @@ import 'screens/vehicles/my_vehicles_screen.dart';
 import 'screens/workshops/workshop_detail_screen.dart';
 import 'services/theme_service.dart';
 import 'services/notification_service.dart';
+import 'providers/notification_provider.dart';
 
 // Global navigator key para navegação de notificações
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -69,8 +70,11 @@ class MecaClienteApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => ThemeService(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeService()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+      ],
       child: Consumer<ThemeService>(
         builder: (context, themeService, child) {
           return MaterialApp(
@@ -79,7 +83,8 @@ class MecaClienteApp extends StatelessWidget {
             navigatorKey: navigatorKey,
             theme: ThemeService.lightTheme,
             darkTheme: ThemeService.darkTheme,
-            themeMode: themeService.themeMode,            initialRoute: '/',
+            themeMode: themeService.themeMode,
+            initialRoute: '/',
             onGenerateRoute: (settings) {
               switch (settings.name) {
                 case '/':

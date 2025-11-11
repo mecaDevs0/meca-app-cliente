@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<Map<String, dynamic>> _upcomingBookings = [];
   List<Map<String, dynamic>> _nearbyWorkshops = [];
   final ApiService _apiService = ApiService();
+  Position? _currentPosition;
 
   @override
   void initState() {
@@ -37,7 +39,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _upcomingBookings = [];
+      _nearbyWorkshops = [];
+    });
     
     try {
       // Carregar agendamentos do usuário real
@@ -102,7 +108,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           desiredAccuracy: LocationAccuracy.high,
           timeLimit: const Duration(seconds: 10),
         );
-        
+        _currentPosition = position;
+
         final workshopsResponse = await _apiService.getNearbyWorkshops(
           position.latitude,
           position.longitude,
@@ -121,7 +128,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           }
           
           setState(() {
-            _nearbyWorkshops = List<Map<String, dynamic>>.from(workshops).take(3).toList();
+            _nearbyWorkshops = workshops
+                .whereType<Map>()
+                .map((w) => _normalizeWorkshop(Map<String, dynamic>.from(w)))
+                .take(3)
+                .toList();
           });
         }
       } catch (e) {
@@ -137,7 +148,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             workshops = data;
           }
           setState(() {
-            _nearbyWorkshops = List<Map<String, dynamic>>.from(workshops).take(3).toList();
+            _nearbyWorkshops = workshops
+                .whereType<Map>()
+                .map((w) => _normalizeWorkshop(Map<String, dynamic>.from(w)))
+                .take(3)
+                .toList();
           });
         }
       }
@@ -585,8 +600,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         ),
         const SizedBox(height: 16),
-        Container(
-          height: 200,
+        SizedBox(
+          height: 240,
           child: _nearbyWorkshops.isEmpty
               ? const Center(
                   child: Text(
@@ -611,6 +626,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildWorkshopCard(Map<String, dynamic> workshop) {
+    final displayAddress = workshop['address_text'] ?? _formatAddress(workshop['address']);
+    final distanceLabel = _formatDistanceLabel(workshop['distance']);
+    final double rating = _parseDouble(workshop['rating']) ?? 0.0;
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -630,6 +649,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ),
         child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -659,7 +679,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                     Text(
-                      _calculateDistance(workshop),
+                      distanceLabel,
                       style: const TextStyle(
                         color: Colors.grey,
                         fontSize: 12,
@@ -675,7 +695,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(width: 4),
               Text(
-                '${workshop['rating'] ?? 4.5}',
+                rating > 0 ? rating.toStringAsFixed(rating >= 10 ? 0 : 1) : 'N/A',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -685,7 +705,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
           const SizedBox(height: 12),
           Text(
-            workshop['address'] ?? 'Endereço não informado',
+            displayAddress,
             style: const TextStyle(
               color: Colors.grey,
               fontSize: 14,
@@ -694,14 +714,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              _buildServiceChip('Mecânica Geral'),
-              _buildServiceChip('Auto Elétrica'),
-              _buildServiceChip('Freios'),
-            ],
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00C977).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text(
+              'Ver detalhes da oficina',
+              style: TextStyle(
+                color: Color(0xFF00C977),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
         ),
@@ -709,35 +735,166 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildServiceChip(String service) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF00C977).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        service,
-        style: const TextStyle(
-          color: Color(0xFF00C977),
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+  Map<String, dynamic> _normalizeWorkshop(Map<String, dynamic> workshop) {
+    final normalized = Map<String, dynamic>.from(workshop);
+
+    normalized['latitude'] = _parseCoordinate(normalized['latitude']);
+    normalized['longitude'] = _parseCoordinate(normalized['longitude']);
+
+    final parsedAddress = _extractAddressDetails(normalized['address']);
+    normalized['address_details'] = parsedAddress;
+    normalized['address_text'] = _formatAddress(parsedAddress ?? normalized['address']);
+    normalized['address'] = normalized['address_text'];
+
+    final parsedDistance = _parseDistance(normalized['distance']);
+    normalized['distance'] = parsedDistance ?? _computeDistanceFromUser(
+      normalized['latitude'],
+      normalized['longitude'],
+      _currentPosition,
     );
+
+    normalized['rating'] = _parseDouble(normalized['rating']);
+    normalized['logo_url'] = normalized['logo_url'] ?? normalized['logo'];
+
+    return normalized;
   }
-  
-  String _calculateDistance(Map<String, dynamic> workshop) {
-    // Simula cálculo de distância (em produção, usar geolocalização real)
-    final random = DateTime.now().millisecondsSinceEpoch % 100;
-    if (random < 30) return '0.5 km de distância';
-    if (random < 60) return '1.2 km de distância';
-    if (random < 80) return '2.8 km de distância';
-    return '4.5 km de distância';
+
+  double? _computeDistanceFromUser(double? lat, double? lng, Position? userPosition) {
+    if (lat == null || lng == null || userPosition == null) return null;
+    try {
+      return Geolocator.distanceBetween(
+            userPosition.latitude,
+            userPosition.longitude,
+            lat,
+            lng,
+          ) /
+          1000;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  double? _parseCoordinate(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String && value.trim().isNotEmpty) {
+      return double.tryParse(value.trim().replaceAll(',', '.'));
+    }
+    return null;
+  }
+
+  double? _parseDistance(dynamic raw) {
+    if (raw is num) return raw.toDouble();
+    if (raw is String) {
+      final cleaned = raw.replaceAll(RegExp(r'[^0-9.,-]'), '').replaceAll(',', '.');
+      return double.tryParse(cleaned);
+    }
+    if (raw is Map) {
+      final value = raw['value'] ?? raw['distance'];
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        return double.tryParse(value.replaceAll(',', '.'));
+      }
+    }
+    return null;
+  }
+
+  double? _parseDouble(dynamic raw) {
+    if (raw is num) return raw.toDouble();
+    if (raw is String && raw.trim().isNotEmpty) {
+      return double.tryParse(raw.trim().replaceAll(',', '.'));
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _extractAddressDetails(dynamic address) {
+    if (address is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(address);
+    }
+
+    if (address is String) {
+      try {
+        final decoded = jsonDecode(address);
+        if (decoded is Map<String, dynamic>) {
+          return Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  String _formatAddress(dynamic address) {
+    if (address == null) return 'Endereço não informado';
+    if (address is String) {
+      if (address.isEmpty) return 'Endereço não informado';
+      return _sanitizeAddress(address);
+    }
+
+    if (address is Map) {
+      final street = address['street'] ?? address['logradouro'] ?? address['addressLine1'];
+      final number = address['number'] ?? address['numero'];
+      final neighborhood = address['neighborhood'] ?? address['bairro'];
+      final city = address['city'] ?? address['cidade'];
+      final state = address['state'] ?? address['uf'];
+      final cep = address['zip'] ?? address['cep'];
+
+      final parts = <String>[];
+      if (street != null) {
+        if (number != null) {
+          parts.add('$street, $number');
+        } else {
+          parts.add(street.toString());
+        }
+      }
+      if (neighborhood != null) {
+        parts.add(neighborhood.toString());
+      }
+      final cityState = [city, state].where((element) => element != null && element.toString().isNotEmpty).join(' - ');
+      if (cityState.isNotEmpty) {
+        parts.add(cityState);
+      }
+      if (cep != null && cep.toString().isNotEmpty) {
+        parts.add('CEP ${cep.toString()}');
+      }
+
+      if (parts.isEmpty) {
+        final rawValues = address.values
+            .whereType<String>()
+            .where((value) => value.isNotEmpty)
+            .map(_sanitizeAddress)
+            .toList();
+        if (rawValues.isEmpty) return 'Endereço não informado';
+        return rawValues.join(' • ');
+      }
+
+      return _sanitizeAddress(parts.join(' • '));
+    }
+
+    return _sanitizeAddress(address.toString());
+  }
+
+  String _sanitizeAddress(String value) {
+    return value
+        .replaceAll(RegExp(r'[\r\n]+'), ' • ')
+        .replaceAll(RegExp(r'\s{2,}'), ' ')
+        .replaceAll(RegExp(r'(•\s*){2,}'), '• ')
+        .trim();
+  }
+
+  String _formatDistanceLabel(dynamic distance) {
+    final distanceValue = _parseDistance(distance) ?? 0.0;
+    if (distanceValue <= 0) {
+      return 'Próximo a você';
+    }
+    final formatted = distanceValue >= 10
+        ? distanceValue.toStringAsFixed(0)
+        : distanceValue.toStringAsFixed(1);
+    return '$formatted km de distância';
   }
 
   String _formatDate(String? dateString) {
-    if (dateString == null) return '';
+    if (dateString == null || dateString.isEmpty) return 'Data não informada';
     try {
       final date = DateTime.parse(dateString);
       return '${date.day}/${date.month}/${date.year} às ${date.hour}:${date.minute.toString().padLeft(2, '0')}';

@@ -35,8 +35,26 @@ class _ServicesScreenState extends State<ServicesScreen> {
       final result = await _apiService.getServices();
       
       if (result['success']) {
+        final rawData = result['data'];
+        List<Map<String, dynamic>> servicesList = [];
+
+        if (rawData is List) {
+          servicesList = rawData
+              .whereType<Map>()
+              .map((service) => Map<String, dynamic>.from(service))
+              .toList();
+        } else if (rawData is Map) {
+          final nested = rawData['services'] ?? rawData['data'];
+          if (nested is List) {
+            servicesList = nested
+                .whereType<Map>()
+                .map((service) => Map<String, dynamic>.from(service))
+                .toList();
+          }
+        }
+
         setState(() {
-          _services = List<Map<String, dynamic>>.from(result['data']['services'] ?? []);
+          _services = servicesList;
           _loading = false;
         });
       } else {
@@ -180,6 +198,15 @@ class _ServicesScreenState extends State<ServicesScreen> {
   Widget _buildServiceCard(Map<String, dynamic> service) {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
+        final String serviceName = (service['name'] ?? 'Serviço').toString();
+        final String? description = service['description']?.toString();
+        final dynamic rawPrice = service['price'] ?? service['service_price'];
+        final double? price = rawPrice is num
+            ? rawPrice.toDouble()
+            : rawPrice is String
+                ? double.tryParse(rawPrice.replaceAll(RegExp(r'[^0-9.,]'), '').replaceAll(',', '.'))
+                : null;
+
         return Card(
           margin: const EdgeInsets.only(bottom: 16),
           elevation: 4,
@@ -226,17 +253,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          service['name'] ?? 'Serviço',
+                          serviceName,
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF00C977),
                           ),
                         ),
-                        if (service['description'] != null) ...[
+                        if (description != null && description.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(
-                            service['description'],
+                            description,
                             style: const TextStyle(
                               fontSize: 14,
                               color: Colors.grey,
@@ -262,6 +289,24 @@ class _ServicesScreenState extends State<ServicesScreen> {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+                            if (price != null) ...[
+                              const SizedBox(width: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00C977).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'R\$ ${price.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF00C977),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
                             const Spacer(),
                             const Icon(
                               Icons.arrow_forward_ios,
@@ -283,12 +328,15 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   void _navigateToServiceDetail(Map<String, dynamic> service) {
+    final serviceId = (service['id'] ?? service['service_id'] ?? '').toString();
+    final workshopId = service['workshop_id']?.toString() ?? '';
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ServiceDetailScreen(
-          serviceId: service['id'] ?? '',
-          workshopId: service['workshop_id'] ?? '',
+          serviceId: serviceId,
+          workshopId: workshopId,
         ),
       ),
     );

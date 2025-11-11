@@ -41,7 +41,16 @@ class _BookingEvidenceScreenState extends State<BookingEvidenceScreen> {
       
       if (result['success']) {
         setState(() {
-          _evidence = List<Map<String, dynamic>>.from(result['data']['evidence'] ?? []);
+          final data = result['data'];
+          if (data is List) {
+            _evidence = data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+          } else if (data is Map && data['evidence'] is List) {
+            _evidence = List<Map<String, dynamic>>.from(
+              (data['evidence'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
+            );
+          } else {
+            _evidence = [];
+          }
           _loading = false;
         });
       } else {
@@ -468,6 +477,8 @@ class _EvidenceFullScreenState extends State<EvidenceFullScreen> {
     );
   }
 }
+
+
 
 
 

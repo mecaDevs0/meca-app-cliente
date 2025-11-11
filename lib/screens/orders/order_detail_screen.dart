@@ -1,16 +1,19 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
+import '../../widgets/app_alerts.dart';
 import 'booking_evidence_screen.dart';
 import '../review/review_screen.dart';
 import '../payment/payment_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Map<String, dynamic> booking;
-  
+
   const OrderDetailScreen({Key? key, required this.booking}) : super(key: key);
 
   @override
@@ -21,6 +24,104 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   final ApiService _apiService = ApiService();
   final NotificationService _notificationService = NotificationService();
   Map<String, dynamic>? _bookingDetails;
+
+  List<Map<String, dynamic>> _coerceUploads(dynamic raw) {
+    if (raw == null) return const [];
+
+    if (raw is List) {
+      return raw.whereType<Object>().map<Map<String, dynamic>>((item) {
+        if (item is Map<String, dynamic>) {
+          return Map<String, dynamic>.from(item);
+        }
+        if (item is Map) {
+          return Map<String, dynamic>.from(item);
+        }
+        return <String, dynamic>{};
+      }).where((item) => item.isNotEmpty).toList();
+    }
+
+    if (raw is String && raw.trim().isNotEmpty) {
+      try {
+        final decoded = json.decode(raw);
+        return _coerceUploads(decoded);
+      } catch (_) {
+        return const [];
+      }
+    }
+
+    return const [];
+  }
+
+  List<Map<String, dynamic>> _getCustomerUploads() {
+    final primary = _bookingDetails?['customer_uploads'] ?? _bookingDetails?['customerUploads'];
+    final fallback = widget.booking['customer_uploads'] ?? widget.booking['customerUploads'];
+    final uploads = _coerceUploads(primary);
+    if (uploads.isNotEmpty) {
+      return uploads;
+    }
+    return _coerceUploads(fallback);
+  }
+
+  void _openUploadPreview(Map<String, dynamic> upload) {
+    final url = upload['url']?.toString();
+    if (url == null || url.isEmpty) return;
+
+    final fileName = upload['file_name']?.toString() ?? 'Foto do agendamento';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(16),
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: InteractiveViewer(
+                      child: Image.network(
+                        url,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) return child;
+                          return const Center(child: CircularProgressIndicator());
+                        },
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: Colors.black,
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.broken_image, color: Colors.white, size: 40),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 20,
+                  left: 20,
+                  right: 20,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      fileName,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -33,29 +134,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Future<void> _loadBookingDetails() async {
     try {
       final result = await _apiService.getBookingDetails(widget.booking['id']?.toString() ?? '');
-      
-      if (mounted && result['success'] && result['data'] != null) {
+
+      if (!mounted) return;
+
+      if (result['success'] && result['data'] != null) {
         setState(() {
-          _bookingDetails = result['data'];
+          _bookingDetails = result['data'] as Map<String, dynamic>?;
         });
       }
     } catch (e) {
-      print('Erro ao carregar detalhes do agendamento: $e');
+      debugPrint('Erro ao carregar detalhes do agendamento: $e');
     }
   }
 
   void _checkBookingStatus() {
-    // Verificar se o status mudou para finalizado e redirecionar para pagamento
     final status = widget.booking['status'] ?? 'pending';
     if (status == 'finalizado' || status == 'finalizado_cliente' || status == 'completed') {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _redirectToPayment();
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _redirectToPayment());
     }
   }
 
   void _setupBookingStatusListener() {
-    // Verificar periodicamente se o status mudou para finalizado
     Future.delayed(const Duration(seconds: 5), () {
       if (mounted) {
         _pollBookingStatus();
@@ -67,45 +166,38 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     try {
       final bookingId = widget.booking['id']?.toString() ?? '';
       if (bookingId.isEmpty) return;
-      
+
       final bookingResult = await _apiService.getBookingDetails(bookingId);
-      
       if (bookingResult['success'] && bookingResult['data'] != null) {
         final updatedBooking = bookingResult['data'];
-        
-        // Garantir que updatedBooking é um Map
         if (updatedBooking is! Map<String, dynamic>) {
-          print('Erro: updatedBooking não é um Map');
+          debugPrint('Erro: updatedBooking não é um Map');
           return;
         }
-        
+
         final status = (updatedBooking['status'] ?? 'pending').toString();
         final previousStatus = (widget.booking['status'] ?? 'pending').toString();
-        
-        // Notificar quando serviço iniciado
+
         if (status == 'iniciado' && previousStatus != 'iniciado') {
           await _notificationService.showServiceStarted(
             workshopName: updatedBooking['workshop_name'] ?? widget.booking['workshop_name'] ?? 'Oficina',
             serviceName: updatedBooking['service_name'] ?? widget.booking['service_name'] ?? 'Serviço',
           );
         }
-        
-        // Notificar quando serviço finalizado
-        if ((status == 'finalizado' || status == 'finalizado_cliente' || status == 'completed') && 
-            previousStatus != 'finalizado' && previousStatus != 'finalizado_cliente' && previousStatus != 'completed') {
+
+        final isCompleted = status == 'finalizado' || status == 'finalizado_cliente' || status == 'completed';
+        final wasCompleted = previousStatus == 'finalizado' || previousStatus == 'finalizado_cliente' || previousStatus == 'completed';
+
+        if (isCompleted && !wasCompleted) {
           await _notificationService.showServiceFinished(
             workshopName: updatedBooking['workshop_name'] ?? widget.booking['workshop_name'] ?? 'Oficina',
             serviceName: updatedBooking['service_name'] ?? widget.booking['service_name'] ?? 'Serviço',
           );
-        }
-        
-        if ((status == 'finalizado' || status == 'finalizado_cliente' || status == 'completed') && 
-            widget.booking['status'] != status) {
           _redirectToPayment();
         }
       }
     } catch (e) {
-      print('Erro ao verificar status do agendamento: $e');
+      debugPrint('Erro ao verificar status do agendamento: $e');
     }
   }
 
@@ -114,14 +206,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => PaymentScreen(
-          service: widget.booking['service'] ?? {
-            'name': widget.booking['service_name'] ?? 'Serviço',
-            'price': widget.booking['service_price'] ?? 0.0,
-          },
-          workshop: widget.booking['workshop'] ?? {
-            'name': widget.booking['workshop_name'] ?? 'Oficina',
-            'accepts_installment': widget.booking['workshop_accepts_installment'] ?? false,
-          },
+          service: widget.booking['service'] ??
+              {
+                'name': widget.booking['service_name'] ?? 'Serviço',
+                'price': widget.booking['service_price'] ?? 0,
+              },
+          workshop: widget.booking['workshop'] ??
+              {
+                'name': widget.booking['workshop_name'] ?? 'Oficina',
+                'accepts_installment': widget.booking['workshop_accepts_installment'] ?? false,
+              },
           booking: widget.booking,
         ),
       ),
@@ -133,6 +227,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final status = widget.booking['status'] ?? 'pending';
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final canCancel = status == 'pending' || status == 'confirmed';
+    final customerUploads = _getCustomerUploads();
+    final bookingNotes = (_bookingDetails?['customer_notes'] ??
+            _bookingDetails?['notes'] ??
+            widget.booking['notes'] ??
+            widget.booking['customer_notes'])
+        ?.toString();
 
     return Scaffold(
       backgroundColor: isDarkMode ? const Color(0xFF0F0F0F) : Colors.white,
@@ -150,14 +250,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Status Banner
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: _getStatusGradient(status),
-                ),
+                gradient: LinearGradient(colors: _getStatusGradient(status)),
               ),
               child: Column(
                 children: [
@@ -179,17 +276,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ],
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Workshop Info
                   _buildSection(
                     'Oficina',
                     [
-                      // Logo e Nome da Oficina
                       if (_bookingDetails?['workshop_logo_url'] != null || widget.booking['workshop_logo_url'] != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
@@ -202,17 +296,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   width: 50,
                                   height: 50,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      width: 50,
-                                      height: 50,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF00C977).withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Icon(Icons.build, color: Color(0xFF00C977)),
-                                    );
-                                  },
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    width: 50,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00C977).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.build, color: Color(0xFF00C977)),
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -256,17 +348,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             ],
                           ),
                         ),
-                      
                       _buildInfoRow(
-                        Icons.build_circle, 
-                        (_bookingDetails?['workshop_name'] ?? widget.booking['workshop_name'] ?? 'Oficina').toString()
+                        Icons.build_circle,
+                        (_bookingDetails?['workshop_name'] ?? widget.booking['workshop_name'] ?? 'Oficina').toString(),
                       ),
-                      
-                      // Componente de Mapa
                       if ((_bookingDetails?['latitude'] ?? widget.booking['latitude']) != null &&
                           (_bookingDetails?['longitude'] ?? widget.booking['longitude']) != null)
                         Padding(
-                          padding: const EdgeInsets.only(top: 8, bottom: 8),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                           child: GestureDetector(
                             onTap: () => _showMapOptionsDialog(
                               _bookingDetails?['latitude'] ?? widget.booking['latitude'],
@@ -276,22 +365,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               height: 180,
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: const Color(0xFF00C977),
-                                  width: 2,
-                                ),
+                                border: Border.all(color: const Color(0xFF00C977), width: 2),
                                 gradient: LinearGradient(
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                   colors: isDarkMode
-                                      ? [
-                                          const Color(0xFF1E1E1E),
-                                          const Color(0xFF2A2A2A),
-                                        ]
-                                      : [
-                                          const Color(0xFFF5F5F5),
-                                          const Color(0xFFE8E8E8),
-                                        ],
+                                      ? [const Color(0xFF1E1E1E), const Color(0xFF2A2A2A)]
+                                      : [const Color(0xFFF5F5F5), const Color(0xFFE8E8E8)],
                                 ),
                                 boxShadow: [
                                   BoxShadow(
@@ -303,59 +383,42 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               ),
                               child: Stack(
                                 children: [
-                                  // Visualização do mapa
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: [
-                                            const Color(0xFF00C977).withOpacity(0.1),
-                                            const Color(0xFF00B369).withOpacity(0.05),
-                                          ],
+                                  Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF00C977).withOpacity(0.1),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.location_on,
+                                            size: 48,
+                                            color: Color(0xFF00C977),
+                                          ),
                                         ),
-                                      ),
-                                      child: Center(
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFF00C977).withOpacity(0.1),
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: const Icon(
-                                                Icons.location_on,
-                                                size: 48,
-                                                color: Color(0xFF00C977),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                            Text(
-                                              'Localização da Oficina',
-                                              style: TextStyle(
-                                                color: isDarkMode ? Colors.white : Colors.black87,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'Toque para abrir no Waze ou Maps',
-                                              style: TextStyle(
-                                                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ],
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          'Localização da Oficina',
+                                          style: TextStyle(
+                                            color: isDarkMode ? Colors.white : Colors.black87,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                      ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Toque para abrir no Waze ou Maps',
+                                          style: TextStyle(
+                                            color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  // Botão de ação
                                   Positioned(
                                     bottom: 12,
                                     right: 12,
@@ -375,11 +438,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: const [
-                                          Icon(
-                                            Icons.navigation,
-                                            color: Colors.white,
-                                            size: 16,
-                                          ),
+                                          Icon(Icons.navigation, color: Colors.white, size: 16),
                                           SizedBox(width: 4),
                                           Text(
                                             'Abrir',
@@ -398,25 +457,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             ),
                           ),
                         ),
-                      
                       _buildLocationRow(
-                        Icons.location_on, 
+                        Icons.location_on,
                         (_bookingDetails?['workshop_address'] ?? widget.booking['workshop_address'] ?? 'Endereço não informado').toString(),
                         _bookingDetails?['latitude'] ?? widget.booking['latitude'],
                         _bookingDetails?['longitude'] ?? widget.booking['longitude'],
                       ),
-                      
                       if (_bookingDetails?['workshop_city'] != null || _bookingDetails?['workshop_state'] != null)
                         _buildInfoRow(
                           Icons.location_city,
-                          '${_bookingDetails?['workshop_city'] ?? ''}, ${_bookingDetails?['workshop_state'] ?? ''}'.replaceAll(RegExp(r'^,\s*|,\s*$'), ''),
+                          '${_bookingDetails?['workshop_city'] ?? ''}, ${_bookingDetails?['workshop_state'] ?? ''}'
+                              .replaceAll(RegExp(r'^,\s*|,\s*$'), ''),
                         ),
-                      
                       _buildInfoRow(
-                        Icons.phone, 
-                        (_bookingDetails?['workshop_phone'] ?? widget.booking['workshop_phone'] ?? 'Telefone não informado').toString()
+                        Icons.phone,
+                        (_bookingDetails?['workshop_phone'] ?? widget.booking['workshop_phone'] ?? 'Telefone não informado').toString(),
                       ),
-                      
                       if (_bookingDetails?['workshop_email'] != null)
                         _buildInfoRow(
                           Icons.email,
@@ -424,10 +480,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         ),
                     ],
                   ),
-
                   const SizedBox(height: 20),
-
-                  // Date & Time
                   _buildSection(
                     'Data e Horário',
                     [
@@ -440,34 +493,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 : 'Data não definida'),
                       ),
                       _buildInfoRow(
-                        Icons.access_time, 
+                        Icons.access_time,
                         widget.booking['appointment_date'] != null
                             ? DateFormat('HH:mm').format(DateTime.parse(widget.booking['appointment_date']))
                             : (widget.booking['scheduled_time'] ?? '00:00'),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 20),
-
-                  // Vehicle Info
                   _buildSection(
                     'Veículo',
                     [
                       _buildInfoRow(
                         Icons.directions_car,
-                        '${widget.booking['vehicle_brand'] ?? widget.booking['brand'] ?? ''} ${widget.booking['vehicle_model'] ?? widget.booking['model'] ?? ''}'.trim(),
+                        '${widget.booking['vehicle_brand'] ?? widget.booking['brand'] ?? ''} '
+                                '${widget.booking['vehicle_model'] ?? widget.booking['model'] ?? ''}'
+                            .trim(),
                       ),
                       _buildInfoRow(
-                        Icons.pin, 
+                        Icons.pin,
                         widget.booking['vehicle_plate'] ?? widget.booking['plate'] ?? 'ABC-1234',
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 20),
-
-                  // Services
                   Text(
                     'Serviço',
                     style: TextStyle(
@@ -479,13 +528,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   const SizedBox(height: 15),
                   Builder(
                     builder: (context) {
-                      final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-                      
-                      // Verificar se há um serviço na resposta (priorizar dados carregados)
-                      final serviceName = (_bookingDetails?['service_name'] ?? widget.booking['service_name'] ?? widget.booking['product_id'] ?? 'Serviço').toString();
-                      final servicePrice = _bookingDetails?['service_price'] ?? widget.booking['service_price'] ?? 0;
-                      final serviceDuration = _bookingDetails?['service_duration'] ?? widget.booking['service_duration'] ?? 0;
-                      
+                      final serviceName =
+                          (_bookingDetails?['service_name'] ?? widget.booking['service_name'] ?? widget.booking['product_id'] ?? 'Serviço')
+                              .toString();
+                      final servicePrice = _bookingDetails?['service_price'] ?? widget.booking['service_price'];
+                      final serviceDuration = _bookingDetails?['service_duration'] ?? widget.booking['service_duration'];
+
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(15),
@@ -517,9 +565,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                         color: isDarkMode ? Colors.white : Colors.black,
                                       ),
                                     ),
-                                    if (serviceDuration != null && serviceDuration > 0)
+                                    if (serviceDuration != null && serviceDuration is num && serviceDuration > 0)
                                       Text(
-                                        '$serviceDuration minutos',
+                                        '${serviceDuration.toString()} minutos',
                                         style: TextStyle(
                                           color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
                                           fontSize: 12,
@@ -529,7 +577,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 ),
                               ],
                             ),
-                            if (servicePrice != null && servicePrice > 0)
+                            if (servicePrice != null && servicePrice is num && servicePrice > 0)
                               Text(
                                 'R\$ ${(servicePrice / 100).toStringAsFixed(2)}',
                                 style: const TextStyle(
@@ -543,10 +591,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       );
                     },
                   ),
-
                   const SizedBox(height: 20),
-
-                  // Total - Só exibir se houver preço e tempo disponíveis
                   if (_shouldShowPrice(widget.booking)) ...[
                     Container(
                       padding: const EdgeInsets.all(20),
@@ -579,8 +624,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       ),
                     ),
                   ],
-
-                  if (widget.booking['notes'] != null) ...[
+                  if (bookingNotes != null && bookingNotes.isNotEmpty) ...[
                     const SizedBox(height: 20),
                     Text(
                       'Observações',
@@ -598,18 +642,66 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         borderRadius: BorderRadius.circular(15),
                       ),
                       child: Text(
-                        widget.booking['notes'],
+                        bookingNotes,
                         style: TextStyle(
                           color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
                         ),
                       ),
                     ),
                   ],
+                  if (customerUploads.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    Text(
+                      'Fotos enviadas por você',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode ? Colors.white : const Color(0xFF252940),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: customerUploads.map((upload) {
+                        final url = upload['url']?.toString();
+                        if (url == null || url.isEmpty) return const SizedBox.shrink();
+                        return GestureDetector(
+                          onTap: () => _openUploadPreview(upload),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              width: 90,
+                              height: 90,
+                              color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
+                              child: Image.network(
+                                url,
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, progress) {
+                                  if (progress == null) return child;
+                                  return const Center(
+                                    child: SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  color: Colors.grey.shade300,
+                                  alignment: Alignment.center,
+                                  child: Icon(Icons.broken_image, color: Colors.grey.shade600),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ],
               ),
             ),
-            
-            // Botões de ação conforme o fluxo
             _buildActionButtons(status),
           ],
         ),
@@ -628,7 +720,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ],
               ),
               child: ElevatedButton(
-                onPressed: () => _cancelBooking(),
+                onPressed: _cancelBooking,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   padding: const EdgeInsets.symmetric(vertical: 18),
@@ -701,7 +793,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget _buildLocationRow(IconData icon, String text, dynamic latitude, dynamic longitude) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final hasLocation = latitude != null && longitude != null;
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: InkWell(
@@ -714,9 +806,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               child: Text(
                 text,
                 style: TextStyle(
-                  color: hasLocation 
-                      ? const Color(0xFF00C977) 
-                      : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
+                  color: hasLocation ? const Color(0xFF00C977) : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
                   fontSize: 15,
                   decoration: hasLocation ? TextDecoration.underline : null,
                 ),
@@ -737,26 +827,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   void _showMapOptionsDialog(dynamic latitude, dynamic longitude) async {
     final lat = latitude is String ? double.tryParse(latitude) : (latitude is num ? latitude.toDouble() : null);
     final lng = longitude is String ? double.tryParse(longitude) : (longitude is num ? longitude.toDouble() : null);
-    
+
     if (lat == null || lng == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Coordenadas inválidas'),
-          backgroundColor: Colors.red,
-        ),
+      if (!mounted) return;
+      AppAlerts.showError(
+        context,
+        message: 'Não encontramos as coordenadas da oficina. Tente novamente mais tarde.',
       );
       return;
     }
-    
+
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'Abrir Localização',
           style: TextStyle(
@@ -766,12 +853,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
         content: Text(
           'Escolha como deseja abrir a localização da oficina:',
-          style: TextStyle(
-            color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
-          ),
+          style: TextStyle(color: isDarkMode ? Colors.grey[300] : Colors.grey[700]),
         ),
         actions: [
-          // Botão Waze
           TextButton.icon(
             onPressed: () async {
               Navigator.pop(context);
@@ -780,10 +864,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             icon: const Icon(Icons.navigation, color: Color(0xFF00C977)),
             label: const Text(
               'Waze',
-              style: TextStyle(
-                color: Color(0xFF00C977),
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: Color(0xFF00C977), fontWeight: FontWeight.bold),
             ),
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -793,8 +874,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          // Botão Google Maps
           ElevatedButton.icon(
             onPressed: () async {
               Navigator.pop(context);
@@ -803,17 +882,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             icon: const Icon(Icons.map, color: Colors.white),
             label: const Text(
               'Google Maps',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00C977),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ],
@@ -823,31 +897,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Future<void> _openInWaze(double lat, double lng) async {
     try {
-      // Waze URL scheme: waze://?ll=latitude,longitude&navigate=yes
       final wazeUrl = Uri.parse('waze://?ll=$lat,$lng&navigate=yes');
       final wazeFallbackUrl = Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes');
-      
+
       if (await canLaunchUrl(wazeUrl)) {
         await launchUrl(wazeUrl, mode: LaunchMode.externalApplication);
       } else if (await canLaunchUrl(wazeFallbackUrl)) {
         await launchUrl(wazeFallbackUrl, mode: LaunchMode.externalApplication);
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Waze não está instalado. Abrindo no Google Maps...'),
-            backgroundColor: Colors.orange,
-          ),
+        AppAlerts.showInfo(
+          context,
+          message: 'Não encontrei o Waze instalado. Vamos tentar abrir no Google Maps.',
+          title: 'Abrindo no Maps',
         );
         await _openInGoogleMaps(lat, lng);
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao abrir no Waze: $e'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível abrir o Waze. Vamos tentar pelo Google Maps.',
       );
       await _openInGoogleMaps(lat, lng);
     }
@@ -860,26 +930,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Não foi possível abrir o Google Maps'),
-            backgroundColor: Colors.orange,
-          ),
+        AppAlerts.showWarning(
+          context,
+          message: 'Não conseguimos abrir o Google Maps neste dispositivo.',
+          title: 'Ação indisponível',
         );
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao abrir no Google Maps: $e'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível abrir o Google Maps. Tente novamente mais tarde.',
       );
     }
   }
 
   void _openLocation(dynamic latitude, dynamic longitude) {
-    // Mantido para compatibilidade com _buildLocationRow
     _showMapOptionsDialog(latitude, longitude);
   }
 
@@ -950,14 +1016,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     if (confirm == true) {
       final result = await _apiService.cancelBooking(widget.booking['id']);
-      
+
+      if (!mounted) return;
+
       if (result['success']) {
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Agendamento cancelado com sucesso'),
-            backgroundColor: Color(0xFF00C977),
-          ),
+        AppAlerts.showSuccess(
+          context,
+          message: 'Agendamento cancelado com sucesso.',
+        );
+      } else {
+        AppAlerts.showError(
+          context,
+          message: result['error'] ?? 'Não foi possível cancelar o agendamento agora. Tente novamente.',
         );
       }
     }
@@ -968,8 +1039,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          
-          // Botão "Ver Provas" - quando status = "completed" ou "in_progress"
           if (status == 'completed' || status == 'in_progress') ...[
             SizedBox(
               width: double.infinity,
@@ -988,8 +1057,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
             const SizedBox(height: 12),
           ],
-          
-          // Botão "Avaliar Serviço" - quando status = "completed"
           if (status == 'completed') ...[
             SizedBox(
               width: double.infinity,
@@ -1014,31 +1081,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
             const SizedBox(height: 12),
           ],
-          
-          // Botão de Lembretes - quando status é confirmado ou pendente e tem data futura
           if (_shouldShowReminderButton()) ...[
             Builder(
               builder: (context) {
                 final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+                final reminderEnabled = (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled']) == true;
+                final gradient = reminderEnabled
+                    ? const LinearGradient(colors: [Color(0xFF00C977), Color(0xFF00B369)])
+                    : null;
+                final inactiveColor = isDarkMode ? const Color(0xFF2A2A2A) : const Color(0xFFE8E8E8);
+
                 return Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                          ? [const Color(0xFF00C977), const Color(0xFF00B369)]
-                          : [
-                              isDarkMode ? const Color(0xFF2A2A2A) : const Color(0xFFE8E8E8),
-                              isDarkMode ? const Color(0xFF1E1E1E) : const Color(0xFFD0D0D0),
-                            ],
-                    ),
+                    gradient: gradient,
+                    color: gradient == null ? inactiveColor : null,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                          ? const Color(0xFF00C977)
-                          : (isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
+                      color: reminderEnabled ? const Color(0xFF00C977) : (isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
                       width: 1.5,
                     ),
-                    boxShadow: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
+                    boxShadow: reminderEnabled
                         ? [
                             BoxShadow(
                               color: const Color(0xFF00C977).withOpacity(0.3),
@@ -1048,71 +1111,59 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           ]
                         : null,
                   ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _toggleReminder(!((_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled']) == true)),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Icons.notifications_active 
-                              : Icons.notifications_off,
-                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Colors.white
-                              : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                    ? 'Lembretes Ativados'
-                                    : 'Ativar Lembretes',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                      ? Colors.white
-                                      : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
-                                ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _toggleReminder(!reminderEnabled),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              reminderEnabled ? Icons.notifications_active : Icons.notifications_off,
+                              color: reminderEnabled ? Colors.white : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    reminderEnabled ? 'Lembretes Ativados' : 'Ativar Lembretes',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: reminderEnabled ? Colors.white : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    reminderEnabled
+                                        ? 'Você receberá notificações 1 dia antes, no dia e 1 hora antes'
+                                        : 'Receba notificações 1 dia antes, no dia e 1 hora antes',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: reminderEnabled
+                                          ? Colors.white.withOpacity(0.9)
+                                          : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                    ? 'Você receberá notificações 1 dia antes, no dia e 1 hora antes'
-                                    : 'Receba notificações 1 dia antes, no dia e 1 hora antes',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                      ? Colors.white.withOpacity(0.9)
-                                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                            Icon(
+                              reminderEnabled ? Icons.toggle_on : Icons.toggle_off,
+                              color: reminderEnabled ? Colors.white : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
+                              size: 32,
+                            ),
+                          ],
                         ),
-                        Icon(
-                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Icons.toggle_on
-                              : Icons.toggle_off,
-                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Colors.white
-                              : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
-                          size: 32,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
                 );
               },
             ),
@@ -1123,9 +1174,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-
   Future<void> _rateService() async {
-    Navigator.push(
+    await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => ReviewScreen(
@@ -1133,27 +1183,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           workshopId: widget.booking['workshop_id'] ?? widget.booking['oficina_id'] ?? '',
         ),
       ),
-    ).then((result) async {
-      if (result == true) {
-        // Recarregar dados do agendamento
-        if (mounted) {
-          setState(() {
-            // Forçar rebuild para atualizar UI
-          });
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Avaliação enviada com sucesso!'),
-            backgroundColor: Color(0xFF00C977),
-          ),
+    ).then((result) {
+      if (result == true && mounted) {
+        AppAlerts.showSuccess(
+          context,
+          message: 'Obrigado pela avaliação! Ela ajuda outras pessoas a escolher a oficina certa.',
         );
       }
     });
   }
 
-
   Future<void> _viewEvidence() async {
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => BookingEvidenceScreen(
@@ -1165,58 +1206,48 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   bool _shouldShowPrice(Map<String, dynamic> booking) {
-    // Só exibir preço se a oficina forneceu tempo E preço (não null, não vazio, não 0)
     final price = booking['service_price'] ?? booking['total'] ?? booking['estimated_price'] ?? 0;
     final hasPrice = price != null && price != 0 && price.toString().trim().isNotEmpty;
-    
+
     final duration = booking['service_duration'] ?? booking['duration'] ?? booking['duration_minutes'] ?? 0;
     final hasDuration = duration != null && duration != 0 && duration.toString().trim().isNotEmpty;
-    
+
     return hasPrice && hasDuration;
   }
 
   String _formatPrice(Map<String, dynamic> booking) {
-    final price = booking['total'] ?? 
-                  booking['service_price'] ?? 
-                  booking['estimated_price'] ?? 
-                  0;
-    
-    // Se o preço está em centavos (valor muito alto), dividir por 100
+    final price = booking['total'] ?? booking['service_price'] ?? booking['estimated_price'] ?? 0;
+
     if (price is int && price > 10000) {
       return (price / 100).toStringAsFixed(2);
     }
-    
-    // Se o preço está como String, converter
+
     if (price is String) {
       final parsed = double.tryParse(price);
       return parsed?.toStringAsFixed(2) ?? '0.00';
     }
-    
-    // Se já está em formato double
+
     if (price is num) {
       return price.toDouble().toStringAsFixed(2);
     }
-    
+
     return '0.00';
   }
 
   bool _shouldShowReminderButton() {
-    // Só mostrar se o agendamento está confirmado ou pendente e tem data futura
     final status = widget.booking['status'] ?? '';
-    final isConfirmedOrPending = status == 'confirmado' || 
-                                 status == 'confirmed' || 
-                                 status == 'confirmado_oficina' ||
-                                 status == 'pendente_oficina';
-    
+    final isConfirmedOrPending =
+        status == 'confirmado' || status == 'confirmed' || status == 'confirmado_oficina' || status == 'pendente_oficina';
+
     if (!isConfirmedOrPending) return false;
-    
+
     final appointmentDate = widget.booking['appointment_date'] ?? widget.booking['scheduled_date'];
     if (appointmentDate == null) return false;
-    
+
     try {
       final date = DateTime.parse(appointmentDate);
       return date.isAfter(DateTime.now());
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
@@ -1225,1039 +1256,69 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     try {
       final bookingId = widget.booking['id']?.toString() ?? '';
       if (bookingId.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ID do agendamento não encontrado'),
-            backgroundColor: Colors.red,
-          ),
+        if (!mounted) return;
+        AppAlerts.showError(
+          context,
+          message: 'Não encontramos o identificador deste agendamento. Tente novamente.',
         );
         return;
       }
-      
+
       final result = await _apiService.toggleBookingReminder(bookingId, enabled);
-      
+
+      if (!mounted) return;
+
       if (result['success']) {
         setState(() {
           _bookingDetails = _bookingDetails ?? {};
           _bookingDetails!['reminder_enabled'] = enabled;
           widget.booking['reminder_enabled'] = enabled;
         });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              enabled
-                  ? 'Lembretes ativados! Você receberá notificações 1 dia antes, no dia e 1 hora antes do agendamento.'
-                  : 'Lembretes desativados',
-            ),
-            backgroundColor: const Color(0xFF00C977),
-            duration: const Duration(seconds: 3),
-          ),
+
+        AppAlerts.showSuccess(
+          context,
+          message: enabled
+              ? 'Lembretes ativados! Vamos avisar você 1 dia antes, no dia e 1 hora antes do serviço.'
+              : 'Lembretes desativados para este agendamento.',
         );
-        
-        // Se ativou, agendar as notificações locais também
+
         if (enabled) {
-          final appointmentDateStr = _bookingDetails?['appointment_date'] ?? 
-                                    widget.booking['appointment_date'] ?? 
-                                    widget.booking['scheduled_date'] ?? '';
-          
+          final appointmentDateStr = _bookingDetails?['appointment_date'] ??
+              widget.booking['appointment_date'] ??
+              widget.booking['scheduled_date'] ??
+              '';
+
           if (appointmentDateStr.isNotEmpty) {
             final appointmentDate = DateTime.tryParse(appointmentDateStr);
-            
+
             if (appointmentDate != null) {
               await _notificationService.scheduleBookingReminders(
-                workshopName: _bookingDetails?['workshop_name'] ?? 
-                             widget.booking['workshop_name'] ?? 
-                             widget.booking['workshop']?['name'] ?? 
-                             'Oficina',
-                serviceName: _bookingDetails?['service_name'] ?? 
-                           widget.booking['service_name'] ?? 
-                           widget.booking['service']?['name'] ?? 
-                           'Serviço',
+                workshopName: _bookingDetails?['workshop_name'] ??
+                    widget.booking['workshop_name'] ??
+                    widget.booking['workshop']?['name'] ??
+                    'Oficina',
+                serviceName: _bookingDetails?['service_name'] ??
+                    widget.booking['service_name'] ??
+                    widget.booking['service']?['name'] ??
+                    'Serviço',
                 scheduledDate: appointmentDate,
               );
             }
           }
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erro ao atualizar lembretes'),
-            backgroundColor: Colors.red,
-          ),
+        AppAlerts.showError(
+          context,
+          message: result['error'] ?? 'Não foi possível atualizar os lembretes agora. Tente novamente.',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao atualizar lembretes: $e'),
-          backgroundColor: Colors.red,
-        ),
+      if (!mounted) return;
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível atualizar os lembretes agora. Tente novamente.',
       );
     }
   }
 }
 
-                      children: [
-                        Icon(
-                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Icons.notifications_active 
-                              : Icons.notifications_off,
-                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Colors.white
-                              : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                    ? 'Lembretes Ativados'
-                                    : 'Ativar Lembretes',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                      ? Colors.white
-                                      : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                    ? 'Você receberá notificações 1 dia antes, no dia e 1 hora antes'
-                                    : 'Receba notificações 1 dia antes, no dia e 1 hora antes',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                      ? Colors.white.withOpacity(0.9)
-                                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Icons.toggle_on
-                              : Icons.toggle_off,
-                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Colors.white
-                              : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
-                          size: 32,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-        ],
-      ),
-    );
-  }
-
-
-  Future<void> _rateService() async {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ReviewScreen(
-          bookingId: widget.booking['id'],
-          workshopId: widget.booking['workshop_id'] ?? widget.booking['oficina_id'] ?? '',
-        ),
-      ),
-    ).then((result) async {
-      if (result == true) {
-        // Recarregar dados do agendamento
-        if (mounted) {
-          setState(() {
-            // Forçar rebuild para atualizar UI
-          });
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Avaliação enviada com sucesso!'),
-            backgroundColor: Color(0xFF00C977),
-          ),
-        );
-      }
-    });
-  }
-
-
-  Future<void> _viewEvidence() async {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BookingEvidenceScreen(
-          bookingId: widget.booking['id'],
-          booking: widget.booking,
-        ),
-      ),
-    );
-  }
-
-  bool _shouldShowPrice(Map<String, dynamic> booking) {
-    // Só exibir preço se a oficina forneceu tempo E preço (não null, não vazio, não 0)
-    final price = booking['service_price'] ?? booking['total'] ?? booking['estimated_price'] ?? 0;
-    final hasPrice = price != null && price != 0 && price.toString().trim().isNotEmpty;
-    
-    final duration = booking['service_duration'] ?? booking['duration'] ?? booking['duration_minutes'] ?? 0;
-    final hasDuration = duration != null && duration != 0 && duration.toString().trim().isNotEmpty;
-    
-    return hasPrice && hasDuration;
-  }
-
-  String _formatPrice(Map<String, dynamic> booking) {
-    final price = booking['total'] ?? 
-                  booking['service_price'] ?? 
-                  booking['estimated_price'] ?? 
-                  0;
-    
-    // Se o preço está em centavos (valor muito alto), dividir por 100
-    if (price is int && price > 10000) {
-      return (price / 100).toStringAsFixed(2);
-    }
-    
-    // Se o preço está como String, converter
-    if (price is String) {
-      final parsed = double.tryParse(price);
-      return parsed?.toStringAsFixed(2) ?? '0.00';
-    }
-    
-    // Se já está em formato double
-    if (price is num) {
-      return price.toDouble().toStringAsFixed(2);
-    }
-    
-    return '0.00';
-  }
-
-  bool _shouldShowReminderButton() {
-    // Só mostrar se o agendamento está confirmado ou pendente e tem data futura
-    final status = widget.booking['status'] ?? '';
-    final isConfirmedOrPending = status == 'confirmado' || 
-                                 status == 'confirmed' || 
-                                 status == 'confirmado_oficina' ||
-                                 status == 'pendente_oficina';
-    
-    if (!isConfirmedOrPending) return false;
-    
-    final appointmentDate = widget.booking['appointment_date'] ?? widget.booking['scheduled_date'];
-    if (appointmentDate == null) return false;
-    
-    try {
-      final date = DateTime.parse(appointmentDate);
-      return date.isAfter(DateTime.now());
-    } catch (e) {
-      return false;
-    }
-  }
-
-  Future<void> _toggleReminder(bool enabled) async {
-    try {
-      final bookingId = widget.booking['id']?.toString() ?? '';
-      if (bookingId.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ID do agendamento não encontrado'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-      
-      final result = await _apiService.toggleBookingReminder(bookingId, enabled);
-      
-      if (result['success']) {
-        setState(() {
-          _bookingDetails = _bookingDetails ?? {};
-          _bookingDetails!['reminder_enabled'] = enabled;
-          widget.booking['reminder_enabled'] = enabled;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              enabled
-                  ? 'Lembretes ativados! Você receberá notificações 1 dia antes, no dia e 1 hora antes do agendamento.'
-                  : 'Lembretes desativados',
-            ),
-            backgroundColor: const Color(0xFF00C977),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-        
-        // Se ativou, agendar as notificações locais também
-        if (enabled) {
-          final appointmentDateStr = _bookingDetails?['appointment_date'] ?? 
-                                    widget.booking['appointment_date'] ?? 
-                                    widget.booking['scheduled_date'] ?? '';
-          
-          if (appointmentDateStr.isNotEmpty) {
-            final appointmentDate = DateTime.tryParse(appointmentDateStr);
-            
-            if (appointmentDate != null) {
-              await _notificationService.scheduleBookingReminders(
-                workshopName: _bookingDetails?['workshop_name'] ?? 
-                             widget.booking['workshop_name'] ?? 
-                             widget.booking['workshop']?['name'] ?? 
-                             'Oficina',
-                serviceName: _bookingDetails?['service_name'] ?? 
-                           widget.booking['service_name'] ?? 
-                           widget.booking['service']?['name'] ?? 
-                           'Serviço',
-                scheduledDate: appointmentDate,
-              );
-            }
-          }
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erro ao atualizar lembretes'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao atualizar lembretes: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-}
-
-                      children: [
-                        Icon(
-                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Icons.notifications_active 
-                              : Icons.notifications_off,
-                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Colors.white
-                              : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                    ? 'Lembretes Ativados'
-                                    : 'Ativar Lembretes',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                      ? Colors.white
-                                      : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                    ? 'Você receberá notificações 1 dia antes, no dia e 1 hora antes'
-                                    : 'Receba notificações 1 dia antes, no dia e 1 hora antes',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                      ? Colors.white.withOpacity(0.9)
-                                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Icons.toggle_on
-                              : Icons.toggle_off,
-                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Colors.white
-                              : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
-                          size: 32,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-        ],
-      ),
-    );
-  }
-
-
-  Future<void> _rateService() async {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ReviewScreen(
-          bookingId: widget.booking['id'],
-          workshopId: widget.booking['workshop_id'] ?? widget.booking['oficina_id'] ?? '',
-        ),
-      ),
-    ).then((result) async {
-      if (result == true) {
-        // Recarregar dados do agendamento
-        if (mounted) {
-          setState(() {
-            // Forçar rebuild para atualizar UI
-          });
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Avaliação enviada com sucesso!'),
-            backgroundColor: Color(0xFF00C977),
-          ),
-        );
-      }
-    });
-  }
-
-
-  Future<void> _viewEvidence() async {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BookingEvidenceScreen(
-          bookingId: widget.booking['id'],
-          booking: widget.booking,
-        ),
-      ),
-    );
-  }
-
-  bool _shouldShowPrice(Map<String, dynamic> booking) {
-    // Só exibir preço se a oficina forneceu tempo E preço (não null, não vazio, não 0)
-    final price = booking['service_price'] ?? booking['total'] ?? booking['estimated_price'] ?? 0;
-    final hasPrice = price != null && price != 0 && price.toString().trim().isNotEmpty;
-    
-    final duration = booking['service_duration'] ?? booking['duration'] ?? booking['duration_minutes'] ?? 0;
-    final hasDuration = duration != null && duration != 0 && duration.toString().trim().isNotEmpty;
-    
-    return hasPrice && hasDuration;
-  }
-
-  String _formatPrice(Map<String, dynamic> booking) {
-    final price = booking['total'] ?? 
-                  booking['service_price'] ?? 
-                  booking['estimated_price'] ?? 
-                  0;
-    
-    // Se o preço está em centavos (valor muito alto), dividir por 100
-    if (price is int && price > 10000) {
-      return (price / 100).toStringAsFixed(2);
-    }
-    
-    // Se o preço está como String, converter
-    if (price is String) {
-      final parsed = double.tryParse(price);
-      return parsed?.toStringAsFixed(2) ?? '0.00';
-    }
-    
-    // Se já está em formato double
-    if (price is num) {
-      return price.toDouble().toStringAsFixed(2);
-    }
-    
-    return '0.00';
-  }
-
-  bool _shouldShowReminderButton() {
-    // Só mostrar se o agendamento está confirmado ou pendente e tem data futura
-    final status = widget.booking['status'] ?? '';
-    final isConfirmedOrPending = status == 'confirmado' || 
-                                 status == 'confirmed' || 
-                                 status == 'confirmado_oficina' ||
-                                 status == 'pendente_oficina';
-    
-    if (!isConfirmedOrPending) return false;
-    
-    final appointmentDate = widget.booking['appointment_date'] ?? widget.booking['scheduled_date'];
-    if (appointmentDate == null) return false;
-    
-    try {
-      final date = DateTime.parse(appointmentDate);
-      return date.isAfter(DateTime.now());
-    } catch (e) {
-      return false;
-    }
-  }
-
-  Future<void> _toggleReminder(bool enabled) async {
-    try {
-      final bookingId = widget.booking['id']?.toString() ?? '';
-      if (bookingId.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ID do agendamento não encontrado'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-      
-      final result = await _apiService.toggleBookingReminder(bookingId, enabled);
-      
-      if (result['success']) {
-        setState(() {
-          _bookingDetails = _bookingDetails ?? {};
-          _bookingDetails!['reminder_enabled'] = enabled;
-          widget.booking['reminder_enabled'] = enabled;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              enabled
-                  ? 'Lembretes ativados! Você receberá notificações 1 dia antes, no dia e 1 hora antes do agendamento.'
-                  : 'Lembretes desativados',
-            ),
-            backgroundColor: const Color(0xFF00C977),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-        
-        // Se ativou, agendar as notificações locais também
-        if (enabled) {
-          final appointmentDateStr = _bookingDetails?['appointment_date'] ?? 
-                                    widget.booking['appointment_date'] ?? 
-                                    widget.booking['scheduled_date'] ?? '';
-          
-          if (appointmentDateStr.isNotEmpty) {
-            final appointmentDate = DateTime.tryParse(appointmentDateStr);
-            
-            if (appointmentDate != null) {
-              await _notificationService.scheduleBookingReminders(
-                workshopName: _bookingDetails?['workshop_name'] ?? 
-                             widget.booking['workshop_name'] ?? 
-                             widget.booking['workshop']?['name'] ?? 
-                             'Oficina',
-                serviceName: _bookingDetails?['service_name'] ?? 
-                           widget.booking['service_name'] ?? 
-                           widget.booking['service']?['name'] ?? 
-                           'Serviço',
-                scheduledDate: appointmentDate,
-              );
-            }
-          }
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erro ao atualizar lembretes'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao atualizar lembretes: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-}
-
-                      children: [
-                        Icon(
-                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Icons.notifications_active 
-                              : Icons.notifications_off,
-                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Colors.white
-                              : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                    ? 'Lembretes Ativados'
-                                    : 'Ativar Lembretes',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                      ? Colors.white
-                                      : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                    ? 'Você receberá notificações 1 dia antes, no dia e 1 hora antes'
-                                    : 'Receba notificações 1 dia antes, no dia e 1 hora antes',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                      ? Colors.white.withOpacity(0.9)
-                                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Icons.toggle_on
-                              : Icons.toggle_off,
-                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Colors.white
-                              : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
-                          size: 32,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-        ],
-      ),
-    );
-  }
-
-
-  Future<void> _rateService() async {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ReviewScreen(
-          bookingId: widget.booking['id'],
-          workshopId: widget.booking['workshop_id'] ?? widget.booking['oficina_id'] ?? '',
-        ),
-      ),
-    ).then((result) async {
-      if (result == true) {
-        // Recarregar dados do agendamento
-        if (mounted) {
-          setState(() {
-            // Forçar rebuild para atualizar UI
-          });
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Avaliação enviada com sucesso!'),
-            backgroundColor: Color(0xFF00C977),
-          ),
-        );
-      }
-    });
-  }
-
-
-  Future<void> _viewEvidence() async {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BookingEvidenceScreen(
-          bookingId: widget.booking['id'],
-          booking: widget.booking,
-        ),
-      ),
-    );
-  }
-
-  bool _shouldShowPrice(Map<String, dynamic> booking) {
-    // Só exibir preço se a oficina forneceu tempo E preço (não null, não vazio, não 0)
-    final price = booking['service_price'] ?? booking['total'] ?? booking['estimated_price'] ?? 0;
-    final hasPrice = price != null && price != 0 && price.toString().trim().isNotEmpty;
-    
-    final duration = booking['service_duration'] ?? booking['duration'] ?? booking['duration_minutes'] ?? 0;
-    final hasDuration = duration != null && duration != 0 && duration.toString().trim().isNotEmpty;
-    
-    return hasPrice && hasDuration;
-  }
-
-  String _formatPrice(Map<String, dynamic> booking) {
-    final price = booking['total'] ?? 
-                  booking['service_price'] ?? 
-                  booking['estimated_price'] ?? 
-                  0;
-    
-    // Se o preço está em centavos (valor muito alto), dividir por 100
-    if (price is int && price > 10000) {
-      return (price / 100).toStringAsFixed(2);
-    }
-    
-    // Se o preço está como String, converter
-    if (price is String) {
-      final parsed = double.tryParse(price);
-      return parsed?.toStringAsFixed(2) ?? '0.00';
-    }
-    
-    // Se já está em formato double
-    if (price is num) {
-      return price.toDouble().toStringAsFixed(2);
-    }
-    
-    return '0.00';
-  }
-
-  bool _shouldShowReminderButton() {
-    // Só mostrar se o agendamento está confirmado ou pendente e tem data futura
-    final status = widget.booking['status'] ?? '';
-    final isConfirmedOrPending = status == 'confirmado' || 
-                                 status == 'confirmed' || 
-                                 status == 'confirmado_oficina' ||
-                                 status == 'pendente_oficina';
-    
-    if (!isConfirmedOrPending) return false;
-    
-    final appointmentDate = widget.booking['appointment_date'] ?? widget.booking['scheduled_date'];
-    if (appointmentDate == null) return false;
-    
-    try {
-      final date = DateTime.parse(appointmentDate);
-      return date.isAfter(DateTime.now());
-    } catch (e) {
-      return false;
-    }
-  }
-
-  Future<void> _toggleReminder(bool enabled) async {
-    try {
-      final bookingId = widget.booking['id']?.toString() ?? '';
-      if (bookingId.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ID do agendamento não encontrado'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-      
-      final result = await _apiService.toggleBookingReminder(bookingId, enabled);
-      
-      if (result['success']) {
-        setState(() {
-          _bookingDetails = _bookingDetails ?? {};
-          _bookingDetails!['reminder_enabled'] = enabled;
-          widget.booking['reminder_enabled'] = enabled;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              enabled
-                  ? 'Lembretes ativados! Você receberá notificações 1 dia antes, no dia e 1 hora antes do agendamento.'
-                  : 'Lembretes desativados',
-            ),
-            backgroundColor: const Color(0xFF00C977),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-        
-        // Se ativou, agendar as notificações locais também
-        if (enabled) {
-          final appointmentDateStr = _bookingDetails?['appointment_date'] ?? 
-                                    widget.booking['appointment_date'] ?? 
-                                    widget.booking['scheduled_date'] ?? '';
-          
-          if (appointmentDateStr.isNotEmpty) {
-            final appointmentDate = DateTime.tryParse(appointmentDateStr);
-            
-            if (appointmentDate != null) {
-              await _notificationService.scheduleBookingReminders(
-                workshopName: _bookingDetails?['workshop_name'] ?? 
-                             widget.booking['workshop_name'] ?? 
-                             widget.booking['workshop']?['name'] ?? 
-                             'Oficina',
-                serviceName: _bookingDetails?['service_name'] ?? 
-                           widget.booking['service_name'] ?? 
-                           widget.booking['service']?['name'] ?? 
-                           'Serviço',
-                scheduledDate: appointmentDate,
-              );
-            }
-          }
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erro ao atualizar lembretes'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao atualizar lembretes: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-}
-
-                      children: [
-                        Icon(
-                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Icons.notifications_active 
-                              : Icons.notifications_off,
-                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Colors.white
-                              : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                    ? 'Lembretes Ativados'
-                                    : 'Ativar Lembretes',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                      ? Colors.white
-                                      : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                    ? 'Você receberá notificações 1 dia antes, no dia e 1 hora antes'
-                                    : 'Receba notificações 1 dia antes, no dia e 1 hora antes',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                                      ? Colors.white.withOpacity(0.9)
-                                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Icons.toggle_on
-                              : Icons.toggle_off,
-                          color: (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled'] == true)
-                              ? Colors.white
-                              : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
-                          size: 32,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-        ],
-      ),
-    );
-  }
-
-
-  Future<void> _rateService() async {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ReviewScreen(
-          bookingId: widget.booking['id'],
-          workshopId: widget.booking['workshop_id'] ?? widget.booking['oficina_id'] ?? '',
-        ),
-      ),
-    ).then((result) async {
-      if (result == true) {
-        // Recarregar dados do agendamento
-        if (mounted) {
-          setState(() {
-            // Forçar rebuild para atualizar UI
-          });
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Avaliação enviada com sucesso!'),
-            backgroundColor: Color(0xFF00C977),
-          ),
-        );
-      }
-    });
-  }
-
-
-  Future<void> _viewEvidence() async {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BookingEvidenceScreen(
-          bookingId: widget.booking['id'],
-          booking: widget.booking,
-        ),
-      ),
-    );
-  }
-
-  bool _shouldShowPrice(Map<String, dynamic> booking) {
-    // Só exibir preço se a oficina forneceu tempo E preço (não null, não vazio, não 0)
-    final price = booking['service_price'] ?? booking['total'] ?? booking['estimated_price'] ?? 0;
-    final hasPrice = price != null && price != 0 && price.toString().trim().isNotEmpty;
-    
-    final duration = booking['service_duration'] ?? booking['duration'] ?? booking['duration_minutes'] ?? 0;
-    final hasDuration = duration != null && duration != 0 && duration.toString().trim().isNotEmpty;
-    
-    return hasPrice && hasDuration;
-  }
-
-  String _formatPrice(Map<String, dynamic> booking) {
-    final price = booking['total'] ?? 
-                  booking['service_price'] ?? 
-                  booking['estimated_price'] ?? 
-                  0;
-    
-    // Se o preço está em centavos (valor muito alto), dividir por 100
-    if (price is int && price > 10000) {
-      return (price / 100).toStringAsFixed(2);
-    }
-    
-    // Se o preço está como String, converter
-    if (price is String) {
-      final parsed = double.tryParse(price);
-      return parsed?.toStringAsFixed(2) ?? '0.00';
-    }
-    
-    // Se já está em formato double
-    if (price is num) {
-      return price.toDouble().toStringAsFixed(2);
-    }
-    
-    return '0.00';
-  }
-
-  bool _shouldShowReminderButton() {
-    // Só mostrar se o agendamento está confirmado ou pendente e tem data futura
-    final status = widget.booking['status'] ?? '';
-    final isConfirmedOrPending = status == 'confirmado' || 
-                                 status == 'confirmed' || 
-                                 status == 'confirmado_oficina' ||
-                                 status == 'pendente_oficina';
-    
-    if (!isConfirmedOrPending) return false;
-    
-    final appointmentDate = widget.booking['appointment_date'] ?? widget.booking['scheduled_date'];
-    if (appointmentDate == null) return false;
-    
-    try {
-      final date = DateTime.parse(appointmentDate);
-      return date.isAfter(DateTime.now());
-    } catch (e) {
-      return false;
-    }
-  }
-
-  Future<void> _toggleReminder(bool enabled) async {
-    try {
-      final bookingId = widget.booking['id']?.toString() ?? '';
-      if (bookingId.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ID do agendamento não encontrado'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-      
-      final result = await _apiService.toggleBookingReminder(bookingId, enabled);
-      
-      if (result['success']) {
-        setState(() {
-          _bookingDetails = _bookingDetails ?? {};
-          _bookingDetails!['reminder_enabled'] = enabled;
-          widget.booking['reminder_enabled'] = enabled;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              enabled
-                  ? 'Lembretes ativados! Você receberá notificações 1 dia antes, no dia e 1 hora antes do agendamento.'
-                  : 'Lembretes desativados',
-            ),
-            backgroundColor: const Color(0xFF00C977),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-        
-        // Se ativou, agendar as notificações locais também
-        if (enabled) {
-          final appointmentDateStr = _bookingDetails?['appointment_date'] ?? 
-                                    widget.booking['appointment_date'] ?? 
-                                    widget.booking['scheduled_date'] ?? '';
-          
-          if (appointmentDateStr.isNotEmpty) {
-            final appointmentDate = DateTime.tryParse(appointmentDateStr);
-            
-            if (appointmentDate != null) {
-              await _notificationService.scheduleBookingReminders(
-                workshopName: _bookingDetails?['workshop_name'] ?? 
-                             widget.booking['workshop_name'] ?? 
-                             widget.booking['workshop']?['name'] ?? 
-                             'Oficina',
-                serviceName: _bookingDetails?['service_name'] ?? 
-                           widget.booking['service_name'] ?? 
-                           widget.booking['service']?['name'] ?? 
-                           'Serviço',
-                scheduledDate: appointmentDate,
-              );
-            }
-          }
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erro ao atualizar lembretes'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao atualizar lembretes: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-}

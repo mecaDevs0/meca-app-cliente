@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../widgets/app_alerts.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({Key? key}) : super(key: key);
@@ -28,22 +29,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     final result = await _apiService.forgotPassword(_emailController.text);
 
+    if (!mounted) return;
     setState(() => _loading = false);
 
     if (result['success']) {
       setState(() => _emailSent = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Email de recuperação enviado!'),
-          backgroundColor: Color(0xFF00C977),
-        ),
+      AppAlerts.showSuccess(
+        context,
+        message: 'Enviamos o link de recuperação para o seu email. Verifique também a caixa de spam.',
+        title: 'Email enviado',
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['error'] ?? 'Erro ao enviar email'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: result['error'] ?? 'Não conseguimos enviar o email agora. Verifique o endereço informado ou tente mais tarde.',
       );
     }
   }

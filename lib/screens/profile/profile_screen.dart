@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
 import '../notifications/recent_notifications_screen.dart';
+import '../../providers/notification_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -23,6 +25,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _loadCustomerData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _syncNotifications();
+    });
   }
 
   Future<void> _loadCustomerData() async {
@@ -42,6 +48,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _hasError = false;
           _errorMessage = null;
         });
+        await _syncNotifications();
       } else {
         if (!mounted) return;
         
@@ -109,32 +116,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final themeService = Provider.of<ThemeService>(context);
-    final isDark = themeService.isDarkMode;
-    
-    return Scaffold(
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        title: Text(
-          'Meu Perfil',
-          style: TextStyle(
-            color: isDark ? Colors.white : const Color(0xFF252940),
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
+    return Consumer2<ThemeService, NotificationProvider>(
+      builder: (context, themeService, notificationProvider, child) {
+        final isDark = themeService.isDarkMode;
+
+        return Scaffold(
+          appBar: AppBar(
+            elevation: 0,
+            backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+            title: Text(
+              'Meu Perfil',
+              style: TextStyle(
+                color: isDark ? Colors.white : const Color(0xFF252940),
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+            actions: [
+              _buildNotificationButton(context, themeService, notificationProvider),
+            ],
           ),
-        ),
-        actions: [
-          _buildNotificationButton(context, themeService),
-        ],
-      ),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
-            : _hasError
-                ? _buildErrorScreen(isDark)
-                : _buildContent(isDark),
-      ),
+          body: SafeArea(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
+                : _hasError
+                    ? _buildErrorScreen(isDark)
+                    : _buildContent(isDark, notificationProvider),
+          ),
+        );
+      },
     );
   }
 
@@ -202,7 +212,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildContent(bool isDark) {
+  Widget _buildContent(bool isDark, NotificationProvider notificationProvider) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -212,12 +222,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 24),
           _buildProfileCard(),
           const SizedBox(height: 24),
-          _buildSettingsSection(),
+          if (notificationProvider.unreadNotifications > 0) ...[
+            _buildUnreadAlert(notificationProvider.unreadNotifications),
+            const SizedBox(height: 24),
+          ],
+          _buildSettingsSection(notificationProvider),
           const SizedBox(height: 24),
           _buildThemeSection(isDark),
           const SizedBox(height: 24),
           _buildLogoutButton(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUnreadAlert(int unreadCount) {
+    return Card(
+      color: const Color(0xFFFFF1F2),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(Icons.notifications_active, color: Color(0xFFEF4444)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                unreadCount == 1
+                    ? 'Você possui 1 notificação pendente.'
+                    : 'Você possui $unreadCount notificações pendentes.',
+                style: const TextStyle(
+                  color: Color(0xFFB91C1C),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const RecentNotificationsScreen(),
+                  ),
+                );
+                if (mounted) {
+                  await _syncNotifications();
+                }
+              },
+              child: const Text(
+                'Ver notificações',
+                style: TextStyle(
+                  color: Color(0xFFB91C1C),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -331,7 +392,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildSettingsSection() {
+  Widget _buildSettingsSection(NotificationProvider notificationProvider) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -354,6 +415,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           icon: Icons.notifications,
           title: 'Notificações',
           subtitle: 'Configurar notificações',
+          showBadge: notificationProvider.unreadNotifications > 0,
           onTap: () => _showNotificationsSettings(),
         ),
         _buildSettingTile(
@@ -371,6 +433,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    bool showBadge = false,
   }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -378,7 +441,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         leading: Icon(icon, color: const Color(0xFF00C977)),
         title: Text(title),
         subtitle: Text(subtitle),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showBadge)
+              Container(
+                width: 10,
+                height: 10,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+            const Icon(Icons.arrow_forward_ios, size: 16),
+          ],
+        ),
         onTap: onTap,
       ),
     );
@@ -460,74 +538,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Widget _buildNotificationButton(BuildContext context, ThemeService themeService) {
-    return FutureBuilder<int>(
-      future: _getUnreadCount(),
-      builder: (context, snapshot) {
-        final unreadCount = snapshot.data ?? 0;
-        
-        return Stack(
-          children: [
-            IconButton(
-              icon: Icon(
-                Icons.notifications,
-                color: themeService.isDarkMode ? Colors.white : const Color(0xFF252940),
+  Widget _buildNotificationButton(
+    BuildContext context,
+    ThemeService themeService,
+    NotificationProvider notificationProvider,
+  ) {
+    final unreadCount = notificationProvider.unreadNotifications;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          icon: Icon(
+            Icons.notifications,
+            color: themeService.isDarkMode ? Colors.white : const Color(0xFF252940),
+          ),
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const RecentNotificationsScreen(),
               ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const RecentNotificationsScreen(),
-                  ),
-                );
-              },
-            ),
-            if (unreadCount > 0)
-              Positioned(
-                right: 8,
-                top: 8,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 16,
-                    minHeight: 16,
-                  ),
-                  child: Text(
-                    unreadCount > 99 ? '99+' : '$unreadCount',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+            );
+            if (mounted) {
+              await _syncNotifications();
+            }
+          },
+        ),
+        if (unreadCount > 0)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 16,
+                minHeight: 16,
+              ),
+              child: Text(
+                unreadCount > 99 ? '99+' : '$unreadCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
                 ),
+                textAlign: TextAlign.center,
               ),
-          ],
-        );
-      },
+            ),
+          ),
+      ],
     );
   }
 
-  Future<int> _getUnreadCount() async {
-    try {
-      final result = await _apiService.getNotifications(limit: 100, read: false);
-      if (result['success'] == true) {
-        final notifications = (result['data'] as List?) ?? [];
-        return notifications.length;
-      }
-    } catch (e) {
-      print('Erro ao buscar contagem de notificações: $e');
-    }
-    return 0;
-  }
-
-  void _showNotificationsSettings() {
-    Navigator.pushNamed(context, '/notifications');
+  Future<void> _showNotificationsSettings() async {
+    await Navigator.pushNamed(context, '/notifications');
+    if (!mounted) return;
+    await _syncNotifications();
   }
 
   void _showHelp() {
@@ -612,6 +682,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _syncNotifications() async {
+    try {
+      final result = await _apiService.getNotifications(limit: 100);
+      if (!mounted) return;
+      if (result['success'] == true) {
+        final provider = Provider.of<NotificationProvider>(context, listen: false);
+        provider.setNotificationsFromPayload(result['data']);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Erro ao sincronizar notificações: $e');
+      }
+    }
   }
 
   Widget _buildContactInfo(IconData icon, String label, String value) {

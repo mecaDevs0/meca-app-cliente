@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/api_service.dart';
+import '../../widgets/app_alerts.dart';
 
 class EditVehicleScreen extends StatefulWidget {
   final Map<String, dynamic> vehicle;
@@ -66,11 +67,9 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
 
     if (customerId == null || customerId.isEmpty) {
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ Erro: Não foi possível identificar o usuário. Faça login novamente.'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível identificar o usuário. Faça login novamente.',
       );
       return;
     }
@@ -89,22 +88,21 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
       vehicleData,
     );
 
+    if (!mounted) return;
     setState(() => _loading = false);
 
     if (result['success']) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Veículo atualizado com sucesso!'),
-          backgroundColor: Color(0xFF00C977),
-        ),
+      await AppAlerts.showSuccess(
+        context,
+        message: result['message'] ?? 'Veículo atualizado com sucesso!',
       );
-      Navigator.pop(context, true);
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['error'] ?? 'Erro ao atualizar veículo'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: result['error'] ?? 'Não foi possível atualizar o veículo agora. Tente novamente.',
       );
     }
   }
@@ -286,6 +284,8 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
     );
   }
 }
+
+
 
 
 

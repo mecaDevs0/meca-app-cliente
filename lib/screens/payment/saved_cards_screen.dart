@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../services/api_service.dart';
+import '../../widgets/app_alerts.dart';
 
 class SavedCardsScreen extends StatefulWidget {
   const SavedCardsScreen({Key? key}) : super(key: key);
@@ -281,26 +283,20 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
         // Recarregar cartões para atualizar status
         await _loadSavedCards();
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cartão definido como padrão'),
-            backgroundColor: Colors.green,
-          ),
+        AppAlerts.showSuccess(
+          context,
+          message: 'Cartão definido como padrão.',
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erro ao definir cartão como padrão'),
-            backgroundColor: Colors.red,
-          ),
+        AppAlerts.showError(
+          context,
+          message: result['error'] ?? 'Não foi possível definir o cartão como padrão. Tente novamente.',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro: $e'),
-          backgroundColor: Colors.red,
-        ),
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível definir o cartão como padrão. Tente novamente.',
       );
     }
   }
@@ -328,26 +324,20 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                     // Recarregar cartões
                     await _loadSavedCards();
                     
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Cartão removido com sucesso'),
-                        backgroundColor: Colors.green,
-                      ),
+                    AppAlerts.showSuccess(
+                      context,
+                      message: 'Cartão removido com sucesso.',
                     );
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(result['error'] ?? 'Erro ao remover cartão'),
-                        backgroundColor: Colors.red,
-                      ),
+                    AppAlerts.showError(
+                      context,
+                      message: result['error'] ?? 'Não foi possível remover o cartão. Tente novamente.',
                     );
                   }
                 } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Erro: $e'),
-                      backgroundColor: Colors.red,
-                    ),
+                  AppAlerts.showError(
+                    context,
+                    message: 'Não foi possível remover o cartão. Tente novamente.',
                   );
                 }
               },
@@ -445,11 +435,10 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                         _expiryDateController.text.isEmpty ||
                         _cvvController.text.isEmpty ||
                         _cardholderNameController.text.isEmpty) {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(
-                          content: Text('Preencha todos os campos'),
-                          backgroundColor: Colors.red,
-                        ),
+                      AppAlerts.showWarning(
+                        dialogContext,
+                        message: 'Preencha todos os campos do cartão para continuar.',
+                        title: 'Campos obrigatórios',
                       );
                       return;
                     }
@@ -488,26 +477,20 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                         Navigator.of(dialogContext).pop();
                         await _loadSavedCards();
                         
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Cartão adicionado com sucesso!'),
-                            backgroundColor: Colors.green,
-                          ),
+                        AppAlerts.showSuccess(
+                          context,
+                          message: 'Cartão adicionado com sucesso!',
                         );
                       } else {
-                        ScaffoldMessenger.of(dialogContext).showSnackBar(
-                          SnackBar(
-                            content: Text(saveResult['error'] ?? 'Erro ao salvar cartão'),
-                            backgroundColor: Colors.red,
-                          ),
+                        AppAlerts.showError(
+                          dialogContext,
+                          message: saveResult['error'] ?? 'Não foi possível salvar o cartão.',
                         );
                       }
                     } catch (e) {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        SnackBar(
-                          content: Text('Erro: $e'),
-                          backgroundColor: Colors.red,
-                        ),
+                      AppAlerts.showError(
+                        dialogContext,
+                        message: 'Não foi possível salvar o cartão. Tente novamente.',
                       );
                     } finally {
                       setState(() => _isLoading = false);
@@ -536,6 +519,9 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
     );
   }
 }
+
+
+
 
 
 

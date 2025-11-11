@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
@@ -18,6 +20,7 @@ class WorkshopDetailScreen extends StatefulWidget {
 class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   final ApiService _apiService = ApiService();
   Map<String, dynamic>? _workshop;
+  List<Map<String, dynamic>> _services = [];
   bool _loading = false;
   String _error = '';
 
@@ -39,8 +42,16 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       if (!mounted) return;
       
       if (result['success']) {
+        final rawWorkshop = Map<String, dynamic>.from(
+          result['data']?['workshop'] ?? result['data'] ?? {},
+        );
+
+        final services = await _loadWorkshopServices();
+
+        if (!mounted) return;
         setState(() {
-          _workshop = result['data']?['workshop'] ?? result['data'] ?? {};
+          _workshop = _normalizeWorkshop(rawWorkshop);
+          _services = services;
           _loading = false;
           _error = '';
         });
@@ -57,6 +68,34 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         _loading = false;
       });
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadWorkshopServices() async {
+    try {
+      final servicesResult = await _apiService.getWorkshopServices(widget.workshopId);
+      if (servicesResult['success']) {
+        final rawData = servicesResult['data'];
+        List<Map<String, dynamic>> servicesList = [];
+        if (rawData is List) {
+          servicesList = rawData
+              .whereType<Map>()
+              .map((service) => _normalizeService(Map<String, dynamic>.from(service)))
+              .toList();
+        } else if (rawData is Map) {
+          final nested = rawData['services'] ?? rawData['data'];
+          if (nested is List) {
+            servicesList = nested
+                .whereType<Map>()
+                .map((service) => _normalizeService(Map<String, dynamic>.from(service)))
+                .toList();
+          }
+        }
+        return servicesList;
+      }
+    } catch (e) {
+      print('Erro ao carregar serviços da oficina: $e');
+    }
+    return [];
   }
 
   @override
@@ -116,11 +155,15 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   Widget _buildWorkshopDetails() {
     if (_workshop == null) return const SizedBox();
 
+    final String workshopName = (_workshop!['name'] ?? 'Oficina').toString();
+    final double rating = _parseDouble(_workshop!['rating']) ?? 0.0;
+    final String logoUrl = (_workshop!['logo_url'] ?? _workshop!['logo'] ?? '').toString();
+
     return CustomScrollView(
       slivers: [
         // Header melhorado com imagem da fachada
         SliverAppBar(
-          expandedHeight: 250,
+          expandedHeight: 310,
           pinned: true,
           backgroundColor: const Color(0xFF00C977),
           flexibleSpace: FlexibleSpaceBar(
@@ -139,6 +182,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               child: SafeArea(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     // Logo da oficina melhorado
                     Container(
@@ -156,12 +200,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                         ],
                       ),
                       child: ClipOval(
-                        child: _workshop!['logo'] != null && 
-                               _workshop!['logo'].isNotEmpty && 
-                               _workshop!['logo'] != '' &&
-                               _workshop!['logo'].startsWith('http')
+                        child: logoUrl.isNotEmpty && logoUrl.startsWith('http')
                             ? Image.network(
-                                _workshop!['logo'],
+                                logoUrl,
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) {
                                   return const Icon(
@@ -180,13 +221,16 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      _workshop!['name'] ?? 'Oficina',
+                      workshopName,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 0.5,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -201,7 +245,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                           const Icon(Icons.star, color: Colors.white, size: 16),
                           const SizedBox(width: 4),
                           Text(
-                            '${_workshop!['rating'] ?? 4.5}',
+                            rating > 0
+                                ? rating.toStringAsFixed(rating >= 10 ? 0 : 1)
+                                : 'N/A',
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -453,7 +499,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
   Widget _buildServicesCard() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final services = _workshop!['services'] ?? [];
+    final services = _services;
     
     // Serviços padrão se não houver dados
     final defaultServices = [
@@ -525,6 +571,19 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
             ),
             const SizedBox(height: 16),
             ...servicesList.map<Widget>((service) {
+              final String serviceId = (service['id'] ?? service['service_id'] ?? '').toString();
+              final String serviceName = (service['name'] ?? 'Serviço').toString();
+              final String? description = service['description']?.toString();
+              final dynamic rawPrice = service['price'] ?? service['service_price'];
+              final double? price = _parseDouble(rawPrice);
+              final dynamic rawDuration = service['duration'] ?? service['duration_minutes'];
+              final int? duration = rawDuration is num
+                  ? rawDuration.toInt()
+                  : rawDuration is String
+                      ? int.tryParse(rawDuration)
+                      : null;
+              final String workshopName = (_workshop?['name'] ?? 'Oficina').toString();
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
@@ -543,12 +602,12 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => BookingScreen(
-                            serviceId: service['id'],
+                            serviceId: serviceId,
                             workshopId: widget.workshopId,
-                            serviceName: service['name'] ?? 'Serviço',
-                            servicePrice: service['price']?.toString() ?? '0',
-                            serviceDuration: service['duration']?.toString() ?? '',
-                            workshopName: _workshop?['name'] ?? 'Oficina',
+                            serviceName: serviceName,
+                            servicePrice: price?.toString() ?? service['price']?.toString() ?? '0',
+                            serviceDuration: duration?.toString() ?? rawDuration?.toString() ?? '',
+                            workshopName: workshopName,
                           ),
                         ),
                       );
@@ -577,7 +636,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  service['name'] ?? 'Serviço',
+                                  serviceName,
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
@@ -586,7 +645,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  service['description'] ?? 'Descrição do serviço',
+                                  description ?? 'Descrição do serviço',
                                   style: TextStyle(
                                     color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade600,
                                     fontSize: 14,
@@ -595,7 +654,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                                 const SizedBox(height: 8),
                                 Row(
                                   children: [
-                                    if (service['price'] != null)
+                                    if (price != null)
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
@@ -603,7 +662,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                                           borderRadius: BorderRadius.circular(6),
                                         ),
                                         child: Text(
-                                          'R\$ ${service['price'].toStringAsFixed(2)}',
+                                          'R\$ ${price.toStringAsFixed(2)}',
                                           style: const TextStyle(
                                             color: Color(0xFF00C977),
                                             fontWeight: FontWeight.bold,
@@ -611,7 +670,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                                           ),
                                         ),
                                       ),
-                                    if (service['duration'] != null) ...[
+                                    if (duration != null) ...[
                                       const SizedBox(width: 8),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -620,7 +679,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                                           borderRadius: BorderRadius.circular(6),
                                         ),
                                         child: Text(
-                                          '${service['duration']} min',
+                                          '$duration min',
                                           style: const TextStyle(
                                             color: Colors.blue,
                                             fontWeight: FontWeight.w500,
@@ -727,7 +786,119 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     };
     return days[day] ?? day;
   }
+
+  Map<String, dynamic> _normalizeWorkshop(Map<String, dynamic> workshop) {
+    final normalized = Map<String, dynamic>.from(workshop);
+    final addressDetails = _extractAddressDetails(normalized['address']);
+    normalized['address_details'] = addressDetails;
+    normalized['address'] = _formatAddress(addressDetails ?? normalized['address']);
+    normalized['address_text'] = normalized['address'];
+    normalized['rating'] = _parseDouble(normalized['rating']);
+    normalized['logo_url'] = normalized['logo_url'] ?? normalized['logo'];
+    return normalized;
+  }
+
+  Map<String, dynamic> _normalizeService(Map<String, dynamic> service) {
+    final normalized = Map<String, dynamic>.from(service);
+    normalized['price'] = _parseDouble(normalized['price'] ?? normalized['service_price']);
+    final duration = normalized['duration'] ?? normalized['duration_minutes'];
+    if (duration is num) {
+      normalized['duration'] = duration.toInt();
+    } else if (duration is String) {
+      normalized['duration'] = int.tryParse(duration);
+    }
+    return normalized;
+  }
+
+  Map<String, dynamic>? _extractAddressDetails(dynamic address) {
+    if (address is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(address);
+    }
+    if (address is String) {
+      try {
+        final decoded = jsonDecode(address);
+        if (decoded is Map<String, dynamic>) {
+          return Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  double? _parseDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String && value.trim().isNotEmpty) {
+      return double.tryParse(value.trim().replaceAll(',', '.'));
+    }
+    return null;
+  }
+
+  String _formatAddress(dynamic address) {
+    if (address == null) return 'Não informado';
+    if (address is String) {
+      if (address.isEmpty) return 'Não informado';
+      return _sanitizeAddress(address);
+    }
+    if (address is Map) {
+      final street = address['street'] ?? address['logradouro'] ?? address['addressLine1'];
+      final number = address['number'] ?? address['numero'];
+      final neighborhood = address['neighborhood'] ?? address['bairro'];
+      final city = address['city'] ?? address['cidade'];
+      final state = address['state'] ?? address['uf'];
+      final cep = address['zip'] ?? address['cep'];
+
+      final parts = <String>[];
+      if (street != null) {
+        if (number != null) {
+          parts.add('$street, $number');
+        } else {
+          parts.add(street.toString());
+        }
+      }
+      if (neighborhood != null) {
+        parts.add(neighborhood.toString());
+      }
+      final cityState = [city, state]
+          .where((element) => element != null && element.toString().isNotEmpty)
+          .join(' - ');
+      if (cityState.isNotEmpty) {
+        parts.add(cityState);
+      }
+      if (cep != null && cep.toString().isNotEmpty) {
+        parts.add('CEP ${cep.toString()}');
+      }
+
+      if (parts.isEmpty) {
+        final rawValues = address.values
+            .whereType<String>()
+            .where((value) => value.isNotEmpty)
+            .map(_sanitizeAddress)
+            .toList();
+        if (rawValues.isEmpty) return 'Não informado';
+        return rawValues.join(' • ');
+      }
+
+      return _sanitizeAddress(parts.join(' • '));
+    }
+
+    return _sanitizeAddress(address.toString());
+  }
+
+  String _sanitizeAddress(String value) {
+    return value
+        .replaceAll(RegExp(r'[\r\n]+'), ' • ')
+        .replaceAll(RegExp(r'\s{2,}'), ' ')
+        .replaceAll(RegExp(r'(•\s*){2,}'), '• ')
+        .trim();
+  }
 }
+
+
+
+
+
 
 
 

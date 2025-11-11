@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/api_service.dart';
+import '../../widgets/app_alerts.dart';
 
 class ScheduleNegotiationScreen extends StatefulWidget {
   final String bookingId;
@@ -621,11 +622,9 @@ class _ScheduleNegotiationScreenState extends State<ScheduleNegotiationScreen> {
 
       if (result['success']) {
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Sugestão enviada! A oficina receberá uma notificação.'),
-            backgroundColor: Color(0xFF00C977),
-          ),
+        AppAlerts.showSuccess(
+          context,
+          message: 'Sugestão enviada! A oficina receberá uma notificação.',
         );
       } else {
         setState(() {
@@ -655,11 +654,9 @@ class _ScheduleNegotiationScreenState extends State<ScheduleNegotiationScreen> {
 
       if (result['success']) {
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Horário aceito! Agendamento confirmado.'),
-            backgroundColor: Color(0xFF00C977),
-          ),
+        AppAlerts.showSuccess(
+          context,
+          message: 'Horário aceito! Agendamento confirmado.',
         );
       } else {
         _showError(result['error'] ?? 'Erro ao aceitar sugestão');
@@ -686,11 +683,9 @@ class _ScheduleNegotiationScreenState extends State<ScheduleNegotiationScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+    AppAlerts.showError(
+      context,
+      message: message,
     );
   }
 
@@ -717,6 +712,8 @@ class _ScheduleNegotiationScreenState extends State<ScheduleNegotiationScreen> {
     }
   }
 }
+
+
 
 
 

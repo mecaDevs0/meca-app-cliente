@@ -1,6 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io';
 
 import '../config/app_config.dart';
 
@@ -38,14 +40,19 @@ class ApiService {
   // Login
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
+      final normalizedEmail = email.trim().toLowerCase();
+      final normalizedPassword = password.trim();
+
       final response = await _dio.post('/auth/login', data: {
-        'email': email,
-        'password': password,
+        'email': normalizedEmail,
+        'password': normalizedPassword,
       });
       
       if (response.data != null && response.data['success'] == true) {
         // Salvar token
         final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('token');
+        await prefs.remove('user_id');
         await prefs.setString('token', response.data['data']['token']);
         await prefs.setString('user_id', response.data['data']['user']['id']);
         
@@ -54,17 +61,24 @@ class ApiService {
         return {'success': false, 'error': response.data['error'] ?? 'Erro no login'};
       }
     } catch (e) {
-      return {'success': false, 'error': _getErrorMessage(e)};
+      if (e is DioException) {
+        final message = _resolveFriendlyMessage(e, default401: 'Email ou senha incorretos. Confira seus dados e tente novamente.');
+        return {'success': false, 'error': message};
+      }
+      return {'success': false, 'error': 'Não foi possível entrar. Verifique sua conexão e tente novamente.'};
     }
   }
 
   // Registro
   Future<Map<String, dynamic>> register(String firstName, String email, String password, String phone, String cpf) async {
     try {
+      final normalizedEmail = email.trim().toLowerCase();
+      final normalizedPassword = password.trim();
+
       final response = await _dio.post('/auth/register', data: {
         'firstName': firstName,
-        'email': email,
-        'password': password,
+        'email': normalizedEmail,
+        'password': normalizedPassword,
         'phone': phone,
         'cpf': cpf,
       });
@@ -72,6 +86,8 @@ class ApiService {
       if (response.data != null && response.data['success'] == true) {
         // Salvar token
         final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('token');
+        await prefs.remove('user_id');
         await prefs.setString('token', response.data['data']['token']);
         await prefs.setString('user_id', response.data['data']['user']['id']);
         
@@ -80,7 +96,11 @@ class ApiService {
         return {'success': false, 'error': response.data['error'] ?? 'Erro no registro'};
       }
     } catch (e) {
-      return {'success': false, 'error': _getErrorMessage(e)};
+      if (e is DioException) {
+        final message = _resolveFriendlyMessage(e, default400: 'Não foi possível criar a conta. Verifique os dados informados.');
+        return {'success': false, 'error': message};
+      }
+      return {'success': false, 'error': 'Não foi possível concluir o cadastro. Tente novamente em instantes.'};
     }
   }
 
@@ -218,6 +238,24 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getWorkshopServices(String workshopId) async {
+    try {
+      final response = await _dio.get('/workshop/$workshopId/services');
+
+      if (response.data != null && response.data['success'] == true) {
+        final data = response.data['data'] ?? response.data['services'];
+        return {'success': true, 'data': data ?? []};
+      } else {
+        return {
+          'success': false,
+          'error': response.data?['error'] ?? 'Erro ao buscar serviços da oficina'
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
   // Obter serviços
   Future<Map<String, dynamic>> getServices() async {
     try {
@@ -273,10 +311,38 @@ class ApiService {
   Future<Map<String, dynamic>> getBookings() async {
     try {
       await loadToken();
-      final response = await _dio.get('/bookings');
+      final userId = await getUserId();
+      final queryParams = <String, dynamic>{};
+      if (userId != null && userId.isNotEmpty) {
+        queryParams['customer_id'] = userId;
+      }
+
+      final response = await _dio.get(
+        '/bookings',
+        queryParameters: queryParams.isEmpty ? null : queryParams,
+      );
       
       if (response.data != null && response.data['success'] == true) {
-        return {'success': true, 'data': response.data['data']};
+        final data = response.data['data'];
+        final bookings = _normalizeToListOfMaps(data);
+
+        List<Map<String, dynamic>> mapWithUploads = bookings
+            .map((booking) => _enrichBooking(Map<String, dynamic>.from(booking)))
+            .toList();
+
+        if (userId != null && userId.isNotEmpty && mapWithUploads.isNotEmpty) {
+          final filtered = mapWithUploads.where((booking) {
+            final bookingCustomer = booking['customer_id'] ??
+                booking['customerId'] ??
+                booking['customer']?['id'] ??
+                booking['customer']?['customer_id'];
+            if (bookingCustomer == null) return false;
+            return bookingCustomer.toString() == userId;
+          }).toList();
+          return {'success': true, 'data': filtered};
+        }
+
+        return {'success': true, 'data': mapWithUploads};
       } else {
         return {'success': false, 'error': 'Erro ao buscar agendamentos'};
       }
@@ -366,10 +432,32 @@ class ApiService {
   Future<Map<String, dynamic>> getUserVehicles() async {
     try {
       await loadToken();
-      final response = await _dio.get('/vehicles');
+      final userId = await getUserId();
+      final queryParams = <String, dynamic>{};
+      if (userId != null && userId.isNotEmpty) {
+        queryParams['customer_id'] = userId;
+      }
+
+      final response = await _dio.get(
+        '/vehicles',
+        queryParameters: queryParams.isEmpty ? null : queryParams,
+      );
       
       if (response.data != null && response.data['success'] == true) {
-        return {'success': true, 'data': response.data['data']};
+        final vehicles = _normalizeToListOfMaps(response.data['data']);
+
+        if (userId != null && userId.isNotEmpty && vehicles.isNotEmpty) {
+          final filtered = vehicles.where((vehicle) {
+            final ownerId = vehicle['customer_id'] ??
+                vehicle['customerId'] ??
+                vehicle['customer']?['id'];
+            if (ownerId == null) return false;
+            return ownerId.toString() == userId;
+          }).toList();
+          return {'success': true, 'data': filtered};
+        }
+
+        return {'success': true, 'data': vehicles};
       } else {
         return {'success': false, 'error': 'Erro ao buscar veículos'};
       }
@@ -419,7 +507,15 @@ class ApiService {
       final response = await _dio.get('/vehicles', queryParameters: {'customer_id': customerId});
       
       if (response.data != null && response.data['success'] == true) {
-        return {'success': true, 'data': response.data['data']};
+        final vehicles = _normalizeToListOfMaps(response.data['data']).where((vehicle) {
+          final ownerId = vehicle['customer_id'] ??
+              vehicle['customerId'] ??
+              vehicle['customer']?['id'];
+          if (ownerId == null) return false;
+          return ownerId.toString() == customerId;
+        }).toList();
+
+        return {'success': true, 'data': vehicles};
       } else {
         return {'success': false, 'error': 'Erro ao buscar veículos'};
       }
@@ -503,13 +599,98 @@ class ApiService {
       final response = await _dio.get('/notifications', queryParameters: queryParams);
       
       if (response.data != null && response.data['success'] == true) {
-        return {'success': true, 'data': response.data['data'] ?? []};
+        final payload = response.data['data'];
+        if (payload is Map<String, dynamic>) {
+          return {'success': true, 'data': payload};
+        }
+        if (payload is List) {
+          return {
+            'success': true,
+            'data': {
+              'notifications': payload,
+              'unread_count': payload.whereType<Map>().where((n) => !(n['read'] == true || n['is_read'] == true)).length,
+            },
+          };
+        }
+        return {'success': true, 'data': {'notifications': const [], 'unread_count': 0}};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao buscar notificações'};
       }
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
     }
+  }
+
+  List<Map<String, dynamic>> _normalizeToListOfMaps(dynamic data) {
+    if (data is List) {
+      return data
+          .whereType<Object>()
+          .map<Map<String, dynamic>>((item) {
+            if (item is Map<String, dynamic>) {
+              return Map<String, dynamic>.from(item);
+            }
+            if (item is Map) {
+              return Map<String, dynamic>.from(item);
+            }
+            return <String, dynamic>{};
+          })
+          .toList();
+    }
+
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      final nested = map['data'] ??
+          map['items'] ??
+          map['bookings'] ??
+          map['vehicles'] ??
+          map['records'];
+      return _normalizeToListOfMaps(nested);
+    }
+
+    return const [];
+  }
+
+  List<Map<String, dynamic>> _extractUploads(dynamic raw) {
+    if (raw == null) {
+      return const [];
+    }
+
+    if (raw is List) {
+      return raw.whereType<Object>().map<Map<String, dynamic>>((item) {
+        if (item is Map<String, dynamic>) {
+          return Map<String, dynamic>.from(item);
+        }
+        if (item is Map) {
+          return Map<String, dynamic>.from(item);
+        }
+        return <String, dynamic>{};
+      }).where((item) => item.isNotEmpty).toList();
+    }
+
+    if (raw is String && raw.trim().isNotEmpty) {
+      try {
+        final decoded = json.decode(raw);
+        return _extractUploads(decoded);
+      } catch (_) {
+        return const [];
+      }
+    }
+
+    return const [];
+  }
+
+  Map<String, dynamic> _enrichBooking(Map<String, dynamic> booking) {
+    final uploads = _extractUploads(
+      booking['customer_uploads'] ?? booking['customerUploads'],
+    );
+    booking['customer_uploads'] = uploads;
+    booking['customerUploads'] = uploads;
+
+    if (booking['notes'] == null && booking['customer_notes'] != null) {
+      booking['notes'] = booking['customer_notes'];
+    }
+
+    return booking;
   }
 
   // Marcar notificação como lida
@@ -743,23 +924,84 @@ class ApiService {
     }
   }
 
+  String _resolveFriendlyMessage(DioException error, {String? default400, String? default401}) {
+    final statusCode = error.response?.statusCode;
+    final serverMessage = _extractServerMessage(error.response?.data);
+
+    if (serverMessage != null && serverMessage.trim().isNotEmpty) {
+      return serverMessage.trim();
+    }
+
+    if (statusCode == 401 && default401 != null) {
+      return default401;
+    }
+
+    if (statusCode == 400 && default400 != null) {
+      return default400;
+    }
+
+    return _getErrorMessage(error);
+  }
+
+  String? _extractServerMessage(dynamic responseData) {
+    if (responseData == null) return null;
+
+    if (responseData is String) {
+      return responseData;
+    }
+
+    if (responseData is List && responseData.isNotEmpty) {
+      final first = responseData.first;
+      if (first is String) {
+        return first;
+      }
+      if (first is Map) {
+        final map = Map<String, dynamic>.from(first);
+        for (final key in ['error', 'message', 'detail', 'msg']) {
+          final value = map[key];
+          if (value is String && value.trim().isNotEmpty) {
+            return value;
+          }
+        }
+      }
+    }
+
+    if (responseData is Map) {
+      final map = Map<String, dynamic>.from(responseData);
+      for (final key in ['error', 'message', 'detail', 'msg']) {
+        final value = map[key];
+        if (value is String && value.trim().isNotEmpty) {
+          return value;
+        }
+      }
+    }
+
+    return null;
+  }
+
   // Tratamento de erros
   String _getErrorMessage(dynamic error) {
     if (error is DioException) {
+      final serverMessage = _extractServerMessage(error.response?.data);
+      if (serverMessage != null && serverMessage.trim().isNotEmpty) {
+        return serverMessage.trim();
+      }
+
       switch (error.type) {
         case DioExceptionType.connectionTimeout:
         case DioExceptionType.sendTimeout:
         case DioExceptionType.receiveTimeout:
           return 'Timeout de conexão. Verifique sua internet.';
         case DioExceptionType.badResponse:
-          if (error.response?.statusCode == 401) {
-            return 'Não autorizado. Faça login novamente.';
-          } else if (error.response?.statusCode == 404) {
-            return 'Recurso não encontrado.';
-          } else if (error.response?.statusCode == 500) {
-            return 'Erro interno do servidor.';
+          final statusCode = error.response?.statusCode;
+          if (statusCode == 401) {
+            return 'Sua sessão expirou. Entre novamente para continuar.';
+          } else if (statusCode == 404) {
+            return 'Não encontramos essas informações. Atualize a tela e tente novamente.';
+          } else if (statusCode == 500) {
+            return 'Estamos passando por uma instabilidade. Tente novamente em instantes.';
           }
-          return 'Erro na requisição: ${error.response?.statusCode}';
+          return 'Ocorreu um erro (${statusCode ?? 'indefinido'}). Tente novamente em instantes.';
         case DioExceptionType.cancel:
           return 'Requisição cancelada.';
         case DioExceptionType.connectionError:
@@ -936,9 +1178,9 @@ class ApiService {
         
         // Garantir que data é um Map, não uma List
         if (data is List && data.isNotEmpty) {
-          return {'success': true, 'data': data[0]};
+          return {'success': true, 'data': _enrichBooking(Map<String, dynamic>.from(data[0]))};
         } else if (data is Map) {
-          return {'success': true, 'data': data};
+          return {'success': true, 'data': _enrichBooking(Map<String, dynamic>.from(data))};
         } else {
           return {'success': false, 'error': 'Formato de dados inválido'};
         }
