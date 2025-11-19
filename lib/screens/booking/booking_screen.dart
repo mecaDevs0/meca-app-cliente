@@ -479,24 +479,30 @@ class _BookingScreenState extends State<BookingScreen> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.attach_money,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'R\$ ${widget.servicePrice}',
-                    style: TextStyle(
-                      fontSize: 14,
+              // Só mostrar preço se tiver preço configurado e for maior que 0
+              if (widget.servicePrice.isNotEmpty && 
+                  widget.servicePrice != '0' && 
+                  widget.servicePrice != '0.00' &&
+                  double.tryParse(widget.servicePrice.replaceAll(',', '.')) != null &&
+                  double.tryParse(widget.servicePrice.replaceAll(',', '.'))! > 0)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.attach_money,
+                      size: 16,
                       color: Colors.grey[600],
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'R\$ ${widget.servicePrice}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
               if (widget.serviceDuration.isNotEmpty)
                 Row(
                   mainAxisSize: MainAxisSize.min,

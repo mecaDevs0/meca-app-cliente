@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
+import '../../utils/price_utils.dart';
 import '../../widgets/meca_loading_widget.dart';
 import 'service_detail_screen.dart';
 
@@ -18,6 +19,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
   List<Map<String, dynamic>> _services = [];
   bool _loading = true;
   String _error = '';
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -149,49 +151,117 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   Widget _buildServicesList() {
-    if (_services.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.build_outlined,
-                size: 80,
-                color: Color(0xFF00C977),
+    final filteredServices = _services.where((service) {
+      final query = _searchQuery.toLowerCase();
+      if (query.isEmpty) return true;
+      final name = service['name']?.toString().toLowerCase() ?? '';
+      final description = service['description']?.toString().toLowerCase() ?? '';
+      final category = service['category']?.toString().toLowerCase() ?? '';
+      return name.contains(query) || description.contains(query) || category.contains(query);
+    }).toList();
+
+    final bool hasOriginalServices = _services.isNotEmpty;
+    final bool noResults = hasOriginalServices ? filteredServices.isEmpty : _searchQuery.isNotEmpty;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: TextField(
+            onChanged: (value) => setState(() => _searchQuery = value),
+            cursorColor: const Color(0xFF00C977),
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF00C977)),
+              hintText: 'Buscar serviço por nome ou descrição...',
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'Nenhum serviço disponível',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF00C977),
-                ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFF00C977), width: 2),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Não há serviços cadastrados no momento',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _services.length,
-      itemBuilder: (context, index) {
-        final service = _services[index];
-        return _buildServiceCard(service);
-      },
+        if (!hasOriginalServices && _searchQuery.isEmpty)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(
+                      Icons.build_outlined,
+                      size: 80,
+                      color: Color(0xFF00C977),
+                    ),
+                    SizedBox(height: 20),
+                    Text(
+                      'Nenhum serviço disponível',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF00C977),
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Não há serviços cadastrados no momento.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else if (noResults)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.search_off_rounded,
+                      size: 72,
+                      color: Color(0xFF00C977),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Nenhum serviço encontrado para "${_searchQuery.trim()}"',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              itemCount: filteredServices.length,
+              itemBuilder: (context, index) {
+                final service = filteredServices[index];
+                return _buildServiceCard(service);
+              },
+            ),
+          ),
+      ],
     );
   }
 
@@ -200,12 +270,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       builder: (context, themeService, child) {
         final String serviceName = (service['name'] ?? 'Serviço').toString();
         final String? description = service['description']?.toString();
-        final dynamic rawPrice = service['price'] ?? service['service_price'];
-        final double? price = rawPrice is num
-            ? rawPrice.toDouble()
-            : rawPrice is String
-                ? double.tryParse(rawPrice.replaceAll(RegExp(r'[^0-9.,]'), '').replaceAll(',', '.'))
-                : null;
+        final String? priceLabel = PriceUtils.formatCurrency(service['price'] ?? service['service_price']);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 16),
@@ -220,16 +285,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xFF00C977).withOpacity(0.1),
-                    const Color(0xFF00C977).withOpacity(0.05),
+                    Color(0xFF00B07F),
+                    Color(0xFF007E6C),
                   ],
-                ),
-                border: Border.all(
-                  color: const Color(0xFF00C977).withOpacity(0.2),
                 ),
               ),
               child: Row(
@@ -238,12 +300,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     width: 60,
                     height: 60,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00C977).withOpacity(0.1),
+                      color: Colors.white.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
                       Icons.build,
-                      color: Color(0xFF00C977),
+                      color: Colors.white,
                       size: 32,
                     ),
                   ),
@@ -257,16 +319,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF00C977),
+                            color: Colors.white,
                           ),
                         ),
                         if (description != null && description.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(
                             description,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey,
+                              color: Colors.white.withOpacity(0.75),
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -278,29 +340,29 @@ class _ServicesScreenState extends State<ServicesScreen> {
                             const Icon(
                               Icons.location_on,
                               size: 16,
-                              color: Color(0xFF00C977),
+                              color: Colors.white,
                             ),
                             const SizedBox(width: 4),
                             const Text(
                               'Ver oficinas próximas',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Color(0xFF00C977),
+                                color: Colors.white,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            if (price != null) ...[
+                            if (priceLabel != null) ...[
                               const SizedBox(width: 12),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF00C977).withOpacity(0.1),
+                                  color: Colors.white.withOpacity(0.15),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  'R\$ ${price.toStringAsFixed(2)}',
+                                  priceLabel!,
                                   style: const TextStyle(
-                                    color: Color(0xFF00C977),
+                                    color: Colors.white,
                                     fontWeight: FontWeight.w600,
                                     fontSize: 12,
                                   ),
@@ -311,7 +373,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                             const Icon(
                               Icons.arrow_forward_ios,
                               size: 16,
-                              color: Color(0xFF00C977),
+                              color: Colors.white,
                             ),
                           ],
                         ),

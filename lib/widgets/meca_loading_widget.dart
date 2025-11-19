@@ -10,7 +10,7 @@ class MecaLoadingWidget extends StatefulWidget {
   const MecaLoadingWidget({
     Key? key,
     this.message,
-    this.size = 300.0, // Aumentado para 300.0 - muito maior
+    this.size = 200.0, // Tamanho padrão aumentado para melhor visibilidade
   }) : super(key: key);
 
   @override
@@ -100,7 +100,7 @@ class MecaApiLoadingWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return MecaLoadingWidget(
       message: message ?? 'Carregando...',
-      size: 120.0, // Aumentado de 60.0 para 120.0
+      size: 200.0, // Aumentado para 200.0 para ficar bem visível
     );
   }
 }
@@ -137,6 +137,17 @@ class MecaEnterLoadingWidget extends StatelessWidget {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

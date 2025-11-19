@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:geolocator/geolocator.dart' show Position;
 
 import '../../services/api_service.dart';
+import '../../services/location_service.dart';
+import '../../utils/price_utils.dart';
 import '../../widgets/meca_loading_widget.dart';
 import '../booking/booking_screen.dart';
 
@@ -21,6 +25,7 @@ class ServiceDetailScreen extends StatefulWidget {
 
 class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
   final ApiService _apiService = ApiService();
+  final LocationService _locationService = LocationService.instance;
   Map<String, dynamic>? _service;
   List<Map<String, dynamic>> _workshops = [];
   bool _loading = true;
@@ -30,34 +35,27 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
-    _loadServiceDetails();
+    _initialize();
   }
 
-  Future<void> _getCurrentLocation() async {
+  Future<void> _initialize() async {
+    await _resolveLocation();
+    await _loadServiceDetails();
+  }
+
+  Future<void> _resolveLocation() async {
     try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          return;
-        }
+      final status = await _locationService.ensurePermissions();
+      if (!status.canRequestPosition) return;
+
+      final position = await _locationService.getCurrentPosition(forceFresh: true);
+      if (position != null && mounted) {
+        setState(() {
+          _currentPosition = position;
+        });
       }
-
-      if (permission == LocationPermission.deniedForever) {
-        return;
-      }
-
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _currentPosition = position;
-      });
     } catch (e) {
-      print('Erro ao obter localização: $e');
+      print('Erro ao resolver localização do serviço: $e');
     }
   }
 
@@ -209,30 +207,36 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Ícone do serviço
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.build,
-                    color: Colors.white,
-                    size: 30,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.build,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        _service!['name'] ?? 'Serviço',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  _service!['name'] ?? 'Serviço',
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Text(
                   _service!['description'] ?? 'Descrição não disponível',
                   style: TextStyle(
@@ -241,50 +245,62 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    if (_service!['price'] != null) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          'R\$ ${_service!['price'].toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            color: Color(0xFF00C977),
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                Builder(builder: (context) {
+                  final priceLabel = PriceUtils.formatCurrency(_service?['price']);
+
+                  double? durationMinutes;
+                  final durationRaw = _service?['duration'];
+                  if (durationRaw is num) {
+                    durationMinutes = durationRaw.toDouble();
+                  } else if (durationRaw is String) {
+                    durationMinutes = double.tryParse(durationRaw);
+                  }
+
+                  return Row(
+                    children: [
+                      if (priceLabel != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            priceLabel,
+                            style: const TextStyle(
+                              color: Color(0xFF00C977),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    if (_service!['duration'] != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.access_time, color: Colors.white, size: 16),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${_service!['duration']} min',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
+                        const SizedBox(width: 12),
+                      ],
+                      if (durationMinutes != null && durationMinutes > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.access_time, color: Colors.white, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${durationMinutes.toStringAsFixed(durationMinutes % 1 == 0 ? 0 : 1)} min',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                  ],
-                ),
+                    ],
+                  );
+                }),
               ],
             ),
           ),
@@ -466,7 +482,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        workshop['address'] ?? 'Endereço não informado',
+                        _formatWorkshopAddress(workshop['address_text'] ?? workshop['address']),
                         style: const TextStyle(
                           color: Colors.grey,
                           fontSize: 14,
@@ -534,6 +550,67 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     );
   }
 
+  String _formatWorkshopAddress(dynamic rawAddress) {
+    if (rawAddress == null) return 'Endereço não informado';
+
+    if (rawAddress is String) {
+      final trimmed = rawAddress.trim();
+      if (trimmed.isEmpty || trimmed.toLowerCase() == 'null') {
+        return 'Endereço não informado';
+      }
+
+      final looksLikeJson = (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']'));
+      if (looksLikeJson) {
+        try {
+          final decoded = json.decode(trimmed);
+          return _formatWorkshopAddress(decoded);
+        } catch (_) {
+          return _sanitizeAddressString(trimmed);
+        }
+      }
+
+      return _sanitizeAddressString(trimmed);
+    }
+
+    if (rawAddress is Map) {
+      final street = rawAddress['street'] ?? rawAddress['logradouro'] ?? rawAddress['addressLine1'];
+      final number = rawAddress['number'] ?? rawAddress['numero'];
+      final neighborhood = rawAddress['neighborhood'] ?? rawAddress['bairro'];
+      final city = rawAddress['city'] ?? rawAddress['cidade'];
+      final state = rawAddress['state'] ?? rawAddress['uf'];
+
+      final cityState = [
+        if (city != null && city.toString().trim().isNotEmpty) city.toString().trim(),
+        if (state != null && state.toString().trim().isNotEmpty) state.toString().trim(),
+      ].join(city != null && state != null ? ' - ' : '');
+
+      final parts = <String>[
+        if (street != null && street.toString().trim().isNotEmpty) street.toString().trim(),
+        if (number != null && number.toString().trim().isNotEmpty) number.toString().trim(),
+        if (neighborhood != null && neighborhood.toString().trim().isNotEmpty) neighborhood.toString().trim(),
+        if (cityState.trim().isNotEmpty) cityState.trim(),
+      ];
+
+      if (parts.isEmpty) return 'Endereço não informado';
+      return parts.join(', ');
+    }
+
+    return rawAddress.toString();
+  }
+
+  String _sanitizeAddressString(String input) {
+    final sanitized = input
+        .replaceAll(RegExp(r'[\{\}\[\]\\"]'), '')
+        .replaceAll(RegExp(r'\\n'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    if (sanitized.isEmpty || sanitized.toLowerCase() == 'null') {
+      return 'Endereço não informado';
+    }
+    return sanitized;
+  }
 
   void _navigateToWorkshop(Map<String, dynamic> workshop) {
     // Navegar direto para agendamento ao selecionar oficina

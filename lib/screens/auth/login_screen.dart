@@ -1,8 +1,14 @@
+import 'dart:io';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'package:provider/provider.dart';
 
+import '../../config/app_config.dart';
 import '../../providers/notification_provider.dart';
 import '../../services/api_service.dart';
 import '../../utils/phone_formatter.dart';
@@ -26,7 +32,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _phoneController = TextEditingController();
   final _cpfController = TextEditingController();
   final ApiService _apiService = ApiService();
-  
+  late final GoogleSignIn _googleSignIn;
   bool _isLogin = true;
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -35,6 +41,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
+    _googleSignIn = GoogleSignIn(
+      scopes: const ['email', 'profile'],
+      clientId: Platform.isIOS ? AppConfig.googleClientIdIos : null,
+      serverClientId: AppConfig.googleClientIdWeb,
+    );
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       setState(() {
@@ -88,8 +99,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         );
         _tabController.animateTo(0);
       } else {
-        Provider.of<NotificationProvider>(context, listen: false).clearAll();
-        Navigator.pushReplacementNamed(context, '/home');
+        await _onLoginSuccess();
       }
     } else {
       if (!mounted) return;
@@ -327,6 +337,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                         ),
                                       ),
                                     ),
+                              const SizedBox(height: 30),
+                              if (_isLogin) _buildSocialButtons(),
                             ],
                           ),
                         ),
@@ -474,7 +486,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                           ),
                                         ),
                                         child: const Text(
-                                          'Registrar',
+                                          'Cadastrar',
                                           style: TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,
@@ -497,8 +509,275 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       ),
     );
   }
+
+  Widget _buildSocialButtons() {
+    final dividerColor = Colors.grey.shade300;
+    final showApple = Platform.isIOS;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Divider(color: dividerColor)),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                'ou continue com',
+                style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+              ),
+            ),
+            Expanded(child: Divider(color: dividerColor)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _isLoading ? null : _handleGoogleSignIn,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.black87,
+                  backgroundColor: Colors.white,
+                  side: BorderSide(color: dividerColor),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    _GoogleLogo(size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Google',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: showApple ? (_isLoading ? null : _handleAppleSignIn) : null,
+                style: ElevatedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.black,
+                  disabledForegroundColor: Colors.white70,
+                  disabledBackgroundColor: Colors.black26,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.apple, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      showApple ? 'Apple' : 'Apple (iOS)',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Usamos apenas dados oficiais do Google/Apple para autenticar na plataforma MECA.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      await _googleSignIn.signOut();
+      final account = await _googleSignIn.signIn();
+      if (account == null) {
+        return;
+      }
+
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw Exception('Não foi possível obter o token do Google.');
+      }
+
+      final displayName = account.displayName?.trim();
+      String? firstName;
+      String? lastName;
+      if (displayName != null && displayName.isNotEmpty) {
+        final parts = displayName.split(RegExp(r'\s+'));
+        firstName = parts.first;
+        if (parts.length > 1) {
+          lastName = parts.sublist(1).join(' ');
+        }
+      }
+
+      final result = await _apiService.loginWithGoogle(
+        idToken: idToken,
+        firstName: firstName,
+        lastName: lastName,
+      );
+
+      if (!mounted) return;
+      if (result['success'] == true) {
+        await _onLoginSuccess();
+      } else {
+        _showError(result['error'] ?? 'Erro ao autenticar com o Google.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Erro ao autenticar com o Google. Tente novamente.');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _handleAppleSignIn() async {
+    if (_isLoading || !Platform.isIOS) return;
+    setState(() => _isLoading = true);
+    try {
+      final isAvailable = await SignInWithApple.isAvailable();
+      if (!isAvailable) {
+        _showError('Sign in with Apple não está disponível neste dispositivo.');
+        return;
+      }
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: const [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final identityToken = credential.identityToken;
+      if (identityToken == null || identityToken.isEmpty) {
+        throw Exception('Não foi possível obter o token da Apple.');
+      }
+
+      final fullNameParts = [
+        credential.givenName,
+        credential.familyName,
+      ].where((value) => value != null && value.trim().isNotEmpty).join(' ').trim();
+
+      final result = await _apiService.loginWithApple(
+        identityToken: identityToken,
+        email: credential.email,
+        fullName: fullNameParts.isEmpty ? null : fullNameParts,
+      );
+
+      if (!mounted) return;
+      if (result['success'] == true) {
+        await _onLoginSuccess();
+      } else {
+        _showError(result['error'] ?? 'Erro ao autenticar com a Apple.');
+      }
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        return;
+      }
+      if (!mounted) return;
+      final details = e.message.trim();
+      _showError(
+        details.isEmpty
+            ? 'Erro ao autenticar com a Apple.'
+            : 'Erro ao autenticar com a Apple. $details',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showError('Erro ao autenticar com a Apple. Tente novamente.');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _onLoginSuccess() async {
+    if (!mounted) return;
+    Provider.of<NotificationProvider>(context, listen: false).clearAll();
+    Navigator.pushReplacementNamed(context, '/home');
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    AppAlerts.showError(context, message: message);
+  }
+
 }
 
+class _GoogleLogo extends StatelessWidget {
+  const _GoogleLogo({this.size = 24});
 
+  final double size;
 
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: size,
+      width: size,
+      child: CustomPaint(
+        painter: _GoogleLogoPainter(),
+      ),
+    );
+  }
+}
 
+class _GoogleLogoPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokeWidth = size.width * 0.18;
+    final rect = Rect.fromLTWH(
+      strokeWidth / 2,
+      strokeWidth / 2,
+      size.width - strokeWidth,
+      size.height - strokeWidth,
+    );
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = strokeWidth;
+
+    void drawArc(Color color, double startDeg, double sweepDeg) {
+      paint.color = color;
+      canvas.drawArc(rect, _degToRad(startDeg), _degToRad(sweepDeg), false, paint);
+    }
+
+    drawArc(const Color(0xFF4285F4), -45, 90);
+    drawArc(const Color(0xFFDB4437), 45, 90);
+    drawArc(const Color(0xFFF4B400), 135, 90);
+    drawArc(const Color(0xFF0F9D58), 225, 90);
+
+    final whitePaint = Paint()..color = Colors.white;
+    canvas.drawRect(
+      Rect.fromLTWH(size.width * 0.55, size.height * 0.32, size.width * 0.25, size.height * 0.36),
+      whitePaint,
+    );
+
+    final bluePaint = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.square;
+    canvas.drawLine(
+      Offset(size.width * 0.55, size.height * 0.5),
+      Offset(size.width * 0.78, size.height * 0.5),
+      bluePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+
+  double _degToRad(double degrees) => degrees * math.pi / 180;
+}

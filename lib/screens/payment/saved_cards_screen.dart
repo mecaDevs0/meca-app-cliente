@@ -15,6 +15,7 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
   final ApiService _apiService = ApiService();
   List<Map<String, dynamic>> _savedCards = [];
   bool _loading = false;
+  bool _hasChanges = false;
 
   @override
   void initState() {
@@ -47,11 +48,18 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
     }
   }
 
+  Future<bool> _onWillPop() async {
+    Navigator.of(context).pop(_hasChanges);
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
       backgroundColor: isDarkMode ? const Color(0xFF121212) : const Color(0xFFF5F5F5),
       appBar: AppBar(
         title: const Text(
@@ -67,7 +75,6 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
         actions: [
           IconButton(
             onPressed: () {
-              // Implementar adicionar novo cartão
               _showAddCardDialog();
             },
             icon: const Icon(Icons.add),
@@ -84,6 +91,7 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                   itemBuilder: (context, index) {
                     return _buildCardItem(_savedCards[index]);
                   },
+                  ),
                 ),
     );
   }
@@ -287,6 +295,9 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
           context,
           message: 'Cartão definido como padrão.',
         );
+        setState(() {
+          _hasChanges = true;
+        });
       } else {
         AppAlerts.showError(
           context,
@@ -328,6 +339,9 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                       context,
                       message: 'Cartão removido com sucesso.',
                     );
+                      setState(() {
+                        _hasChanges = true;
+                      });
                   } else {
                     AppAlerts.showError(
                       context,
@@ -350,136 +364,110 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
   }
 
   void _showAddCardDialog() {
-    final _cardNumberController = TextEditingController();
-    final _expiryDateController = TextEditingController();
-    final _cvvController = TextEditingController();
-    final _cardholderNameController = TextEditingController();
-    bool _isLoading = false;
+    final tokenController = TextEditingController();
+    final lastDigitsController = TextEditingController();
+    final brandController = TextEditingController(text: 'Cartão');
+    final holderNameController = TextEditingController();
+    bool isLoading = false;
 
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Adicionar Cartão'),
+              title: const Text('Adicionar Cartão Tokenizado'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(
+                      'Use o token gerado pelo PagBank e informe apenas dados não sensíveis.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 16),
                     TextField(
-                      controller: _cardholderNameController,
+                      controller: tokenController,
                       decoration: const InputDecoration(
-                        labelText: 'Nome no Cartão',
-                        hintText: 'Nome completo',
+                        labelText: 'Token do cartão',
+                        hintText: 'card_tk_12345',
                       ),
                     ),
                     const SizedBox(height: 16),
                     TextField(
-                      controller: _cardNumberController,
+                      controller: lastDigitsController,
                       decoration: const InputDecoration(
-                        labelText: 'Número do Cartão',
-                        hintText: '0000 0000 0000 0000',
+                        labelText: 'Últimos dígitos',
+                        hintText: '1234',
                       ),
                       keyboardType: TextInputType.number,
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(16),
+                        LengthLimitingTextInputFormatter(4),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _expiryDateController,
+                    TextField(
+                      controller: brandController,
                             decoration: const InputDecoration(
-                              labelText: 'Validade',
-                              hintText: 'MM/AA',
-                            ),
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(4),
-                            ],
+                        labelText: 'Bandeira',
+                        hintText: 'Visa / Mastercard / Elo',
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextField(
-                            controller: _cvvController,
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: holderNameController,
                             decoration: const InputDecoration(
-                              labelText: 'CVV',
-                              hintText: '123',
-                            ),
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(4),
-                            ],
-                          ),
+                        labelText: 'Nome do titular (opcional)',
+                        hintText: 'Como aparece no cartão',
                         ),
-                      ],
                     ),
                   ],
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: _isLoading ? null : () => Navigator.of(dialogContext).pop(),
+                  onPressed: isLoading ? null : () => Navigator.of(dialogContext).pop(),
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: _isLoading ? null : () async {
-                    if (_cardNumberController.text.isEmpty ||
-                        _expiryDateController.text.isEmpty ||
-                        _cvvController.text.isEmpty ||
-                        _cardholderNameController.text.isEmpty) {
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          if (tokenController.text.trim().isEmpty || lastDigitsController.text.trim().isEmpty) {
                       AppAlerts.showWarning(
                         dialogContext,
-                        message: 'Preencha todos os campos do cartão para continuar.',
+                              message: 'Informe o token e os últimos dígitos do cartão.',
                         title: 'Campos obrigatórios',
                       );
                       return;
                     }
 
-                    setState(() => _isLoading = true);
+                          setDialogState(() => isLoading = true);
 
                     try {
-                      // Obter customerId do perfil
-                      final profileResult = await _apiService.getProfile();
-                      String? customerId;
-
-                      if (profileResult['success'] && profileResult['data'] != null) {
-                        customerId = profileResult['data']['id'] ?? profileResult['data']['customer_id'];
-                      }
-
-                      if (customerId == null || customerId.isEmpty) {
-                        throw Exception('Não foi possível identificar o usuário');
-                      }
-
-                      // Salvar cartão diretamente via API real (a API já tokeniza internamente)
-                      final saveResult = await _apiService.saveCardDirect(
-                        customerId: customerId,
-                        cardNumber: _cardNumberController.text,
-                        expiryMonth: _expiryDateController.text.length >= 2
-                            ? _expiryDateController.text.substring(0, 2)
-                            : '',
-                        expiryYear: _expiryDateController.text.length >= 4
-                            ? '20${_expiryDateController.text.substring(2, 4)}'
-                            : '',
-                        cvv: _cvvController.text,
-                        holderName: _cardholderNameController.text,
+                            final saveResult = await _apiService.saveCard(
+                              cardToken: tokenController.text.trim(),
+                              lastDigits: lastDigitsController.text.trim(),
+                              brand: brandController.text.trim().isEmpty ? 'Cartão' : brandController.text.trim(),
+                              holderName: holderNameController.text.trim().isEmpty
+                                  ? null
+                                  : holderNameController.text.trim(),
                         isDefault: false,
                       );
 
                       if (saveResult['success']) {
                         Navigator.of(dialogContext).pop();
                         await _loadSavedCards();
-                        
+                              if (mounted) {
+                                setState(() {
+                                  _hasChanges = true;
+                                });
+                              }
                         AppAlerts.showSuccess(
                           context,
-                          message: 'Cartão adicionado com sucesso!',
+                                message: 'Cartão tokenizado salvo com sucesso!',
                         );
                       } else {
                         AppAlerts.showError(
@@ -493,14 +481,14 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                         message: 'Não foi possível salvar o cartão. Tente novamente.',
                       );
                     } finally {
-                      setState(() => _isLoading = false);
+                            setDialogState(() => isLoading = false);
                     }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00C977),
                     foregroundColor: Colors.white,
                   ),
-                  child: _isLoading
+                  child: isLoading
                       ? const SizedBox(
                           width: 20,
                           height: 20,

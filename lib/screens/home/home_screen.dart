@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
+import '../../services/location_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/meca_loading_widget.dart';
 import '../services/services_screen.dart';
@@ -19,11 +20,18 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late TabController _tabController;
+  static const double _fallbackLatitude = -23.5505;
+  static const double _fallbackLongitude = -46.6333;
+
   bool _isLoading = true;
   List<Map<String, dynamic>> _upcomingBookings = [];
   List<Map<String, dynamic>> _nearbyWorkshops = [];
   final ApiService _apiService = ApiService();
+  final LocationService _locationService = LocationService.instance;
   Position? _currentPosition;
+  bool _locationPermissionDenied = false;
+  bool _locationPermissionDeniedForever = false;
+  bool _locationServicesDisabled = false;
 
   @override
   void initState() {
@@ -102,59 +110,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         });
       }
       
-      // Carregar oficinas próximas com geolocalização real
-      try {
-        Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 10),
-        );
-        _currentPosition = position;
-
-        final workshopsResponse = await _apiService.getNearbyWorkshops(
-          position.latitude,
-          position.longitude,
-          10.0
-        );
-        
-        if (workshopsResponse['success']) {
-          final data = workshopsResponse['data'];
-          List<dynamic> workshops = [];
-          
-          // Adaptar resposta
-          if (data is Map) {
-            workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
-          } else if (data is List) {
-            workshops = data;
+      final locationStatus = await _syncLocationStatus();
+      if (locationStatus.canRequestPosition) {
+        try {
+          final position = await _locationService.getCurrentPosition();
+          if (position != null) {
+            _currentPosition = position;
+            await _updateNearbyWorkshops(position.latitude, position.longitude);
+          } else {
+            await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude);
           }
-          
-          setState(() {
-            _nearbyWorkshops = workshops
-                .whereType<Map>()
-                .map((w) => _normalizeWorkshop(Map<String, dynamic>.from(w)))
-                .take(3)
-                .toList();
-          });
+        } catch (e) {
+          print('Erro ao obter localização: $e');
+          await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude);
         }
-      } catch (e) {
-        print('Erro ao obter localização: $e');
-        // Fallback para coordenadas padrão (São Paulo)
-        final workshopsResponse = await _apiService.getNearbyWorkshops(-23.5505, -46.6333, 10.0);
-        if (workshopsResponse['success']) {
-          final data = workshopsResponse['data'];
-          List<dynamic> workshops = [];
-          if (data is Map) {
-            workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
-          } else if (data is List) {
-            workshops = data;
-          }
-          setState(() {
-            _nearbyWorkshops = workshops
-                .whereType<Map>()
-                .map((w) => _normalizeWorkshop(Map<String, dynamic>.from(w)))
-                .take(3)
-                .toList();
-          });
-        }
+      } else {
+        setState(() {
+          _nearbyWorkshops = [];
+        });
       }
       
     } catch (e) {
@@ -200,6 +173,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _buildNearbyWorkshops(),
           ),
+          const SizedBox(height: 40),
         ],
       ),
     );
@@ -554,6 +528,85 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildNearbyWorkshops() {
+    final locationBlocked = _locationPermissionDenied || _locationServicesDisabled;
+    if (locationBlocked) {
+      final isPermanent = _locationPermissionDeniedForever;
+      final isServiceDisabled = _locationServicesDisabled;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Oficinas Próximas',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00C977).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF00C977).withOpacity(0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isServiceDisabled
+                      ? 'Ative o GPS para ver oficinas próximas de você.'
+                      : 'Ative a localização para ver oficinas próximas de você.',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isServiceDisabled
+                      ? 'Parece que os serviços de localização do aparelho estão desligados. Ative o GPS para encontrarmos oficinas perto de você.'
+                      : isPermanent
+                          ? 'Sua permissão de localização está desativada para o app. Abra as configurações e permita o acesso para continuar.'
+                          : 'Precisamos da sua autorização para usar a localização e encontrar oficinas próximas.',
+                  style: const TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: isServiceDisabled
+                        ? _openLocationSettings
+                        : (isPermanent ? _openAppSettings : _requestLocationPermissionAgain),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C977),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: Icon(
+                      isServiceDisabled
+                          ? Icons.gps_fixed
+                          : (isPermanent ? Icons.settings : Icons.my_location),
+                      size: 18,
+                    ),
+                    label: Text(
+                      isServiceDisabled
+                          ? 'Ativar localização'
+                          : (isPermanent ? 'Abrir Configurações' : 'Permitir localização'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -625,10 +678,77 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Future<LocationStatus> _syncLocationStatus({bool requestPermission = true}) async {
+    final status = await _locationService.ensurePermissions(
+      requestPermission: requestPermission,
+    );
+
+    if (!mounted) return status;
+
+    setState(() {
+      _locationServicesDisabled = !status.serviceEnabled;
+      _locationPermissionDenied =
+          !_locationServicesDisabled && !status.permissionGranted;
+      _locationPermissionDeniedForever = status.permissionPermanentlyDenied;
+    });
+
+    return status;
+  }
+
+  Future<void> _updateNearbyWorkshops(double latitude, double longitude) async {
+    final workshopsResponse = await _apiService.getNearbyWorkshops(
+      latitude,
+      longitude,
+      10.0,
+    );
+
+    if (!mounted) return;
+
+    if (workshopsResponse['success']) {
+      final data = workshopsResponse['data'];
+      List<dynamic> workshops = [];
+
+      if (data is Map) {
+        workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
+      } else if (data is List) {
+        workshops = data;
+      }
+
+      setState(() {
+        _nearbyWorkshops = workshops
+            .whereType<Map>()
+            .map((w) => _normalizeWorkshop(Map<String, dynamic>.from(w)))
+            .take(3)
+            .toList();
+      });
+    } else {
+      setState(() {
+        _nearbyWorkshops = [];
+      });
+    }
+  }
+
+  void _requestLocationPermissionAgain() {
+    _syncLocationStatus().then((status) {
+      if (status.canRequestPosition) {
+        _loadData();
+      }
+    });
+  }
+
+  Future<void> _openAppSettings() async {
+    await _locationService.openAppSettings();
+  }
+
+  Future<void> _openLocationSettings() async {
+    await _locationService.openLocationSettings();
+  }
+
   Widget _buildWorkshopCard(Map<String, dynamic> workshop) {
     final displayAddress = workshop['address_text'] ?? _formatAddress(workshop['address']);
     final distanceLabel = _formatDistanceLabel(workshop['distance']);
-    final double rating = _parseDouble(workshop['rating']) ?? 0.0;
+    final double? ratingValue =
+        _parseDouble(workshop['rating']) ?? _parseDouble(workshop['average_rating']);
 
     return GestureDetector(
       onTap: () {
@@ -695,7 +815,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(width: 4),
               Text(
-                rating > 0 ? rating.toStringAsFixed(rating >= 10 ? 0 : 1) : 'N/A',
+                ratingValue != null && ratingValue > 0
+                    ? ratingValue.toStringAsFixed(ratingValue >= 10 ? 0 : 1)
+                    : '--',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -800,8 +922,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   double? _parseDouble(dynamic raw) {
     if (raw is num) return raw.toDouble();
-    if (raw is String && raw.trim().isNotEmpty) {
-      return double.tryParse(raw.trim().replaceAll(',', '.'));
+    if (raw is String) {
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) return null;
+      final lower = trimmed.toLowerCase();
+      if (lower == 'n/a' || lower == 'na' || lower == 'null' || lower == '--') {
+        return null;
+      }
+      return double.tryParse(trimmed.replaceAll(',', '.'));
     }
     return null;
   }
@@ -907,12 +1035,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Mapear status da API para cores
     final statusMap = {
       'pendente_oficina': Colors.orange,
+      'pendente': Colors.orange,
+      'pending': Colors.orange,
+      'pending_oficina': Colors.orange,
+      'pendente_cliente': Colors.deepOrange,
+      'pending_cliente': Colors.deepOrange,
       'confirmado': Colors.blue,
       'confirmado_oficina': Colors.blue,
+      'confirmed': Colors.blue,
       'em_andamento': Colors.purple,
       'in_progress': Colors.purple,
+      'started': Colors.purple,
+      'finalizado_aguardando_pagamento': Colors.teal,
+      'finalizado': Colors.teal,
+      'concluido': Colors.teal,
+      'concluído': Colors.teal,
+      'completed': Colors.teal,
       'finalizado_cliente': Colors.green,
-      'completed': Colors.green,
+      'pago': Colors.green,
       'cancelado': Colors.red,
       'cancelled': Colors.red,
     };
@@ -925,12 +1065,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Mapear status da API para texto
     final statusMap = {
       'pendente_oficina': 'Pendente',
+      'pendente': 'Pendente',
+      'pending': 'Pendente',
+      'pending_oficina': 'Pendente',
+      'pendente_cliente': 'Aguardando você',
+      'pending_cliente': 'Aguardando você',
       'confirmado': 'Confirmado',
       'confirmado_oficina': 'Confirmado',
+      'confirmed': 'Confirmado',
       'em_andamento': 'Em Andamento',
       'in_progress': 'Em Andamento',
-      'finalizado_cliente': 'Finalizado',
-      'completed': 'Finalizado',
+      'started': 'Em Andamento',
+      'finalizado_aguardando_pagamento': 'Aguardando Pagamento',
+      'finalizado': 'Aguardando Pagamento',
+      'concluido': 'Aguardando Pagamento',
+      'concluído': 'Aguardando Pagamento',
+      'completed': 'Aguardando Pagamento',
+      'finalizado_cliente': 'Concluído',
+      'pago': 'Concluído',
       'cancelado': 'Cancelado',
       'cancelled': 'Cancelado',
     };

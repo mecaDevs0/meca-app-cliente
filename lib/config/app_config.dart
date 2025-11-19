@@ -33,8 +33,8 @@ class AppConfig {
   /// Chave pública PagBank
   static const String pagBankPublicKey = 'YOUR_PUBLIC_KEY_HERE'; // TODO: Adicionar chave real
   
-  /// Taxa da plataforma MECA (5%)
-  static const double mecaPlatformFee = 0.05; // 5%
+  /// Taxa da plataforma MECA (7%)
+  static const double mecaPlatformFee = 0.07; // 7%
   
   // ========================================
   // FIPE API (Consulta de Veículos)
@@ -48,10 +48,32 @@ class AppConfig {
   // ========================================
   
   /// Google Maps API Key (Android)
-  static const String googleMapsApiKeyAndroid = 'YOUR_ANDROID_KEY_HERE'; // TODO: Adicionar chave real
+  static const String googleMapsApiKeyAndroid = 'AIzaSyC20pzNvopOH3yEw8GEBQHUvQFOUo06nKI';
   
   /// Google Maps API Key (iOS)
-  static const String googleMapsApiKeyIos = 'YOUR_IOS_KEY_HERE'; // TODO: Adicionar chave real
+  static const String googleMapsApiKeyIos = 'AIzaSyCrPTUKg8WhqdoR7sWooJIBysXGr398A_A';
+  
+  /// Google Maps API Key (Browser/Static Maps)
+  static const String googleMapsApiKeyBrowser = 'AIzaSyAghycKw5EdhmYeYFRYgLpggKTU7uVHFL4';
+
+  // ========================================
+  // LOGIN SOCIAL
+  // ========================================
+
+  /// OAuth Client ID do Google para Android (meca cliente)
+  static const String googleClientIdAndroid =
+      '767232279794-gom2mm3q2l65aotqta7ki0sfhvq3vb25.apps.googleusercontent.com';
+
+  /// OAuth Client ID do Google para iOS (meca cliente)
+  static const String googleClientIdIos =
+      '767232279794-roqqa6hu1tqjsdusu5a3halkheqet6b0.apps.googleusercontent.com';
+
+  /// OAuth Client ID do Google para uso como serverClientId (web)
+  static const String googleClientIdWeb =
+      '767232279794-tn09hsoednrtm3vonkfep0ec1qrob6v1.apps.googleusercontent.com';
+
+  /// Service ID utilizado no Sign in with Apple (bundle da MECA)
+  static const String appleServiceId = 'com.meca.app.service';
   
   // ========================================
   // FIREBASE / NOTIFICAÇÕES

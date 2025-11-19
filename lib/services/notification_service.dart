@@ -262,7 +262,7 @@ class NotificationService {
     await showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: 'Serviço Finalizado! ✅',
-      body: 'O serviço $serviceName foi finalizado na $workshopName. Agora você pode avaliar!',
+      body: 'O serviço $serviceName foi finalizado na $workshopName. Abra o app MECA para confirmar e realizar o pagamento.',
       payload: payload,
     );
   }

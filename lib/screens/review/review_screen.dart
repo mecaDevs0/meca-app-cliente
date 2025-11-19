@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
-import '../../utils/colors.dart';
 import '../../widgets/app_alerts.dart';
 
 class ReviewScreen extends StatefulWidget {
@@ -25,7 +24,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   Future<void> _submitRating() async {
     if (_rating < 1 || _rating > 5) {
-      AppAlerts.showWarning(
+      await AppAlerts.showWarning(
         context,
         message: 'Escolha uma nota de 1 a 5 para enviar sua avaliação.',
         title: 'Nota obrigatória',
@@ -44,13 +43,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
       );
 
       if (result['success']) {
-        AppAlerts.showSuccess(
+        await AppAlerts.showSuccess(
           context,
           message: 'Avaliação enviada com sucesso! Obrigado por compartilhar sua experiência.',
         );
+        if (!mounted) return;
         Navigator.of(context).pop(true);
       } else {
-        AppAlerts.showError(
+        await AppAlerts.showError(
           context,
           message: result['error'] != null
               ? 'Erro ao enviar avaliação: ${result['error']}'
@@ -58,7 +58,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         );
       }
     } catch (e) {
-      AppAlerts.showError(
+      await AppAlerts.showError(
         context,
         message: 'Não foi possível enviar sua avaliação agora. Tente novamente.',
       );
@@ -68,12 +68,31 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor =
+        isDark ? theme.colorScheme.surface : theme.colorScheme.background;
+    final cardColor = isDark
+        ? theme.colorScheme.surfaceVariant.withOpacity(0.55)
+        : theme.colorScheme.surfaceVariant.withOpacity(0.92);
+    final borderColor = theme.dividerColor.withOpacity(isDark ? 0.5 : 0.25);
+    final primaryTextColor = theme.colorScheme.onSurface;
+    final titleColor = theme.colorScheme.primary;
+    final starActiveColor = theme.colorScheme.secondary;
+    final starInactiveColor = theme.colorScheme.onSurface.withOpacity(isDark ? 0.4 : 0.2);
+
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.secondary,
-        foregroundColor: Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor ?? theme.colorScheme.primary,
+        foregroundColor: theme.appBarTheme.foregroundColor ?? theme.colorScheme.onPrimary,
         title: const Text('Avaliar Serviço'),
       ),
       body: Padding(
@@ -81,12 +100,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text(
+            Text(
               'Como foi sua experiência?',
-              style: TextStyle(
+              style: theme.textTheme.headlineSmall?.copyWith(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: AppColors.secondary,
+                color: titleColor,
               ),
             ),
             const SizedBox(height: 30),
@@ -95,9 +114,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
               children: List.generate(5, (index) {
                 return IconButton(
                   icon: Icon(
-                    index < _rating ? Icons.star : Icons.star_border,
+                    index < _rating ? Icons.star_rounded : Icons.star_border_rounded,
                     size: 48,
-                    color: Colors.amber,
+                    color: index < _rating ? starActiveColor : starInactiveColor,
                   ),
                   onPressed: () {
                     setState(() => _rating = index + 1);
@@ -106,13 +125,30 @@ class _ReviewScreenState extends State<ReviewScreen> {
               }),
             ),
             const SizedBox(height: 30),
-            TextField(
-              controller: _commentController,
-              maxLines: 5,
-              decoration: InputDecoration(
-                hintText: 'Deixe um comentário (opcional)',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+            Container(
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderColor),
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.shadowColor.withOpacity(isDark ? 0.12 : 0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                ),
+                ],
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: TextField(
+                controller: _commentController,
+                maxLines: 5,
+                style: theme.textTheme.bodyMedium?.copyWith(color: primaryTextColor),
+                decoration: InputDecoration(
+                  hintText: 'Deixe um comentário (opcional)',
+                  hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(isDark ? 0.5 : 0.4),
+                  ),
+                  border: InputBorder.none,
                 ),
               ),
             ),
@@ -122,21 +158,24 @@ class _ReviewScreenState extends State<ReviewScreen> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submitRating,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: theme.colorScheme.primary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
                 child: _isSubmitting
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                          color: Colors.white,
+                          color: theme.colorScheme.onPrimary,
                           strokeWidth: 2,
                         ),
                       )
-                    : const Text(
+                    : Text(
                         'Enviar Avaliação',
-                        style: TextStyle(fontSize: 18, color: Colors.white),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.onPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
               ),
             ),

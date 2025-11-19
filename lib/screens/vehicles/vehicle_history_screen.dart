@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/api_service.dart';
+import '../../utils/price_utils.dart';
 import '../../widgets/app_alerts.dart';
 import '../../widgets/meca_loading_widget.dart';
 
@@ -270,12 +271,7 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
     final notes = (item['notes'] ?? item['service_description'] ?? '').toString();
 
     final rawPrice = item['price_paid'] ?? item['price'] ?? item['total'];
-    String priceText = '';
-    if (rawPrice is num) {
-      priceText = 'R\$ ${rawPrice.toStringAsFixed(2)}';
-    } else if (rawPrice is String && rawPrice.trim().isNotEmpty) {
-      priceText = rawPrice.trim().startsWith('R') ? rawPrice.trim() : 'R\$ ${rawPrice.trim()}';
-    }
+    final priceText = PriceUtils.hasValidPrice(rawPrice) ? PriceUtils.formatCurrency(rawPrice) : null;
 
     final serviceDate = item['service_date'] ?? item['completion_date'] ?? item['created_at'];
     final dateText = _formatDate(serviceDate?.toString());
@@ -311,7 +307,7 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
                   ),
                 ),
               ),
-              if (priceText.isNotEmpty)
+              if (priceText != null)
                 Text(
                   priceText,
                   style: const TextStyle(

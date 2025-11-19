@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_config.dart';
+import '../../utils/price_utils.dart';
 import 'meca_payment_screen.dart';
 
 class PaymentScreen extends StatelessWidget {
@@ -17,20 +19,83 @@ class PaymentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Converter para o formato esperado pelo MecaPaymentScreen
-    final serviceAmount = (service['price'] ?? 0.0).toDouble();
-    final totalAmount = (booking['total'] ?? serviceAmount).toDouble();
-    final mecaFee = totalAmount * 0.05; // Taxa de 5% do MECA
+    // Só usar valores válidos (maiores que 0)
+    final quoteAmount = _extractQuoteAmount(booking, service) ?? 0.0;
+    final mecaFee = quoteAmount > 0 ? quoteAmount * AppConfig.mecaPlatformFee : 0.0;
     
     return MecaPaymentScreen(
       bookingData: booking,
-      totalAmount: totalAmount,
+      totalAmount: quoteAmount,
       mecaFee: mecaFee,
-      serviceAmount: serviceAmount,
+      serviceAmount: quoteAmount,
       installments: 1,
       workshopAcceptsInstallment: workshop['accepts_installment'] ?? false,
     );
   }
+
+  double? _extractQuoteAmount(Map<String, dynamic> booking, Map<String, dynamic> service) {
+    final candidateKeys = [
+      'final_price',
+      'finalPrice',
+      'final_amount',
+      'finalAmount',
+      'approved_amount',
+      'approvedAmount',
+      'final_price_cents',
+    ];
+
+    for (final key in candidateKeys) {
+      if (!booking.containsKey(key)) continue;
+      final parsed = _parseBackendPrice(booking[key]);
+      if (parsed != null && parsed > 0) {
+        return parsed;
+      }
+    }
+
+    final total = _parseBackendPrice(booking['total']);
+    if (total != null && total > 0) {
+      return total;
+    }
+
+    final servicePrice = PriceUtils.extractPrice(service['price']);
+    if (servicePrice != null && servicePrice > 0) {
+      return servicePrice;
+    }
+
+    return null;
+  }
+
+  double? _parseBackendPrice(dynamic raw) {
+    if (raw == null) return null;
+
+    if (raw is num) {
+      final value = raw.toDouble();
+      if (value == 0) return null;
+      if (value.abs() >= 100 && value % 1 == 0) {
+        return value / 100;
+      }
+      return value;
+    }
+
+    if (raw is String) {
+      final cleaned = raw.trim();
+      if (cleaned.isEmpty) return null;
+      final parsed = double.tryParse(cleaned.replaceAll(',', '.'));
+      if (parsed == null || parsed == 0) return null;
+      if (cleaned.contains('.') || cleaned.contains(',')) {
+        return parsed;
+      }
+      if (parsed.abs() >= 100 && parsed % 1 == 0) {
+        return parsed / 100;
+      }
+      return parsed;
+    }
+
+    return null;
+  }
 }
+
+
 
 
 

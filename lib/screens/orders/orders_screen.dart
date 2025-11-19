@@ -2,10 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../providers/notification_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/price_utils.dart';
 import '../../widgets/meca_loading_widget.dart';
-import '../notifications/recent_notifications_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({Key? key}) : super(key: key);
@@ -57,11 +56,17 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         if (_currentStatus == 'pendente_oficina') {
           return bookingStatus == 'pendente_oficina' || bookingStatus == 'pending';
         } else if (_currentStatus == 'confirmado') {
+          // Incluir confirmado, em_andamento E pendente_cliente (aguardando aprovação do cliente)
           return bookingStatus == 'confirmado' || 
                  bookingStatus == 'confirmado_oficina' || 
-                 bookingStatus == 'confirmed';
+                 bookingStatus == 'confirmed' ||
+                 bookingStatus == 'em_andamento' ||
+                 bookingStatus == 'in_progress' ||
+                 bookingStatus == 'pendente_cliente'; // Agendamentos aguardando aprovação do cliente
         } else if (_currentStatus == 'finalizado_cliente') {
           return bookingStatus == 'finalizado_cliente' || 
+                 bookingStatus == 'finalizado_aguardando_pagamento' ||
+                 bookingStatus == 'pago' ||
                  bookingStatus == 'concluido' || 
                  bookingStatus == 'completed';
         }
@@ -140,71 +145,6 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     }
   }
 
-  Widget _buildNotificationButton(BuildContext context) {
-    return FutureBuilder<int>(
-      future: _getUnreadCount(),
-      builder: (context, snapshot) {
-        final unreadCount = snapshot.data ?? 0;
-        
-        return Stack(
-          children: [
-            IconButton(
-              icon: const Icon(
-                Icons.notifications,
-                color: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const RecentNotificationsScreen(),
-                  ),
-                );
-              },
-            ),
-            if (unreadCount > 0)
-              Positioned(
-                right: 8,
-                top: 8,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 16,
-                    minHeight: 16,
-                  ),
-                  child: Text(
-                    unreadCount > 99 ? '99+' : '$unreadCount',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<int> _getUnreadCount() async {
-    try {
-      final result = await _apiService.getNotifications(limit: 100, read: false);
-      if (result['success'] == true) {
-        return NotificationProvider.extractUnreadCount(result['data']);
-      }
-    } catch (e) {
-      print('Erro ao buscar contagem de notificações: $e');
-    }
-    return 0;
-  }
-
   String _getVehicleDisplayName(Map<String, dynamic> booking) {
     // Primeiro tenta usar vehicle_snapshot se disponível
     if (booking['vehicle_snapshot'] != null) {
@@ -225,7 +165,23 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+    final bool isPendingTab = _currentStatus == 'pendente_oficina';
+    final List<Map<String, dynamic>> pendingUpcoming = [];
+    final List<Map<String, dynamic>> pendingExpired = [];
+
+    if (isPendingTab && _bookings.isNotEmpty) {
+      final today = DateTime.now();
+      for (final booking in _bookings) {
+        if (_isBookingExpired(booking, today)) {
+          pendingExpired.add(booking);
+        } else {
+          pendingUpcoming.add(booking);
+        }
+      }
+    }
+
+    final hasExpiredSection = isPendingTab && pendingExpired.isNotEmpty;
+
     return Scaffold(
       backgroundColor: isDarkMode ? const Color(0xFF0A0A0A) : Colors.white,
       body: CustomScrollView(
@@ -250,11 +206,6 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 );
               },
             ),
-            actions: [
-              Builder(
-                builder: (context) => _buildNotificationButton(context),
-              ),
-            ],
             flexibleSpace: FlexibleSpaceBar(
               title: const Text(
                 'Meus Agendamentos',
@@ -379,10 +330,29 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                           )
                         : ListView.builder(
                             padding: const EdgeInsets.all(15),
-                            itemCount: _bookings.length,
+                            itemCount: isPendingTab
+                                ? pendingUpcoming.length + (hasExpiredSection ? 1 : 0) + pendingExpired.length
+                                : _bookings.length,
                             itemBuilder: (context, index) {
-                              final booking = _bookings[index];
-                              return _buildBookingCard(booking);
+                              if (!isPendingTab) {
+                                final booking = _bookings[index];
+                                return _buildBookingCard(booking);
+                              }
+
+                              if (index < pendingUpcoming.length) {
+                                return _buildBookingCard(pendingUpcoming[index]);
+                              }
+
+                              if (hasExpiredSection && index == pendingUpcoming.length) {
+                                return _buildExpiredDivider(pendingExpired.length);
+                              }
+
+                              final expiredIndex =
+                                  index - pendingUpcoming.length - (hasExpiredSection ? 1 : 0);
+                              return _buildBookingCard(
+                                pendingExpired[expiredIndex],
+                                isExpired: true,
+                              );
                             },
                           ),
                   ),
@@ -392,7 +362,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildBookingCard(Map<String, dynamic> booking) {
+  Widget _buildBookingCard(Map<String, dynamic> booking, {bool isExpired = false}) {
     final status = booking['status'] ?? 'pending';
     final statusConfig = _getStatusConfig(status);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -461,20 +431,48 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                         ),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: statusConfig['color'],
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        statusConfig['label'],
-                        style: TextStyle(
-                          color: statusConfig['textColor'],
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                    Row(
+                      children: [
+                        if (isExpired)
+                          Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.orange.withOpacity(0.4)),
+                            ),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.history, size: 14, color: Colors.orange),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Expirado',
+                                  style: TextStyle(
+                                    color: Colors.orange,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: statusConfig['color'],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            statusConfig['label'],
+                            style: TextStyle(
+                              color: statusConfig['textColor'],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -559,8 +557,12 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 const SizedBox(height: 15),
 
                 // Total - só mostra se houver preço
-                if (booking['estimated_price'] != null || booking['final_price'] != null)
-                  Row(
+                Builder(builder: (context) {
+                  final totalLabel = PriceUtils.formatCurrency(
+                    booking['final_price'] ?? booking['total'] ?? booking['estimated_price'] ?? booking['service_price'],
+                  );
+                  if (totalLabel == null) return const SizedBox.shrink();
+                  return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
@@ -571,7 +573,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                         ),
                       ),
                       Text(
-                        'R\$ ${((booking['final_price'] ?? booking['estimated_price']) ?? 0) / 100}',
+                        totalLabel,
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -579,13 +581,96 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                         ),
                       ),
                     ],
-                  ),
+                  );
+                }),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildExpiredDivider(int expiredCount) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Divider(
+            color: isDarkMode ? Colors.white12 : Colors.grey.shade300,
+            thickness: 1,
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.orange.withOpacity(0.4),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline, color: Colors.orange),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Agendamentos pendentes expirados',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        expiredCount == 1
+                            ? 'Este agendamento passou da data prevista e aguarda ação manual.'
+                            : '$expiredCount agendamentos pendentes passaram da data prevista e aguardam ação manual.',
+                        style: TextStyle(
+                          color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _isBookingExpired(Map<String, dynamic> booking, DateTime reference) {
+    final bookingDate = _parseBookingDate(booking);
+    if (bookingDate == null) return false;
+    final dayStart = DateTime(reference.year, reference.month, reference.day);
+    final bookingDay = DateTime(bookingDate.year, bookingDate.month, bookingDate.day);
+    return bookingDay.isBefore(dayStart);
+  }
+
+  DateTime? _parseBookingDate(Map<String, dynamic> booking) {
+    final possibleDates = [
+      booking['appointment_date'],
+      booking['scheduled_date'],
+      booking['expected_date'],
+    ];
+    for (final raw in possibleDates) {
+      if (raw == null) continue;
+      try {
+        final parsed = DateTime.parse(raw.toString());
+        return parsed.toLocal();
+      } catch (_) {}
+    }
+    return null;
   }
 
   Map<String, dynamic> _getStatusConfig(String status) {
@@ -595,6 +680,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     // Mapear status da API para status de exibição
     final statusMap = {
       'pendente_oficina': 'pending',
+      'pendente_cliente': 'pending_customer',
       'pendente': 'pending',
       'pending': 'pending',
       'confirmado': 'confirmed',
@@ -603,11 +689,13 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       'em_andamento': 'in_progress',
       'em andamento': 'in_progress',
       'in_progress': 'in_progress',
+      'finalizado_aguardando_pagamento': 'awaiting_payment',
       'finalizado_cliente': 'completed',
-      'finalizado': 'completed',
-      'concluido': 'completed',
-      'concluído': 'completed',
-      'completed': 'completed',
+      'finalizado': 'awaiting_payment',
+      'concluido': 'awaiting_payment',
+      'concluído': 'awaiting_payment',
+      'completed': 'awaiting_payment',
+      'pago': 'completed',
       'cancelado': 'cancelled',
       'cancelled': 'cancelled',
     };
@@ -620,6 +708,11 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         'color': const Color(0xFFFCF4E5),
         'textColor': const Color(0xFFDBA800),
       },
+      'pending_customer': {
+        'label': 'Aguardando você',
+        'color': const Color(0xFFFFF4E6),
+        'textColor': const Color(0xFFEF8E1C),
+      },
       'confirmed': {
         'label': 'Confirmado',
         'color': const Color(0xFFE3EDFA),
@@ -629,6 +722,11 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         'label': 'Em Andamento',
         'color': const Color(0xFFE8FFEE),
         'textColor': const Color(0xFF2FD65C),
+      },
+      'awaiting_payment': {
+        'label': 'Aguardando Pagamento',
+        'color': const Color(0xFFE0F2FF),
+        'textColor': const Color(0xFF1B6DC1),
       },
       'completed': {
         'label': 'Concluído',

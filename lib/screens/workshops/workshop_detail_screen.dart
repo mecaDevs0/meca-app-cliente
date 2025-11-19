@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../booking/booking_screen.dart';
 
@@ -23,6 +25,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   List<Map<String, dynamic>> _services = [];
   bool _loading = false;
   String _error = '';
+  bool _showAllServices = false;
 
   @override
   void initState() {
@@ -54,6 +57,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
           _services = services;
           _loading = false;
           _error = '';
+          _showAllServices = false;
         });
       } else {
         setState(() {
@@ -156,7 +160,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     if (_workshop == null) return const SizedBox();
 
     final String workshopName = (_workshop!['name'] ?? 'Oficina').toString();
-    final double rating = _parseDouble(_workshop!['rating']) ?? 0.0;
+    final double? rating = _getWorkshopRating();
     final String logoUrl = (_workshop!['logo_url'] ?? _workshop!['logo'] ?? '').toString();
 
     return CustomScrollView(
@@ -245,9 +249,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                           const Icon(Icons.star, color: Colors.white, size: 16),
                           const SizedBox(width: 4),
                           Text(
-                            rating > 0
+                            rating != null && rating > 0
                                 ? rating.toStringAsFixed(rating >= 10 ? 0 : 1)
-                                : 'N/A',
+                                : '--',
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -272,6 +276,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               children: [
                 // Informações básicas melhoradas
                 _buildInfoCard(),
+                const SizedBox(height: 20),
+                
+                // Mapa e ações rápidas
+                _buildLocationMapCard(),
                 const SizedBox(height: 20),
                 
                 // Horários de funcionamento melhorados
@@ -340,7 +348,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
             _buildInfoRow(Icons.location_on, 'Endereço', _workshop!['address'] ?? 'Não informado'),
             _buildInfoRow(Icons.phone, 'Telefone', _workshop!['phone'] ?? 'Não informado'),
             _buildInfoRow(Icons.email, 'Email', _workshop!['email'] ?? 'Não informado'),
-            _buildInfoRow(Icons.star, 'Avaliação', '${_workshop!['rating'] ?? 4.5} ⭐'),
+                _buildInfoRow(
+                  Icons.star,
+                  'Avaliação',
+                  _formatRatingWithStar(),
+                ),
             if (_workshop!['description'] != null && _workshop!['description'].isNotEmpty)
               _buildInfoRow(Icons.description, 'Descrição', _workshop!['description']),
           ],
@@ -380,6 +392,342 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildLocationMapCard() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final String addressText = (_workshop?['address_text'] ?? _workshop?['address'] ?? 'Endereço não informado').toString();
+    final double? latitude = _extractWorkshopLatitude();
+    final double? longitude = _extractWorkshopLongitude();
+    final bool hasCoords = latitude != null && longitude != null;
+    final String? staticMapUrl = hasCoords ? _buildStaticMapUrl(latitude!, longitude!) : null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDarkMode ? const Color(0xFF111111) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF00C977).withOpacity(0.15),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDarkMode ? 0.4 : 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00C977).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.location_on,
+                    color: Color(0xFF00C977),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Localização e Rotas',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        addressText,
+                        style: TextStyle(
+                          color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: GestureDetector(
+                onTap: hasCoords ? () => _showMapOptions(latitude!, longitude!) : null,
+                child: Container(
+                  height: 220,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.grey[isDarkMode ? 900 : 200]!,
+                        Colors.grey[isDarkMode ? 850 : 100]!,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: staticMapUrl != null
+                            ? Image.network(
+                                staticMapUrl,
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, progress) {
+                                  if (progress == null) return child;
+                                  return _buildMapPlaceholder(isDarkMode);
+                                },
+                                errorBuilder: (_, __, ___) => _buildMapPlaceholder(isDarkMode),
+                              )
+                            : _buildMapPlaceholder(isDarkMode),
+                      ),
+                      Positioned(
+                        top: 16,
+                        left: 16,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.65),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.my_location, size: 16, color: Colors.white.withOpacity(0.9)),
+                              const SizedBox(width: 6),
+                              Text(
+                                hasCoords ? 'Mapa interativo' : 'Localização aproximada',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (hasCoords)
+                        Positioned(
+                          right: 16,
+                          bottom: 16,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _showMapOptions(latitude!, longitude!),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF00C977),
+                              shadowColor: Colors.black54,
+                              elevation: 6,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            icon: const Icon(Icons.directions),
+                            label: const Text(
+                              'Traçar rota',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: hasCoords ? () => _launchGoogleMaps(latitude!, longitude!) : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C977),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.map),
+                    label: const Text(
+                      'Google Maps',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: hasCoords ? () => _launchWaze(latitude!, longitude!) : null,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: const Color(0xFF00C977).withOpacity(0.6)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.directions_car, color: Color(0xFF00C977)),
+                    label: Text(
+                      'Abrir no Waze',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF00C977).withOpacity(hasCoords ? 1 : 0.5),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapPlaceholder(bool isDarkMode) {
+    return Container(
+      height: 220,
+      color: isDarkMode ? const Color(0xFF101010) : const Color(0xFFE8F5EE),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.explore,
+              size: 42,
+              color: isDarkMode ? Colors.white54 : const Color(0xFF00C977),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Mapa indisponível',
+              style: TextStyle(
+                color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double? _extractWorkshopLatitude() {
+    final addressDetails = _workshop?['address_details'] as Map<String, dynamic>?;
+    final sources = [
+      _workshop?['latitude'],
+      _workshop?['lat'],
+      addressDetails?['latitude'],
+      addressDetails?['lat'],
+    ];
+    for (final source in sources) {
+      final parsed = _parseDouble(source);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  double? _extractWorkshopLongitude() {
+    final addressDetails = _workshop?['address_details'] as Map<String, dynamic>?;
+    final sources = [
+      _workshop?['longitude'],
+      _workshop?['lng'],
+      addressDetails?['longitude'],
+      addressDetails?['lng'],
+    ];
+    for (final source in sources) {
+      final parsed = _parseDouble(source);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  String? _buildStaticMapUrl(double lat, double lng) {
+    final key = AppConfig.googleMapsApiKeyBrowser;
+    if (key.isEmpty) return null;
+    final encodedMarker = Uri.encodeComponent('color:0x00C977|label:M|$lat,$lng');
+    return 'https://maps.googleapis.com/maps/api/staticmap?center=$lat,$lng&zoom=15&size=640x360&scale=2'
+        '&maptype=roadmap&markers=$encodedMarker&key=$key';
+  }
+
+  void _showMapOptions(double lat, double lng) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDarkMode ? const Color(0xFF101010) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 60,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.map, color: Color(0xFF00C977)),
+                  title: const Text('Abrir no Google Maps'),
+                  subtitle: const Text('Rota completa pelo Google Maps'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _launchGoogleMaps(lat, lng);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.directions_car, color: Color(0xFF00C977)),
+                  title: const Text('Abrir no Waze'),
+                  subtitle: const Text('Rota em tempo real pelo Waze'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _launchWaze(lat, lng);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _launchGoogleMaps(double lat, double lng) async {
+    final googleUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
+    await _launchExternalUrl(googleUrl);
+  }
+
+  Future<void> _launchWaze(double lat, double lng) async {
+    final wazeUrl = Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes');
+    await _launchExternalUrl(wazeUrl);
+  }
+
+  Future<void> _launchExternalUrl(Uri url) async {
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível abrir o app de mapas.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   Widget _buildWorkingHoursCard() {
@@ -527,6 +875,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     ];
     
     final servicesList = services.isNotEmpty ? services : defaultServices;
+    final bool hasMoreThanThree = servicesList.length > 3;
+    final List<Map<String, dynamic>> visibleServices = _showAllServices
+        ? servicesList
+        : servicesList.take(3).toList();
     
     return Container(
       decoration: BoxDecoration(
@@ -570,7 +922,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            ...servicesList.map<Widget>((service) {
+            ...visibleServices.map<Widget>((service) {
               final String serviceId = (service['id'] ?? service['service_id'] ?? '').toString();
               final String serviceName = (service['name'] ?? 'Serviço').toString();
               final String? description = service['description']?.toString();
@@ -605,7 +957,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                             serviceId: serviceId,
                             workshopId: widget.workshopId,
                             serviceName: serviceName,
-                            servicePrice: price?.toString() ?? service['price']?.toString() ?? '0',
+                            servicePrice: price != null && price > 0 ? price.toString() : '',
                             serviceDuration: duration?.toString() ?? rawDuration?.toString() ?? '',
                             workshopName: workshopName,
                           ),
@@ -654,7 +1006,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                                 const SizedBox(height: 8),
                                 Row(
                                   children: [
-                                    if (price != null)
+                                    if (price != null && price > 0)
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
@@ -670,7 +1022,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                                           ),
                                         ),
                                       ),
-                                    if (duration != null) ...[
+                                    if (duration != null && duration > 0) ...[
                                       const SizedBox(width: 8),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -705,6 +1057,22 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 ),
               );
             }).toList(),
+            if (hasMoreThanThree)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: TextButton(
+                  onPressed: () {
+                    setState(() => _showAllServices = !_showAllServices);
+                  },
+                  child: Text(
+                    _showAllServices ? 'Ver menos' : 'Ver mais',
+                    style: const TextStyle(
+                      color: Color(0xFF00C977),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -829,10 +1197,31 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
   double? _parseDouble(dynamic value) {
     if (value is num) return value.toDouble();
-    if (value is String && value.trim().isNotEmpty) {
-      return double.tryParse(value.trim().replaceAll(',', '.'));
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return null;
+      final lower = trimmed.toLowerCase();
+      if (lower == 'n/a' || lower == 'na' || lower == 'null' || lower == '--') {
+        return null;
+      }
+      return double.tryParse(trimmed.replaceAll(',', '.'));
     }
     return null;
+  }
+
+  double? _getWorkshopRating() {
+    return _parseDouble(_workshop?['rating']) ??
+        _parseDouble(_workshop?['average_rating']) ??
+        _parseDouble(_workshop?['score']);
+  }
+
+  String _formatRatingWithStar() {
+    final rating = _getWorkshopRating();
+    if (rating == null || rating <= 0) {
+      return 'Sem avaliações';
+    }
+    final formatted = rating.toStringAsFixed(rating >= 10 ? 0 : 1);
+    return '$formatted ⭐';
   }
 
   String _formatAddress(dynamic address) {

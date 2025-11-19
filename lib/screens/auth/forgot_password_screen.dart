@@ -116,7 +116,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Digite seu email para receber as instruções de recuperação de senha.',
+            'Digite seu email para receber um código de acesso. Use-o como senha temporária para fazer login.',
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey,
@@ -126,6 +126,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const SizedBox(height: 30),
           TextFormField(
             controller: _emailController,
+            style: const TextStyle(color: Colors.black),
             decoration: const InputDecoration(
               labelText: 'Email',
               prefixIcon: Icon(Icons.email),
@@ -185,7 +186,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         const SizedBox(height: 20),
         const Text(
-          'Email Enviado!',
+          'Código Enviado!',
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -195,12 +196,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         const SizedBox(height: 10),
         const Text(
-          'Enviamos as instruções de recuperação de senha para o seu email.',
+          'Enviamos um código de acesso para o seu email. Use-o como senha temporária para fazer login.',
           style: TextStyle(
             fontSize: 16,
             color: Colors.grey,
           ),
           textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: const Color(0xFF00C977).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Text(
+            'Após fazer login, acesse o perfil e altere sua senha para uma de sua escolha.',
+            style: TextStyle(
+              fontSize: 14,
+              color: Color(0xFF00C977),
+            ),
+            textAlign: TextAlign.center,
+          ),
         ),
         const SizedBox(height: 30),
         ElevatedButton(

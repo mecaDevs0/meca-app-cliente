@@ -135,10 +135,15 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
             ),
             actions: [
               if (_unreadCount > 0)
-                TextButton(
+                TextButton.icon(
                   onPressed: _markAllAsRead,
-                  child: const Text(
-                    'Marcar todas como lidas',
+                  icon: const Icon(
+                    Icons.done_all,
+                    size: 18,
+                    color: Color(0xFF00C977),
+                  ),
+                  label: const Text(
+                    'Ler todas',
                     style: TextStyle(
                       color: Color(0xFF00C977),
                       fontWeight: FontWeight.w600,

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Meca App Cliente</string>
+	<string>Meca</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,13 +13,24 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>meca_app_cliente</string>
+	<string>Meca</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.767232279794-roqqa6hu1tqjsdusu5a3halkheqet6b0</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
@@ -45,45 +56,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Usamos o Face ID para agilizar o login com Apple.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
-</dict>
-</plist>
-
-	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
-</dict>
-</plist>
-
-	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
-</dict>
-</plist>
-
-	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
-</dict>
-</plist>
-
-	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
-</dict>
-</plist>
-
-	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
-</dict>
-</plist>
-
-	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
-</dict>
-</plist>
-
-	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
-</dict>
-</plist>
-
-	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
-</dict>
-</plist>
-
 	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
 </dict>
 </plist>

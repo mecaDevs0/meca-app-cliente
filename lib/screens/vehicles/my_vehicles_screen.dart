@@ -240,14 +240,12 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                 padding: const EdgeInsets.all(20),
                 child: Row(
                   children: [
-                    // Car Icon (reduzido)
+                    // Car Icon com cor do veículo
                     Container(
                       width: 45,
                       height: 45,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF00C977), Color(0xFF00B369)],
-                        ),
+                        color: _getVehicleColor(vehicle['color']),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
@@ -354,5 +352,59 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
         );
       },
     );
+  }
+
+  Color _getVehicleColor(dynamic colorValue) {
+    if (colorValue == null || colorValue.toString().isEmpty) {
+      return const Color(0xFF00C977); // Cor padrão MECA
+    }
+    
+    final colorStr = colorValue.toString().toLowerCase().trim();
+    
+    // Mapeamento de cores comuns
+    final colorMap = {
+      'vermelho': Colors.red,
+      'red': Colors.red,
+      'azul': Colors.blue,
+      'blue': Colors.blue,
+      'verde': Colors.green,
+      'green': Colors.green,
+      'amarelo': Colors.yellow,
+      'yellow': Colors.yellow,
+      'branco': Colors.white,
+      'white': Colors.white,
+      'preto': Colors.black,
+      'black': Colors.black,
+      'cinza': Colors.grey,
+      'gray': Colors.grey,
+      'gris': Colors.grey,
+      'prata': Colors.grey[300]!,
+      'silver': Colors.grey[300]!,
+      'laranja': Colors.orange,
+      'orange': Colors.orange,
+      'rosa': Colors.pink,
+      'pink': Colors.pink,
+      'roxo': Colors.purple,
+      'purple': Colors.purple,
+      'marrom': Colors.brown,
+      'brown': Colors.brown,
+    };
+    
+    // Tentar encontrar cor no mapa
+    if (colorMap.containsKey(colorStr)) {
+      return colorMap[colorStr]!;
+    }
+    
+    // Tentar parsear como hex
+    if (colorStr.startsWith('#')) {
+      try {
+        return Color(int.parse(colorStr.substring(1), radix: 16) + 0xFF000000);
+      } catch (e) {
+        // Ignorar erro de parse
+      }
+    }
+    
+    // Cor padrão se não conseguir identificar
+    return const Color(0xFF00C977);
   }
 }

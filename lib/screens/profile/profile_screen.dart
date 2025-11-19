@@ -6,6 +6,7 @@ import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
 import '../notifications/recent_notifications_screen.dart';
 import '../../providers/notification_provider.dart';
+import 'edit_password_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -419,6 +420,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onTap: () => _showNotificationsSettings(),
         ),
         _buildSettingTile(
+          icon: Icons.lock,
+          title: 'Alterar Senha',
+          subtitle: 'Alterar sua senha de acesso',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const EditPasswordScreen(),
+              ),
+            );
+          },
+        ),
+        _buildSettingTile(
           icon: Icons.help,
           title: 'Ajuda',
           subtitle: 'Central de ajuda e suporte',
@@ -636,19 +650,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _buildContactInfo(
                 Icons.email,
                 'Email',
-                'suporte@meca.com.br',
-              ),
-              const SizedBox(height: 12),
-              _buildContactInfo(
-                Icons.phone,
-                'Telefone',
-                '(11) 99999-9999',
+                'contato@mecabr.com',
               ),
               const SizedBox(height: 12),
               _buildContactInfo(
                 Icons.access_time,
                 'Horário de Atendimento',
-                'Segunda a Sexta: 8h às 18h',
+                'Horário de 24hrs',
               ),
               const SizedBox(height: 12),
               const SizedBox(height: 16),

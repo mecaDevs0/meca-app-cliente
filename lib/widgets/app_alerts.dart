@@ -77,7 +77,19 @@ class AppAlerts {
     final colors = _colorsForType(type, theme);
     final icon = _iconForType(type);
 
-    _currentFlushbar?.dismiss();
+    final previousFlushbar = _currentFlushbar;
+    if (previousFlushbar != null) {
+      _currentFlushbar = null;
+      try {
+        await previousFlushbar.dismiss();
+      } catch (_) {
+        // Se o flushbar anterior já estiver fechado, seguimos sem interromper o fluxo.
+      }
+    }
+
+    if (!context.mounted) {
+      return;
+    }
 
     final flushbar = Flushbar<dynamic>(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

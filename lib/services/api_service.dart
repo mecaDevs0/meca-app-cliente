@@ -37,6 +37,39 @@ class ApiService {
     ));
   }
 
+  Future<void> _persistAuthSession(Map<String, dynamic>? payload) async {
+    if (payload == null) return;
+    final token = payload['token'];
+    final user = payload['user'];
+
+    if (token == null && user == null) return;
+
+    if (token is String && user is Map && user['id'] != null) {
+      await setSession(token, user['id'].toString());
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    if (token is String) {
+      await prefs.setString('token', token);
+    }
+    if (user is Map && user['id'] != null) {
+      await prefs.setString('user_id', user['id'].toString());
+    }
+  }
+
+  Future<Map<String, dynamic>> _handleAuthResponse(
+    Response response, {
+    String fallbackError = 'Erro ao autenticar',
+  }) async {
+    final data = response.data;
+    if (data != null && data['success'] == true) {
+      await _persistAuthSession(data['data']);
+      return {'success': true, 'data': data['data']};
+    }
+    return {'success': false, 'error': data?['error'] ?? fallbackError};
+  }
+
   // Login
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
@@ -47,19 +80,8 @@ class ApiService {
         'email': normalizedEmail,
         'password': normalizedPassword,
       });
-      
-      if (response.data != null && response.data['success'] == true) {
-        // Salvar token
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('token');
-        await prefs.remove('user_id');
-        await prefs.setString('token', response.data['data']['token']);
-        await prefs.setString('user_id', response.data['data']['user']['id']);
-        
-        return {'success': true, 'data': response.data['data']};
-      } else {
-        return {'success': false, 'error': response.data['error'] ?? 'Erro no login'};
-      }
+
+      return await _handleAuthResponse(response, fallbackError: 'Erro no login');
     } catch (e) {
       if (e is DioException) {
         final message = _resolveFriendlyMessage(e, default401: 'Email ou senha incorretos. Confira seus dados e tente novamente.');
@@ -82,19 +104,8 @@ class ApiService {
         'phone': phone,
         'cpf': cpf,
       });
-      
-      if (response.data != null && response.data['success'] == true) {
-        // Salvar token
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('token');
-        await prefs.remove('user_id');
-        await prefs.setString('token', response.data['data']['token']);
-        await prefs.setString('user_id', response.data['data']['user']['id']);
-        
-        return {'success': true, 'data': response.data['data']};
-      } else {
-        return {'success': false, 'error': response.data['error'] ?? 'Erro no registro'};
-      }
+
+      return await _handleAuthResponse(response, fallbackError: 'Erro no registro');
     } catch (e) {
       if (e is DioException) {
         final message = _resolveFriendlyMessage(e, default400: 'Não foi possível criar a conta. Verifique os dados informados.');
@@ -102,6 +113,76 @@ class ApiService {
       }
       return {'success': false, 'error': 'Não foi possível concluir o cadastro. Tente novamente em instantes.'};
     }
+  }
+
+  Future<Map<String, dynamic>> loginWithGoogle({
+    required String idToken,
+    String? phone,
+    String? firstName,
+    String? lastName,
+  }) async {
+    try {
+      final response = await _dio.post('/auth/social/google', data: {
+        'idToken': idToken,
+        'phone': phone,
+        'firstName': firstName,
+        'lastName': lastName,
+      });
+
+      return await _handleAuthResponse(
+        response,
+        fallbackError: 'Erro ao autenticar com o Google',
+      );
+    } on DioException catch (e) {
+      final message = _resolveFriendlyMessage(
+        e,
+        default400: 'Não conseguimos autenticar com o Google.',
+      );
+      return {'success': false, 'error': message};
+    } catch (_) {
+      return {
+        'success': false,
+        'error': 'Erro ao autenticar com o Google. Tente novamente.'
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> loginWithApple({
+    required String identityToken,
+    String? email,
+    String? fullName,
+    String? phone,
+  }) async {
+    try {
+      final response = await _dio.post('/auth/social/apple', data: {
+        'identityToken': identityToken,
+        'email': email,
+        'fullName': fullName,
+        'phone': phone,
+      });
+
+      return await _handleAuthResponse(
+        response,
+        fallbackError: 'Erro ao autenticar com a Apple.',
+      );
+    } on DioException catch (e) {
+      final message = _resolveFriendlyMessage(
+        e,
+        default400: 'Não conseguimos autenticar com a Apple.',
+      );
+      return {'success': false, 'error': message};
+    } catch (_) {
+      return {
+        'success': false,
+        'error': 'Erro ao autenticar com a Apple. Tente novamente.'
+      };
+    }
+  }
+
+  Future<void> setSession(String token, String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('token', token);
+    await prefs.setString('user_id', userId);
   }
 
   // Buscar veículo por placa - API REAL na EC2
@@ -557,6 +638,40 @@ class ApiService {
   }
 
   // Cancelar agendamento
+  // Aprovar orçamento proposto pela oficina
+  Future<Map<String, dynamic>> approveQuote(String bookingId) async {
+    try {
+      await loadToken();
+      final response = await _dio.put('/bookings/$bookingId/approve-quote');
+      
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'data': response.data['data']};
+      } else {
+        return {'success': false, 'error': response.data['error'] ?? 'Erro ao aprovar orçamento'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  // Rejeitar orçamento proposto pela oficina
+  Future<Map<String, dynamic>> rejectQuote(String bookingId, {String? reason}) async {
+    try {
+      await loadToken();
+      final response = await _dio.put('/bookings/$bookingId/reject-quote', data: {
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+      });
+      
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'data': response.data['data']};
+      } else {
+        return {'success': false, 'error': response.data['error'] ?? 'Erro ao rejeitar orçamento'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
   Future<Map<String, dynamic>> cancelBooking(String bookingId) async {
     try {
       await loadToken();
@@ -581,6 +696,46 @@ class ApiService {
         return {'success': true, 'message': response.data['message'] ?? 'Email enviado com sucesso'};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao enviar email'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  // Redefinir senha com token
+  Future<Map<String, dynamic>> resetPassword(String token, String password) async {
+    try {
+      final response = await _dio.post('/auth/reset-password', data: {
+        'token': token,
+        'password': password,
+      });
+      
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'message': response.data['message'] ?? 'Senha redefinida com sucesso'};
+      } else {
+        return {'success': false, 'error': response.data['error'] ?? 'Erro ao redefinir senha'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  // Alterar senha no perfil
+  Future<Map<String, dynamic>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await loadToken();
+      final response = await _dio.put('/customers/profile/password', data: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      });
+      
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'message': response.data['message'] ?? 'Senha alterada com sucesso'};
+      } else {
+        return {'success': false, 'error': response.data['error'] ?? 'Erro ao alterar senha'};
       }
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
@@ -1130,6 +1285,9 @@ class ApiService {
     required String cardToken,
     required String lastDigits,
     required String brand,
+    String? holderName,
+    String? expiryMonth,
+    String? expiryYear,
     bool isDefault = false,
   }) async {
     try {
@@ -1138,6 +1296,9 @@ class ApiService {
         'card_token': cardToken,
         'last_digits': lastDigits,
         'brand': brand,
+        if (holderName != null) 'holder_name': holderName,
+        if (expiryMonth != null) 'expiry_month': expiryMonth,
+        if (expiryYear != null) 'expiry_year': expiryYear,
         'is_default': isDefault,
       });
       
@@ -1275,6 +1436,145 @@ class ApiService {
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao remover cartão'};
       }
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  Future<Map<String, dynamic>> createPayment({
+    required String bookingId,
+    required String paymentMethod,
+    double? amount,
+    String? cardToken,
+    int? installments,
+    int? pixExpirationInSeconds,
+    Map<String, dynamic>? metadata,
+  }) async {
+    try {
+      await loadToken();
+      final payload = <String, dynamic>{
+        'bookingId': bookingId,
+        'paymentMethod': paymentMethod.toUpperCase(),
+      };
+
+      if (amount != null) {
+        payload['amount'] = amount;
+      }
+
+      if (cardToken != null && cardToken.isNotEmpty) {
+        payload['cardToken'] = cardToken;
+      }
+
+      if (installments != null && installments > 0) {
+        payload['installments'] = installments;
+      }
+
+      if (pixExpirationInSeconds != null && pixExpirationInSeconds > 0) {
+        payload['pixExpiration'] = pixExpirationInSeconds;
+      }
+
+      if (metadata != null && metadata.isNotEmpty) {
+        payload['metadata'] = metadata;
+      }
+
+      final response = await _dio.post('/payments', data: payload);
+
+      if (response.data != null && response.data['success'] == true) {
+        return {
+          'success': true,
+          'data': response.data['data'],
+        };
+      }
+
+      return {
+        'success': false,
+        'error': response.data?['error'] ?? 'Não foi possível iniciar o pagamento.',
+      };
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  Future<Map<String, dynamic>> createBookingPayment(
+    String bookingId, {
+    required String paymentMethod,
+    String? cardToken,
+    int? installments,
+    int? pixExpirationInSeconds,
+  }) async {
+    try {
+      await loadToken();
+      
+      // Primeiro validar o booking
+      final validationResponse = await _dio.post('/bookings/$bookingId/payment', data: {});
+      
+      if (validationResponse.data == null || validationResponse.data['success'] != true) {
+        return {
+          'success': false,
+          'error': validationResponse.data?['error'] ?? 'Não foi possível validar o agendamento para pagamento.',
+        };
+      }
+      
+      final bookingData = validationResponse.data['data'] as Map<String, dynamic>? ?? {};
+      final amount = bookingData['amount'] as double?;
+      
+      if (amount == null || amount <= 0) {
+        return {
+          'success': false,
+          'error': 'Valor do agendamento não encontrado.',
+        };
+      }
+      
+      // Agora criar o pagamento usando o endpoint /payments
+      final payload = <String, dynamic>{
+        'bookingId': bookingId,
+        'paymentMethod': paymentMethod.toUpperCase(),
+        'amount': amount,
+      };
+
+      if (cardToken != null && cardToken.isNotEmpty) {
+        payload['cardToken'] = cardToken;
+      }
+
+      if (installments != null && installments > 0) {
+        payload['installments'] = installments;
+      }
+
+      if (pixExpirationInSeconds != null && pixExpirationInSeconds > 0) {
+        payload['pixExpiration'] = pixExpirationInSeconds;
+      }
+
+      final response = await _dio.post('/payments', data: payload);
+
+      if (response.data != null && response.data['success'] == true) {
+        return {
+          'success': true,
+          'data': response.data['data'],
+        };
+      }
+
+      return {
+        'success': false,
+        'error': response.data?['error'] ?? 'Não foi possível iniciar o pagamento.',
+      };
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  Future<Map<String, dynamic>> getPaymentStatus(String paymentId) async {
+    try {
+      await loadToken();
+      final response = await _dio.get('/payments/$paymentId/status');
+
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'data': response.data['data']};
+      }
+
+      return {
+        'success': false,
+        'error': response.data?['error'] ?? 'Não foi possível consultar o status do pagamento.',
+      };
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
     }

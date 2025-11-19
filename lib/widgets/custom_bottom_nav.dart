@@ -77,6 +77,13 @@ class CustomBottomNav extends StatelessWidget {
     final inactiveColor = isDark ? const Color(0xFF666666) : const Color(0xFF999999);
     final textColor = isActive ? activeColor : inactiveColor;
     final hasUnreadNotifications = notificationProvider.unreadNotifications > 0;
+    final hasBookingNotifications = _hasUnreadBookingNotifications(notificationProvider);
+    bool shouldShowBadge = false;
+    if (index == 2) {
+      shouldShowBadge = hasBookingNotifications;
+    } else if (index == items.length - 1) {
+      shouldShowBadge = hasUnreadNotifications;
+    }
     
     return GestureDetector(
       onTap: () => onTap(index),
@@ -102,7 +109,7 @@ class CustomBottomNav extends StatelessWidget {
                     color: textColor,
                     size: 24,
                   ),
-                  if (index == items.length - 1 && hasUnreadNotifications)
+                  if (shouldShowBadge)
                     Positioned(
                       right: -1,
                       top: -1,
@@ -135,6 +142,27 @@ class CustomBottomNav extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  bool _hasUnreadBookingNotifications(NotificationProvider provider) {
+    for (final notification in provider.notifications) {
+      final isRead = notification['read'] == true || notification['is_read'] == true;
+      if (isRead) continue;
+
+      final type = (notification['type'] ?? '').toString().toLowerCase();
+      final title = (notification['title'] ?? '').toString().toLowerCase();
+      final message = (notification['message'] ?? '').toString().toLowerCase();
+
+      final bool bookingKeyword = type.contains('booking') ||
+          type.contains('agendamento') ||
+          title.contains('agendamento') ||
+          message.contains('agendamento');
+
+      if (bookingKeyword) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 

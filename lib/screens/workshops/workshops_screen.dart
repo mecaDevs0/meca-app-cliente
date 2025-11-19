@@ -1,8 +1,13 @@
-import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+
 import '../../services/api_service.dart';
+import '../../services/location_service.dart';
 import '../../widgets/meca_loading_widget.dart';
 import 'workshop_detail_screen.dart';
 
@@ -14,14 +19,23 @@ class WorkshopsScreen extends StatefulWidget {
 }
 
 class _WorkshopsScreenState extends State<WorkshopsScreen> {
+  static const double _fallbackLatitude = -23.5505;
+  static const double _fallbackLongitude = -46.6333;
+
   final ApiService _apiService = ApiService();
+  final LocationService _locationService = LocationService.instance;
   List<dynamic> _workshops = [];
   List<dynamic> _filteredWorkshops = [];
   bool _loading = false;
   String _error = '';
+  String? _locationWarning;
+  String? _manualCepError;
+  bool _isManualCepLoading = false;
+  bool _manualCepSuccess = false;
   
   // Filtros
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _cepController = TextEditingController();
   String _selectedService = 'Todos';
   String _selectedDistance = 'Todos';
   String _selectedRating = 'Todos';
@@ -31,32 +45,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   @override
   void initState() {
     super.initState();
-    getCurrentLocation();
     _loadNearbyWorkshops();
-  }
-
-  Future<void> getCurrentLocation() async {
-    try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        return;
-      }
-
-      await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      
-      // Posição obtida - não precisa armazenar
-    } catch (e) {
-      print('Erro ao obter localização: $e');
-    }
   }
 
   Future<void> _loadNearbyWorkshops() async {
@@ -64,78 +53,74 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     setState(() {
       _loading = true;
       _error = '';
+      _locationWarning = null;
+      _manualCepError = null;
+      _manualCepSuccess = false;
     });
     
     try {
-      // Verificar se o serviço de localização está habilitado
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
+      final status = await _locationService.ensurePermissions();
+      double targetLat = _fallbackLatitude;
+      double targetLng = _fallbackLongitude;
+
+      if (status.canRequestPosition) {
+        final position = await _locationService.getCurrentPosition(forceFresh: true);
+        if (position != null) {
+          targetLat = position.latitude;
+          targetLng = position.longitude;
+        } else {
         if (!mounted) return;
         setState(() {
-          _error = 'Serviço de localização desabilitado. Por favor, ative o GPS nas configurações do dispositivo.';
-          _loading = false;
-        });
-        return;
-      }
-
-      // Verificar permissões
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
+            _locationWarning = 'Não conseguimos acessar sua localização agora. Mostrando oficinas próximas a São Paulo.';
+          });
+        }
+      } else {
           if (!mounted) return;
           setState(() {
-            _error = 'Permissão de localização negada. Por favor, permita o acesso à localização nas configurações do dispositivo.';
-            _loading = false;
-          });
-          return;
-        }
+          _locationWarning = _buildLocationWarning(status);
+        });
       }
 
-      if (permission == LocationPermission.deniedForever) {
+      await _fetchWorkshops(targetLat, targetLng);
+    } catch (e) {
+      String errorMessage = 'Erro ao carregar oficinas';
+      if (e.toString().contains('timeout')) {
+        errorMessage = 'Timeout ao obter localização. Verifique se o GPS está ativado e tente novamente.';
+      } else {
+        errorMessage = 'Erro ao carregar oficinas: $e';
+      }
+      
         if (!mounted) return;
         setState(() {
-          _error = 'Permissão de localização permanentemente negada. Por favor, permita o acesso à localização nas configurações do dispositivo.';
+        _error = errorMessage;
           _loading = false;
         });
-        return;
-      }
+    }
+  }
 
-      // Obter localização atual
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
-      );
-      
-      // Buscar TODAS as oficinas (sem limite de raio)
-      final result = await _apiService.getNearbyWorkshops(
-        position.latitude,
-        position.longitude,
-        10000.0, // Raio muito grande para pegar todas (em km)
-      );
+  Future<void> _fetchWorkshops(double userLat, double userLng, {double radiusKm = 10000.0}) async {
+    final result = await _apiService.getNearbyWorkshops(userLat, userLng, radiusKm);
       
       if (!mounted) return;
              if (result['success']) {
                final data = result['data'];
                List<dynamic> workshops = [];
                
-               // Adaptar resposta para diferentes formatos
                if (data is Map) {
                  workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
                } else if (data is List) {
                  workshops = data;
                }
                
-               // Calcular distâncias e adicionar aos dados
                for (var workshop in workshops) {
                  if (workshop['latitude'] != null && workshop['longitude'] != null) {
-                   double distance = Geolocator.distanceBetween(
-                     position.latitude,
-                     position.longitude,
+          final double distance = Geolocator.distanceBetween(
+                userLat,
+                userLng,
                      double.parse(workshop['latitude'].toString()),
                      double.parse(workshop['longitude'].toString()),
-                   ) / 1000; // Converter para km
-                   
+              ) /
+              1000;
                    workshop['distance'] = distance;
                  } else {
                    workshop['distance'] = 0.0;
@@ -156,6 +141,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                  _workshops = workshops;
                  _filteredWorkshops = List.from(_workshops);
                  _loading = false;
+        _error = '';
                });
                _applyFilters();
              } else {
@@ -164,23 +150,114 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
           _loading = false;
         });
       }
-    } catch (e) {
-      String errorMessage = 'Erro ao carregar oficinas';
-      if (e.toString().contains('permission')) {
-        errorMessage = 'Erro ao obter localização: Permissão de localização negada. Por favor, permita o acesso à localização nas configurações do dispositivo.';
-      } else if (e.toString().contains('location')) {
-        errorMessage = 'Erro ao obter localização: Não foi possível acessar sua localização atual. Verifique se o GPS está ativado.';
-      } else if (e.toString().contains('timeout')) {
-        errorMessage = 'Timeout ao obter localização. Verifique se o GPS está ativado e tente novamente.';
-      } else {
-        errorMessage = 'Erro ao carregar oficinas: $e';
-      }
-      
-      if (!mounted) return;
+  }
+
+  String _buildLocationWarning(LocationStatus status) {
+    if (!status.serviceEnabled) {
+      return 'Seu GPS está desligado. Estamos exibindo oficinas padrão até você ativar a localização.';
+    }
+
+    if (status.permissionPermanentlyDenied) {
+      return 'A permissão de localização está bloqueada para o app. Mostrando oficinas padrão.';
+    }
+
+    if (!status.permissionGranted) {
+      return 'Permissão de localização negada. Mostrando oficinas padrão enquanto você libera o acesso.';
+    }
+
+    return 'Não conseguimos usar sua localização agora. Mostrando oficinas padrão.';
+  }
+
+  Future<(double, double)?> _resolveCoordinatesFromCep(String cep) async {
+    final uri = Uri.parse('https://viacep.com.br/ws/$cep/json/');
+    final response = await http.get(uri);
+    if (response.statusCode != 200) {
+      throw CepLookupException('Não conseguimos validar esse CEP agora. Tente novamente em instantes.');
+    }
+
+    final data = jsonDecode(response.body);
+    if (data is Map && data['erro'] == true) {
+      throw CepLookupException('CEP não encontrado. Verifique se digitou corretamente.');
+    }
+
+    final logradouro = (data['logradouro'] as String?)?.trim() ?? '';
+    final bairro = (data['bairro'] as String?)?.trim() ?? '';
+    final cidade = (data['localidade'] as String?)?.trim() ?? '';
+    final estado = (data['uf'] as String?)?.trim() ?? '';
+
+    final primaryQuery = [
+      if (logradouro.isNotEmpty) logradouro,
+      if (bairro.isNotEmpty) bairro,
+      if (cidade.isNotEmpty) cidade,
+      if (estado.isNotEmpty) estado,
+      'Brasil'
+    ].join(', ');
+
+    final fallbackQuery = [
+      if (cidade.isNotEmpty) cidade,
+      if (estado.isNotEmpty) estado,
+      'Brasil',
+      'CEP $cep',
+    ].join(', ');
+
+    Future<(double, double)?> tryResolve(String query) async {
+      if (query.trim().isEmpty) return null;
+      try {
+        final locations = await locationFromAddress(query);
+        if (locations.isNotEmpty) {
+          final loc = locations.first;
+          return (loc.latitude, loc.longitude);
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    return await tryResolve(primaryQuery) ?? await tryResolve(fallbackQuery);
+  }
+
+  Future<void> _handleCepSearch() async {
+    final rawCep = _cepController.text.trim();
+    final normalizedCep = rawCep.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (normalizedCep.length != 8) {
       setState(() {
-        _error = errorMessage;
-        _loading = false;
+        _manualCepError = 'Informe um CEP válido com 8 dígitos.';
+        _manualCepSuccess = false;
       });
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _manualCepError = null;
+      _isManualCepLoading = true;
+      _manualCepSuccess = false;
+    });
+
+    try {
+      final coords = await _resolveCoordinatesFromCep(normalizedCep);
+      if (coords == null) {
+        throw CepLookupException('Não encontramos a latitude/longitude desse CEP.');
+      }
+
+      setState(() {
+        _locationWarning = 'Exibindo oficinas para o CEP $normalizedCep.';
+        _manualCepSuccess = true;
+      });
+      await _fetchWorkshops(coords.$1, coords.$2);
+    } catch (e) {
+      setState(() {
+        _manualCepError = e is CepLookupException
+            ? e.message
+            : 'Não conseguimos localizar esse CEP. Confira os números e tente novamente.';
+        _manualCepSuccess = false;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isManualCepLoading = false;
+        });
+      }
     }
   }
 
@@ -354,22 +431,192 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   }
 
   Widget _buildWorkshopsList() {
+    Widget listBody;
     if (_filteredWorkshops.isEmpty) {
-      return const Center(
+      listBody = const Center(
         child: Text(
           'Nenhuma oficina encontrada com os filtros aplicados',
           style: TextStyle(fontSize: 16, color: Colors.grey),
         ),
       );
-    }
-
-    return ListView.builder(
+    } else {
+      listBody = ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _filteredWorkshops.length,
       itemBuilder: (context, index) {
         final workshop = _filteredWorkshops[index];
         return _buildWorkshopCard(workshop);
       },
+      );
+    }
+
+    if (_locationWarning != null) {
+      return Column(
+        children: [
+          _buildWarningBanner(_locationWarning!),
+          Expanded(child: listBody),
+        ],
+      );
+    }
+
+    return listBody;
+  }
+
+  Widget _buildWarningBanner(String message) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 4,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFF4E5),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Color(0xFFFFB74D),
+                  child: Icon(Icons.gps_off, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Não conseguimos sua localização',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF8B5E00),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        message,
+                        style: const TextStyle(
+                          color: Color(0xFF8B5E00),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _loadNearbyWorkshops,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Tentar GPS'),
+                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF8B5E00)),
+                ),
+              ],
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Informe o CEP onde você está',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: theme.brightness == Brightness.dark ? const Color(0xFF1F1F1F) : const Color(0xFFF8F9FB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _manualCepError != null
+                          ? Colors.red.withOpacity(0.7)
+                          : _manualCepSuccess
+                              ? Colors.green.withOpacity(0.7)
+                              : Colors.grey.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 12),
+                      Icon(
+                        Icons.location_searching,
+                        color: _manualCepError != null
+                            ? Colors.red
+                            : _manualCepSuccess
+                                ? Colors.green
+                                : Colors.grey[600],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _cepController,
+                          keyboardType: TextInputType.number,
+                          maxLength: 8,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          cursorColor: const Color(0xFF00C977),
+                          style: TextStyle(
+                            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1,
+                          ),
+                          decoration: InputDecoration(
+                            counterText: '',
+                            hintText: '00000000',
+                            hintStyle: TextStyle(color: Colors.grey[400], fontWeight: FontWeight.w500),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ElevatedButton(
+                          onPressed: _isManualCepLoading ? null : _handleCepSearch,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00C977),
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(70, 40),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: _isManualCepLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Text('Buscar'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (_manualCepError != null)
+                  Text(
+                    _manualCepError!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.w600),
+                  )
+                else if (_manualCepSuccess)
+                  const Text(
+                    'Localização atualizada com sucesso!',
+                    style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -382,7 +629,8 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         : distanceRaw is String
             ? double.tryParse(distanceRaw.replaceAll(',', '.')) ?? 0.0
             : 0.0;
-    final double ratingValue = _parseDouble(workshop['rating']) ?? 0.0;
+    final double? ratingValue =
+        _parseDouble(workshop['rating']) ?? _parseDouble(workshop['average_rating']);
     
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -510,9 +758,9 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      ratingValue > 0
+                                      ratingValue != null && ratingValue > 0
                                           ? ratingValue.toStringAsFixed(ratingValue >= 10 ? 0 : 1)
-                                          : 'N/A',
+                                          : '--',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
@@ -1164,8 +1412,14 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
 
   double? _parseDouble(dynamic value) {
     if (value is num) return value.toDouble();
-    if (value is String && value.trim().isNotEmpty) {
-      return double.tryParse(value.trim().replaceAll(',', '.'));
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return null;
+      final lower = trimmed.toLowerCase();
+      if (lower == 'n/a' || lower == 'na' || lower == 'null' || lower == '--') {
+        return null;
+      }
+      return double.tryParse(trimmed.replaceAll(',', '.'));
     }
     return null;
   }
@@ -1239,8 +1493,14 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _cepController.dispose();
     super.dispose();
   }
+}
+
+class CepLookupException implements Exception {
+  CepLookupException(this.message);
+  final String message;
 }
 
 
