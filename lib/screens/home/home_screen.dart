@@ -25,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   bool _isLoading = true;
   List<Map<String, dynamic>> _upcomingBookings = [];
+  List<Map<String, dynamic>> _inProgressBookings = [];
   List<Map<String, dynamic>> _nearbyWorkshops = [];
   final ApiService _apiService = ApiService();
   final LocationService _locationService = LocationService.instance;
@@ -50,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() {
       _isLoading = true;
       _upcomingBookings = [];
+      _inProgressBookings = [];
       _nearbyWorkshops = [];
     });
     
@@ -61,15 +63,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         final bookingsList = data is List ? data : (data is Map ? (data['bookings'] ?? data['data'] ?? []) : []);
         final bookings = List<Map<String, dynamic>>.from(bookingsList);
         
-        // Filtrar apenas agendamentos futuros ou pendentes e ordenar por data
+        // Filtrar serviços em andamento
+        final inProgress = bookings.where((b) {
+          final status = (b['status'] ?? '').toString().toLowerCase();
+          return status == 'em_andamento' || status == 'in_progress';
+        }).toList();
+        
+        // Filtrar apenas agendamentos futuros ou pendentes (excluindo em andamento) e ordenar por data
         final now = DateTime.now();
         final upcoming = bookings.where((b) {
           final status = b['status'] ?? '';
           final isPendingOrConfirmed = status == 'pendente_oficina' || 
                                       status == 'confirmed' || 
-                                      status == 'confirmado' ||
-                                      status == 'em_andamento' ||
-                                      status == 'in_progress';
+                                      status == 'confirmado';
+          
+          // Excluir serviços em andamento
+          final statusLower = status.toString().toLowerCase();
+          if (statusLower == 'em_andamento' || statusLower == 'in_progress') {
+            return false;
+          }
           
           if (!isPendingOrConfirmed) return false;
           
@@ -107,6 +119,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         
         setState(() {
           _upcomingBookings = upcoming.take(3).toList(); // Pegar apenas os 3 mais próximos
+          _inProgressBookings = inProgress;
         });
       }
       
@@ -167,6 +180,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: _buildQuickActions(),
           ),
           const SizedBox(height: 24),
+          if (_inProgressBookings.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _buildInProgressServices(),
+            ),
+            const SizedBox(height: 24),
+          ],
           _buildUpcomingBookings(), // Sem padding para ocupar toda a largura
           const SizedBox(height: 24),
           Padding(
@@ -277,7 +297,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 120, // Altura fixa para padronizar
+        height: 128, // Altura fixa levemente maior para evitar overflow em textos mais longos
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: const Color(0xFF00C977).withOpacity(0.1),
@@ -781,10 +801,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   color: const Color(0xFF00C977).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(
-                  Icons.build,
-                  color: Color(0xFF00C977),
-                ),
+                child: (workshop['logo_url'] != null && 
+                        workshop['logo_url'].toString().trim().isNotEmpty &&
+                        workshop['logo_url'].toString().startsWith('http'))
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          workshop['logo_url'].toString(),
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const Icon(
+                            Icons.build,
+                            color: Color(0xFF00C977),
+                          ),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.build,
+                        color: Color(0xFF00C977),
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -797,6 +833,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     Text(
                       distanceLabel,
@@ -815,9 +853,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(width: 4),
               Text(
-                ratingValue != null && ratingValue > 0
-                    ? ratingValue.toStringAsFixed(ratingValue >= 10 ? 0 : 1)
-                    : '--',
+                (ratingValue != null && ratingValue > 0 && ratingValue <= 5)
+                    ? ratingValue.toStringAsFixed(1)
+                    : '-',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -1088,5 +1126,111 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     };
     
     return statusMap[status] ?? 'Pendente';
+  }
+
+  Widget _buildInProgressServices() {
+    if (_inProgressBookings.isEmpty) return const SizedBox.shrink();
+    
+    final booking = _inProgressBookings.first; // Pegar o primeiro serviço em andamento
+    final serviceName = booking['service_name'] ?? booking['service']?['name'] ?? 'Serviço';
+    final workshopName = booking['workshop_name'] ?? booking['workshop']?['name'] ?? 'Oficina';
+    final workshopLogoUrl = booking['workshop_logo_url'] ?? 
+                            booking['workshop']?['logo_url']?.toString();
+    final hasLogo = workshopLogoUrl != null && 
+                    workshopLogoUrl.toString().trim().isNotEmpty &&
+                    workshopLogoUrl.toString() != 'null';
+    
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF00C977), Color(0xFF00B369)],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: hasLogo
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          workshopLogoUrl.toString(),
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.build_circle,
+                              color: Colors.white,
+                              size: 40,
+                            );
+                          },
+                        ),
+                      )
+                    : const Icon(
+                        Icons.build_circle,
+                        color: Colors.white,
+                        size: 40,
+                      ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Serviço em Andamento',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      serviceName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Oficina: $workshopName',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 13,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

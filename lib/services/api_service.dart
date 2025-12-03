@@ -115,74 +115,54 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> loginWithGoogle({
-    required String idToken,
-    String? phone,
-    String? firstName,
-    String? lastName,
-  }) async {
-    try {
-      final response = await _dio.post('/auth/social/google', data: {
-        'idToken': idToken,
-        'phone': phone,
-        'firstName': firstName,
-        'lastName': lastName,
-      });
-
-      return await _handleAuthResponse(
-        response,
-        fallbackError: 'Erro ao autenticar com o Google',
-      );
-    } on DioException catch (e) {
-      final message = _resolveFriendlyMessage(
-        e,
-        default400: 'Não conseguimos autenticar com o Google.',
-      );
-      return {'success': false, 'error': message};
-    } catch (_) {
-      return {
-        'success': false,
-        'error': 'Erro ao autenticar com o Google. Tente novamente.'
-      };
-    }
-  }
-
-  Future<Map<String, dynamic>> loginWithApple({
-    required String identityToken,
-    String? email,
-    String? fullName,
-    String? phone,
-  }) async {
-    try {
-      final response = await _dio.post('/auth/social/apple', data: {
-        'identityToken': identityToken,
-        'email': email,
-        'fullName': fullName,
-        'phone': phone,
-      });
-
-      return await _handleAuthResponse(
-        response,
-        fallbackError: 'Erro ao autenticar com a Apple.',
-      );
-    } on DioException catch (e) {
-      final message = _resolveFriendlyMessage(
-        e,
-        default400: 'Não conseguimos autenticar com a Apple.',
-      );
-      return {'success': false, 'error': message};
-    } catch (_) {
-      return {
-        'success': false,
-        'error': 'Erro ao autenticar com a Apple. Tente novamente.'
-      };
-    }
-  }
 
   Future<void> setSession(String token, String userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', token);
     await prefs.setString('user_id', userId);
+  }
+
+  Future<SharedPreferences> getStorage() async {
+    return await SharedPreferences.getInstance();
+  }
+
+  // ============================================
+  // DEVICE TOKENS - PUSH NOTIFICATIONS
+  // ============================================
+
+  Future<Map<String, dynamic>> saveDeviceToken(String onesignalPlayerId, {String? platform}) async {
+    try {
+      await loadToken();
+      
+      final response = await _dio.post('/device-tokens', data: {
+        'onesignal_player_id': onesignalPlayerId,
+        'platform': platform ?? (Platform.isAndroid ? 'android' : 'ios'),
+      });
+      
+      return {'success': true, 'data': response.data['data'] ?? response.data};
+    } catch (e) {
+      if (e is DioException) {
+        return {'success': false, 'error': e.response?.data['error'] ?? 'Erro ao salvar token'};
+      }
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> removeDeviceToken(String onesignalPlayerId) async {
+    try {
+      await loadToken();
+      
+      final response = await _dio.delete('/device-tokens', data: {
+        'onesignal_player_id': onesignalPlayerId,
+      });
+      
+      return {'success': true, 'data': response.data['data'] ?? response.data};
+    } catch (e) {
+      if (e is DioException) {
+        return {'success': false, 'error': e.response?.data['error'] ?? 'Erro ao remover token'};
+      }
+      return {'success': false, 'error': e.toString()};
+    }
   }
 
   // Buscar veículo por placa - API REAL na EC2
@@ -223,15 +203,23 @@ class ApiService {
   }
 
   // Obter oficinas próximas (com raio em km)
-  Future<Map<String, dynamic>> getNearbyWorkshops(double lat, double lng, [double radiusKm = 10.0]) async {
+  // Se searchQuery for fornecido, busca por nome independente de distância
+  Future<Map<String, dynamic>> getNearbyWorkshops(double lat, double lng, [double radiusKm = 10.0, String? searchQuery]) async {
     try {
       // Se /workshop/nearby falhar, usar /workshop como fallback
       try {
-        final response = await _dio.get('/workshop/nearby', queryParameters: {
+        final queryParams = <String, dynamic>{
           'lat': lat.toString(),
           'lng': lng.toString(),
-          'radiusKm': radiusKm.toString(),
-        });
+          'radius': radiusKm.toString(), // API usa 'radius', não 'radiusKm'
+        };
+        
+        // Se tiver busca por nome, adicionar parâmetro 'q'
+        if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+          queryParams['q'] = searchQuery.trim();
+        }
+        
+        final response = await _dio.get('/workshop/nearby', queryParameters: queryParams);
         
         if (response.data != null && response.data['success'] == true) {
           final data = response.data['data'];
@@ -310,7 +298,7 @@ class ApiService {
           workshop = {'id': workshopId};
         }
         
-        return {'success': true, 'data': {'workshop': workshop}};
+        return {'success': true, 'data': workshop};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao buscar detalhes da oficina'};
       }
@@ -503,6 +491,22 @@ class ApiService {
         return {'success': true, 'data': response.data['data']};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao atualizar veículo'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  // Remover veículo
+  Future<Map<String, dynamic>> deleteVehicle(String vehicleId) async {
+    try {
+      await loadToken();
+      final response = await _dio.delete('/vehicles/$vehicleId');
+      
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'message': response.data['message'] ?? 'Veículo removido com sucesso'};
+      } else {
+        return {'success': false, 'error': response.data['error'] ?? 'Erro ao remover veículo'};
       }
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
@@ -1067,12 +1071,39 @@ class ApiService {
   Future<Map<String, dynamic>> acceptSchedule(String bookingId) async {
     try {
       await loadToken();
+      // Tentar novo endpoint primeiro
+      try {
+        final response = await _dio.put('/bookings/$bookingId/accept-time');
+        if (response.data != null && response.data['success'] == true) {
+          return {'success': true, 'data': response.data['data']};
+        }
+      } catch (_) {
+        // Fallback para endpoint antigo
+      }
+      
       final response = await _dio.put('/bookings/$bookingId/accept-schedule');
       
       if (response.data != null && response.data['success'] == true) {
         return {'success': true, 'data': response.data['data']};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao aceitar horário'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  // Recusar sugestão de horário (cancela o agendamento)
+  Future<Map<String, dynamic>> rejectTimeSuggestion(String bookingId) async {
+    try {
+      await loadToken();
+      // Usar endpoint dedicado de rejeitar horário
+      final response = await _dio.put('/bookings/$bookingId/reject-time');
+      
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'data': response.data['data']};
+      } else {
+        return {'success': false, 'error': response.data['error'] ?? 'Erro ao recusar sugestão'};
       }
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};

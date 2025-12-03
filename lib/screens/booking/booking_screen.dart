@@ -1,11 +1,16 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/photo/photo_service.dart';
+import '../../services/photo/photo_repository.dart';
+import '../../services/photo/upload_service.dart';
 import '../../widgets/app_alerts.dart';
+import '../../widgets/photo/photo_grid_widget.dart';
 
 class BookingScreen extends StatefulWidget {
   final String serviceId;
@@ -14,6 +19,7 @@ class BookingScreen extends StatefulWidget {
   final String servicePrice;
   final String serviceDuration;
   final String workshopName;
+  final String? workshopLogoUrl;
 
   const BookingScreen({
     Key? key,
@@ -23,6 +29,7 @@ class BookingScreen extends StatefulWidget {
     required this.servicePrice,
     required this.serviceDuration,
     required this.workshopName,
+    this.workshopLogoUrl,
   }) : super(key: key);
 
   @override
@@ -32,6 +39,8 @@ class BookingScreen extends StatefulWidget {
 class _BookingScreenState extends State<BookingScreen> {
   final ApiService _apiService = ApiService();
   final NotificationService _notificationService = NotificationService();
+  final PhotoService _photoService = PhotoService(mode: PhotoCaptureMode.quick);
+  final UploadService _uploadService = UploadService();
   
   List<Map<String, dynamic>> _vehicles = [];
   Map<String, dynamic>? _selectedVehicle;
@@ -41,7 +50,6 @@ class _BookingScreenState extends State<BookingScreen> {
   bool _isLoading = false;
   bool _isCreatingBooking = false;
   List<File> _uploadedImages = [];
-  final ImagePicker _imagePicker = ImagePicker();
   bool _showAllVehicles = false; // Controla se mostra todos os veículos ou apenas 5
   
   // Serviços da oficina
@@ -292,7 +300,6 @@ class _BookingScreenState extends State<BookingScreen> {
         'status': 'pendente_oficina',
       };
 
-      print('📅 Criando agendamento: $bookingData');
 
       final result = await _apiService.createBooking(bookingData);
       
@@ -327,7 +334,6 @@ class _BookingScreenState extends State<BookingScreen> {
         await _showSnackBar('Erro ao criar agendamento: ${result['message']}', isError: true);
       }
     } catch (e) {
-      print('Erro ao criar agendamento: $e');
       await _showSnackBar('Erro ao criar agendamento: $e', isError: true);
     } finally {
       setState(() => _isCreatingBooking = false);
@@ -454,10 +460,36 @@ class _BookingScreenState extends State<BookingScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Icon(
-                Icons.store,
-                size: 16,
-                color: Colors.grey[600],
+              // Logo da oficina ou ícone padrão
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C977).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: (widget.workshopLogoUrl != null && 
+                        widget.workshopLogoUrl!.isNotEmpty &&
+                        widget.workshopLogoUrl!.startsWith('http'))
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.network(
+                          widget.workshopLogoUrl!,
+                          width: 24,
+                          height: 24,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const Icon(
+                            Icons.store,
+                            size: 16,
+                            color: Color(0xFF00C977),
+                          ),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.store,
+                        size: 16,
+                        color: Color(0xFF00C977),
+                      ),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -838,7 +870,7 @@ class _BookingScreenState extends State<BookingScreen> {
     return GestureDetector(
       onTap: _selectDate,
       child: Container(
-        height: 70, // Altura fixa para igualar ao horário
+        height: 80, // Altura aumentada para melhor visualização
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[100],
@@ -890,7 +922,7 @@ class _BookingScreenState extends State<BookingScreen> {
     return GestureDetector(
       onTap: _selectTime,
       child: Container(
-        height: 70, // Altura fixa igual ao campo de data
+        height: 80, // Altura aumentada para melhor visualização
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[100],
@@ -1005,7 +1037,10 @@ class _BookingScreenState extends State<BookingScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _takePhoto,
+                  onPressed: () {
+                    print('🔘 [BookingScreen] Botão Tirar Foto clicado!');
+                    _takePhoto();
+                  },
                   icon: const Icon(Icons.camera_alt, size: 20),
                   label: const Text('Tirar Foto'),
                   style: OutlinedButton.styleFrom(
@@ -1031,44 +1066,9 @@ class _BookingScreenState extends State<BookingScreen> {
           // Exibir imagens selecionadas
           if (_uploadedImages.isNotEmpty) ...[
             const SizedBox(height: 16),
-            const Text(
-              'Fotos selecionadas:',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: List.generate(_uploadedImages.length, (index) {
-                return Stack(
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        image: DecorationImage(
-                          image: FileImage(_uploadedImages[index]),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: -5,
-                      right: -5,
-                      child: IconButton(
-                        icon: const Icon(Icons.close, size: 20, color: Colors.red),
-                        onPressed: () => _removeImage(index),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ),
-                  ],
-                );
-              }),
+            PhotoGridWidget(
+              photos: _uploadedImages,
+              onRemove: _removeImage,
             ),
           ],
         ],
@@ -1110,47 +1110,159 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
+
   Future<void> _takePhoto() async {
+    print('📸 [BookingScreen] Botão Tirar Foto pressionado');
+    
     try {
-      final XFile? image = await _imagePicker.pickImage(
+      // Usar image_picker diretamente - ele já gerencia permissões automaticamente
+      // e dispara o popup NATIVO do sistema quando necessário
+      print('📸 [BookingScreen] Abrindo câmera via image_picker...');
+      
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
         source: ImageSource.camera,
         maxWidth: 1920,
         maxHeight: 1080,
         imageQuality: 85,
       );
       
-      if (image != null) {
-        setState(() {
-          _uploadedImages.add(File(image.path));
-        });
+      if (image == null) {
+        print('📸 [BookingScreen] Usuário cancelou a captura');
+        return;
       }
-    } catch (e) {
-      AppAlerts.showError(
-        context,
-        message: 'Não foi possível acessar a câmera. Verifique as permissões e tente novamente.',
-      );
+      
+      print('📸 [BookingScreen] Foto capturada: ${image.path}');
+      
+      // Verificar se o arquivo original existe
+      final originalFile = File(image.path);
+      if (!await originalFile.exists()) {
+        print('❌ [BookingScreen] Arquivo original não existe: ${image.path}');
+        if (mounted) {
+          AppAlerts.showError(
+            context,
+            message: 'Erro: arquivo de foto não encontrado. Tente novamente.',
+          );
+        }
+        return;
+      }
+      
+      // Verificar tamanho do arquivo
+      final fileSize = await originalFile.length();
+      print('📸 [BookingScreen] Tamanho do arquivo original: $fileSize bytes');
+      
+      if (fileSize == 0) {
+        print('❌ [BookingScreen] Arquivo está vazio');
+        if (mounted) {
+          AppAlerts.showError(
+            context,
+            message: 'Erro: arquivo de foto está vazio. Tente novamente.',
+          );
+        }
+        return;
+      }
+      
+      // Salvar em diretório temporário (copia o arquivo)
+      final photoRepo = PhotoRepository();
+      final tempFile = await photoRepo.saveTempFile(originalFile);
+      
+      // Verificar se a cópia foi bem-sucedida
+      if (!await tempFile.exists()) {
+        print('❌ [BookingScreen] Erro ao copiar arquivo para diretório temporário');
+        if (mounted) {
+          AppAlerts.showError(
+            context,
+            message: 'Erro ao salvar foto. Tente novamente.',
+          );
+        }
+        return;
+      }
+      
+      final tempFileSize = await tempFile.length();
+      print('📸 [BookingScreen] Foto salva em: ${tempFile.path}');
+      print('📸 [BookingScreen] Tamanho do arquivo copiado: $tempFileSize bytes');
+      
+      if (mounted) {
+        setState(() {
+          _uploadedImages.add(tempFile);
+        });
+        print('📸 [BookingScreen] Foto adicionada à lista. Total: ${_uploadedImages.length}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [BookingScreen] Erro ao tirar foto: $e');
+      print('❌ [BookingScreen] Stack trace: $stackTrace');
+      if (mounted) {
+        AppAlerts.showError(
+          context,
+          message: 'Não foi possível acessar a câmera. Verifique as permissões e tente novamente.',
+        );
+      }
     }
   }
 
   Future<void> _selectImage() async {
     try {
-      final XFile? image = await _imagePicker.pickImage(
+      // No Android, não solicitamos permissões. O image_picker usa automaticamente
+      // o Photo Picker do Android (disponível desde API 33) que não requer permissões.
+      // No iOS, tentar abrir a galeria diretamente primeiro
+      final ImagePicker picker = ImagePicker();
+      
+      // No iOS, tentar abrir a galeria diretamente
+      // O image_picker vai solicitar permissão automaticamente se necessário
+      final image = await picker.pickImage(
         source: ImageSource.gallery,
         maxWidth: 1920,
         maxHeight: 1080,
         imageQuality: 85,
       );
       
-      if (image != null) {
+      if (image != null && mounted) {
+        final photoRepo = PhotoRepository();
+        final tempFile = await photoRepo.saveTempFile(File(image.path));
         setState(() {
-          _uploadedImages.add(File(image.path));
+          _uploadedImages.add(tempFile);
         });
+      } else if (image == null && Platform.isIOS) {
+        // Se o usuário cancelou ou houve problema, verificar se precisa de permissão
+        final photosPermission = Permission.photos;
+        final photosStatus = await photosPermission.status;
+        
+        if (!photosStatus.isGranted && photosStatus.isPermanentlyDenied) {
+          // Só abrir configurações se realmente estiver permanentemente negada
+          final shouldOpenSettings = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Permissão necessária'),
+              content: const Text('Para selecionar fotos da galeria, é necessário permitir o acesso às fotos nas configurações do dispositivo.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C977),
+                  ),
+                  child: const Text('Abrir Configurações', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          );
+          
+          if (shouldOpenSettings == true && mounted) {
+            await openAppSettings();
+          }
+        }
       }
     } catch (e) {
-      AppAlerts.showError(
-        context,
-        message: 'Não foi possível abrir suas fotos agora. Verifique as permissões e tente novamente.',
-      );
+      print('Erro ao selecionar imagem: $e');
+      if (mounted) {
+        AppAlerts.showError(
+          context,
+          message: 'Não foi possível abrir suas fotos agora. Tente novamente.',
+        );
+      }
     }
   }
 
@@ -1161,16 +1273,48 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _uploadImages(String bookingId) async {
-    for (var imageFile in _uploadedImages) {
+    if (_uploadedImages.isEmpty) return;
+
+    print('📤 [BookingScreen] Iniciando upload de ${_uploadedImages.length} imagem(ns)');
+    
+    for (int i = 0; i < _uploadedImages.length; i++) {
+      final imageFile = _uploadedImages[i];
       try {
-        final result = await _apiService.uploadBookingImage(bookingId, imageFile);
-        if (!result['success']) {
-          print('Erro ao fazer upload da imagem: ${result['error']}');
+        // Verificar se o arquivo existe antes de fazer upload
+        if (!await imageFile.exists()) {
+          print('❌ [BookingScreen] Arquivo não existe antes do upload: ${imageFile.path}');
+          continue;
         }
-      } catch (e) {
-        print('Erro ao fazer upload da imagem: $e');
+        
+        final fileSize = await imageFile.length();
+        print('📤 [BookingScreen] Upload ${i + 1}/${_uploadedImages.length}: ${imageFile.path} (${fileSize} bytes)');
+        
+        final result = await _uploadService.uploadImage(
+          imageFile,
+          bookingId,
+          onProgress: (progress) {
+            print('📤 [BookingScreen] Upload progress: ${progress.percentage.toStringAsFixed(0)}%');
+          },
+        );
+
+        if (result.success) {
+          print('✅ [BookingScreen] Upload bem-sucedido: ${result.imageUrl}');
+          // Limpar arquivo temporário após upload bem-sucedido
+          try {
+            await _photoService.deleteTempPhoto(imageFile.path);
+          } catch (e) {
+            print('⚠️ [BookingScreen] Erro ao deletar arquivo temporário: $e');
+          }
+        } else {
+          print('❌ [BookingScreen] Erro ao fazer upload da imagem: ${result.error}');
+        }
+      } catch (e, stackTrace) {
+        print('❌ [BookingScreen] Erro ao fazer upload da imagem: $e');
+        print('❌ [BookingScreen] Stack trace: $stackTrace');
       }
     }
+    
+    print('📤 [BookingScreen] Upload de imagens concluído');
   }
 
   @override

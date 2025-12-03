@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -35,6 +37,22 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Usamos o Face ID para agilizar o login com Apple.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>O Meca precisa acessar sua câmera para tirar fotos dos serviços do seu veículo.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>O Meca precisa acessar sua galeria para selecionar fotos dos serviços do seu veículo.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>O Meca precisa salvar fotos na sua galeria.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -52,15 +70,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-	<key>NSFaceIDUsageDescription</key>
-	<string>Usamos o Face ID para agilizar o login com Apple.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
 </dict>
 </plist>

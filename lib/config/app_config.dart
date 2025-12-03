@@ -21,10 +21,10 @@ class AppConfig {
   static const String appName = 'MECA Cliente';
   
   /// Versão do app
-  static const String appVersion = '1.0.0';
+  static const String appVersion = '1.7.7';
   
   /// Build number
-  static const String buildNumber = '1';
+  static const String buildNumber = '161';
   
   // ========================================
   // PAGSEGURO / PAGBANK
@@ -81,6 +81,13 @@ class AppConfig {
   
   /// Firebase Project ID
   static const String firebaseProjectId = 'meca-cliente';
+  
+  // ========================================
+  // ONESIGNAL / PUSH NOTIFICATIONS
+  // ========================================
+  
+  /// OneSignal App ID
+  static const String oneSignalAppId = '7bbec33c-bffc-47b1-ab90-a080b7353763';
   
   // ========================================
   // DEBUG

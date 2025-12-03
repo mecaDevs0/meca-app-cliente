@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../utils/price_utils.dart';
 import '../../widgets/meca_loading_widget.dart';
+import '../../widgets/app_alerts.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({Key? key}) : super(key: key);
@@ -52,17 +53,23 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       // Filtrar por status - mapear corretamente
       bookings = bookings.where((b) {
         final bookingStatus = b['status'] ?? '';
+        final suggestedBy = b['suggested_by'] ?? b['sugerido_por'];
+        final hasSuggestedDate = b['suggested_date'] != null || b['data_sugerida'] != null;
+        final isTimeSuggestion = suggestedBy == 'oficina' && hasSuggestedDate;
         
         if (_currentStatus == 'pendente_oficina') {
-          return bookingStatus == 'pendente_oficina' || bookingStatus == 'pending';
+          // Incluir pendentes E agendamentos com sugestão de horário pendente (pendente_cliente)
+          return bookingStatus == 'pendente_oficina' || 
+                 bookingStatus == 'pending' ||
+                 (isTimeSuggestion && bookingStatus == 'pendente_cliente'); // Sugestão de horário aguardando aprovação
         } else if (_currentStatus == 'confirmado') {
-          // Incluir confirmado, em_andamento E pendente_cliente (aguardando aprovação do cliente)
-          return bookingStatus == 'confirmado' || 
+          // Incluir confirmado, em_andamento, mas NÃO incluir pendente_cliente com sugestão (fica em pendentes)
+          return (bookingStatus == 'confirmado' || 
                  bookingStatus == 'confirmado_oficina' || 
                  bookingStatus == 'confirmed' ||
                  bookingStatus == 'em_andamento' ||
-                 bookingStatus == 'in_progress' ||
-                 bookingStatus == 'pendente_cliente'; // Agendamentos aguardando aprovação do cliente
+                 bookingStatus == 'in_progress') &&
+                 !(isTimeSuggestion && bookingStatus == 'pendente_cliente'); // Excluir sugestões pendentes
         } else if (_currentStatus == 'finalizado_cliente') {
           return bookingStatus == 'finalizado_cliente' || 
                  bookingStatus == 'finalizado_aguardando_pagamento' ||
@@ -243,31 +250,34 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
               ),
             ),
           ),
-          // TabBar melhorado com padding
+          // TabBar com design moderno estilo iOS
           SliverPersistentHeader(
             pinned: true,
-            delegate: _FuturisticTabBarDelegate(
+            delegate: _SimpleTabBarDelegate(
               TabBar(
                 controller: _tabController,
-                labelColor: const Color(0xFF00C977),
-                unselectedLabelColor: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                labelColor: Colors.white,
+                unselectedLabelColor: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade600,
                 indicator: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: const Color(0xFF00C977).withOpacity(0.15),
-                  border: Border.all(
-                    color: const Color(0xFF00C977).withOpacity(0.3),
-                    width: 1,
-                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  color: isDarkMode ? const Color(0xFF00B369).withOpacity(0.3) : const Color(0xFF00C977).withOpacity(0.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isDarkMode ? const Color(0xFF00B369) : const Color(0xFF00C977)).withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
                 ),
                 indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
                 labelStyle: const TextStyle(
-                  fontWeight: FontWeight.w600, 
-                  fontSize: 14,
-                  letterSpacing: 0.3,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
                 ),
                 unselectedLabelStyle: const TextStyle(
                   fontWeight: FontWeight.w500,
-                  fontSize: 14,
+                  fontSize: 13,
                 ),
                 tabs: const [
                   Tab(text: 'Pendentes'),
@@ -275,6 +285,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   Tab(text: 'Concluídos'),
                 ],
               ),
+              isDarkMode: isDarkMode,
             ),
           ),
           // Conteúdo principal
@@ -422,12 +433,15 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
-                      child: Text(
-                        booking['workshop_name'] ?? 'Oficina',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: isDarkMode ? Colors.white : Colors.black87,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          booking['workshop_name'] ?? 'Oficina',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isDarkMode ? Colors.white : Colors.black87,
+                          ),
                         ),
                       ),
                     ),
@@ -557,10 +571,28 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 const SizedBox(height: 15),
 
                 // Total - só mostra se houver preço
+                // Priorizar final_price (orçamento aprovado) sobre outros valores
                 Builder(builder: (context) {
-                  final totalLabel = PriceUtils.formatCurrency(
-                    booking['final_price'] ?? booking['total'] ?? booking['estimated_price'] ?? booking['service_price'],
-                  );
+                  // Extrair preço usando a mesma lógica do order_detail_screen
+                  double? finalPrice;
+                  
+                  // Primeiro, tentar final_price (orçamento aprovado)
+                  finalPrice = PriceUtils.extractPrice(booking['final_price'] ?? booking['finalPrice']);
+                  
+                  // Se não tiver final_price, tentar outros campos
+                  if (finalPrice == null) {
+                    finalPrice = PriceUtils.extractPrice(
+                      booking['approved_amount'] ?? 
+                      booking['approvedAmount'] ?? 
+                      booking['final_amount'] ?? 
+                      booking['finalAmount'] ??
+                      booking['total'] ?? 
+                      booking['estimated_price'] ?? 
+                      booking['service_price']
+                    );
+                  }
+                  
+                  final totalLabel = finalPrice != null ? PriceUtils.formatCurrency(finalPrice) : null;
                   if (totalLabel == null) return const SizedBox.shrink();
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -583,6 +615,155 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                     ],
                   );
                 }),
+                
+                // Botões para aceitar/recusar sugestão de horário
+                Builder(
+                  builder: (context) {
+                    final suggestedBy = booking['suggested_by'] ?? booking['sugerido_por'];
+                    final hasSuggestedDate = booking['suggested_date'] != null || booking['data_sugerida'] != null;
+                    final isTimeSuggestion = suggestedBy == 'oficina' && hasSuggestedDate && status.toLowerCase() == 'pendente_cliente';
+                    
+                    if (!isTimeSuggestion) return const SizedBox.shrink();
+                    
+                    final suggestedDateStr = booking['suggested_date'] ?? booking['data_sugerida'];
+                    DateTime? suggestedDate;
+                    try {
+                      if (suggestedDateStr != null) {
+                        suggestedDate = DateTime.parse(suggestedDateStr.toString());
+                      }
+                    } catch (e) {
+                      // Ignorar erro
+                    }
+                    
+                    return Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                const Color(0xFFF59E0B).withOpacity(0.15),
+                                const Color(0xFFF97316).withOpacity(0.1),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFFF59E0B).withOpacity(0.4),
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFF59E0B).withOpacity(0.1),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF59E0B).withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.schedule_rounded,
+                                      color: Color(0xFFF59E0B),
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Nova Sugestão de Horário',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDarkMode ? Colors.white : Colors.black87,
+                                          ),
+                                        ),
+                                        if (suggestedDate != null) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '${DateFormat('dd/MM/yyyy').format(suggestedDate)} às ${DateFormat('HH:mm').format(suggestedDate)}',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _rejectTimeSuggestion(booking),
+                                      icon: const Icon(Icons.close_rounded, size: 18),
+                                      label: const Text(
+                                        'Recusar',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFFEF4444),
+                                        side: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () => _acceptTimeSuggestion(booking),
+                                      icon: const Icon(Icons.check_circle_rounded, size: 18),
+                                      label: const Text(
+                                        'Aceitar',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF00C977),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        elevation: 0,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -743,6 +924,121 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     return configs[mappedStatus] ?? configs['pending']!;
   }
 
+  Future<void> _acceptTimeSuggestion(Map<String, dynamic> booking) async {
+    final bookingId = booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) {
+      AppAlerts.showError(context, message: 'Erro: ID do agendamento não encontrado.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Aceitar Sugestão de Horário'),
+        content: const Text('Deseja aceitar o horário sugerido pela oficina? O agendamento será confirmado.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C977),
+            ),
+            child: const Text('Aceitar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final result = await _apiService.acceptSchedule(bookingId);
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        AppAlerts.showSuccess(
+          context,
+          message: 'Horário aceito com sucesso! O agendamento está confirmado.',
+        );
+        await _loadBookings();
+      } else {
+        AppAlerts.showError(
+          context,
+          message: result['error'] ?? 'Erro ao aceitar sugestão de horário.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppAlerts.showError(
+        context,
+        message: 'Erro ao aceitar sugestão: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<void> _rejectTimeSuggestion(Map<String, dynamic> booking) async {
+    final bookingId = booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) {
+      AppAlerts.showError(context, message: 'Erro: ID do agendamento não encontrado.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Recusar Sugestão de Horário'),
+        content: const Text(
+          'Ao recusar a sugestão de horário, o agendamento será cancelado. Deseja continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Recusar e Cancelar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final result = await _apiService.rejectTimeSuggestion(bookingId);
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        AppAlerts.showSuccess(
+          context,
+          message: 'Sugestão recusada. O agendamento foi cancelado e a oficina foi notificada.',
+        );
+        // Recarregar lista para remover o agendamento cancelado
+        await _loadBookings();
+      } else {
+        AppAlerts.showError(
+          context,
+          message: result['error'] ?? 'Erro ao recusar sugestão de horário.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppAlerts.showError(
+        context,
+        message: 'Erro ao recusar sugestão: ${e.toString()}',
+      );
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -750,29 +1046,47 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   }
 }
 
-class _FuturisticTabBarDelegate extends SliverPersistentHeaderDelegate {
+class _SimpleTabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
+  final bool isDarkMode;
 
-  _FuturisticTabBarDelegate(this.tabBar);
-
-  @override
-  double get minExtent => 48;
+  _SimpleTabBarDelegate(this.tabBar, {required this.isDarkMode});
 
   @override
-  double get maxExtent => 48;
+  double get minExtent => 60;
+
+  @override
+  double get maxExtent => 60;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      color: isDarkMode ? const Color(0xFF0A0A0A) : Colors.white,
-      child: tabBar,
+      decoration: BoxDecoration(
+        color: isDarkMode ? const Color(0xFF0A0A0A) : Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.shade200,
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDarkMode ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: tabBar,
+        ),
+      ),
     );
   }
 
   @override
   bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) {
-    return false;
+    if (oldDelegate is! _SimpleTabBarDelegate) return true;
+    return oldDelegate.isDarkMode != isDarkMode;
   }
 }
 

@@ -160,6 +160,28 @@ class _ServicesScreenState extends State<ServicesScreen> {
       return name.contains(query) || description.contains(query) || category.contains(query);
     }).toList();
 
+    // Dividir serviços em Gerais e Especializados
+    final generalServicesNames = ['Mecânica Geral', 'Mecanica Geral', 'Estética Automotiva', 'Estetica Automotiva', 'Funilaria e Pintura', 'Funilaria e Pintura'];
+    final generalServices = filteredServices.where((service) {
+      final name = (service['name'] ?? '').toString();
+      return generalServicesNames.any((generalName) => 
+        name.toLowerCase().contains(generalName.toLowerCase()) ||
+        generalName.toLowerCase().contains(name.toLowerCase())
+      );
+    }).toList();
+    
+    final specializedServices = filteredServices.where((service) {
+      final name = (service['name'] ?? '').toString();
+      return !generalServicesNames.any((generalName) => 
+        name.toLowerCase().contains(generalName.toLowerCase()) ||
+        generalName.toLowerCase().contains(name.toLowerCase())
+      );
+    }).toList()..sort((a, b) {
+      final nameA = (a['name'] ?? '').toString().toLowerCase();
+      final nameB = (b['name'] ?? '').toString().toLowerCase();
+      return nameA.compareTo(nameB);
+    });
+
     final bool hasOriginalServices = _services.isNotEmpty;
     final bool noResults = hasOriginalServices ? filteredServices.isEmpty : _searchQuery.isNotEmpty;
 
@@ -167,23 +189,45 @@ class _ServicesScreenState extends State<ServicesScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: TextField(
-            onChanged: (value) => setState(() => _searchQuery = value),
-            cursorColor: const Color(0xFF00C977),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search, color: Color(0xFF00C977)),
-              hintText: 'Buscar serviço por nome ou descrição...',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF00C977), width: 2),
-              ),
-            ),
+          child: Consumer<ThemeService>(
+            builder: (context, themeService, child) {
+              final isDark = themeService.isDarkMode;
+              return TextField(
+                onChanged: (value) => setState(() => _searchQuery = value),
+                cursorColor: const Color(0xFF00C977),
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF00C977)),
+                  hintText: 'Buscar serviço por nome ou descrição...',
+                  hintStyle: TextStyle(
+                    color: isDark ? Colors.grey[500] : Colors.grey[400],
+                  ),
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF00C977),
+                      width: 2,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
         if (!hasOriginalServices && _searchQuery.isEmpty)
@@ -252,13 +296,23 @@ class _ServicesScreenState extends State<ServicesScreen> {
           )
         else
           Expanded(
-            child: ListView.builder(
+            child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              itemCount: filteredServices.length,
-              itemBuilder: (context, index) {
-                final service = filteredServices[index];
-                return _buildServiceCard(service);
-              },
+              children: [
+                // Seção de Serviços Gerais
+                if (generalServices.isNotEmpty) ...[
+                  _buildSectionHeader('Serviços Gerais'),
+                  const SizedBox(height: 12),
+                  ...generalServices.map((service) => _buildServiceCard(service)),
+                  const SizedBox(height: 24),
+                ],
+                // Seção de Serviços Especializados
+                if (specializedServices.isNotEmpty) ...[
+                  _buildSectionHeader('Serviços Especializados'),
+                  const SizedBox(height: 12),
+                  ...specializedServices.map((service) => _buildServiceCard(service)),
+                ],
+              ],
             ),
           ),
       ],
@@ -271,37 +325,47 @@ class _ServicesScreenState extends State<ServicesScreen> {
         final String serviceName = (service['name'] ?? 'Serviço').toString();
         final String? description = service['description']?.toString();
         final String? priceLabel = PriceUtils.formatCurrency(service['price'] ?? service['service_price']);
+        final isDark = themeService.isDarkMode;
 
         return Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          elevation: 4,
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+              width: 1,
+            ),
           ),
+          color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
           child: InkWell(
             onTap: () => _navigateToServiceDetail(service),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF00B07F),
-                    Color(0xFF007E6C),
-                  ],
-                ),
-              ),
+              padding: const EdgeInsets.all(20),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 60,
-                    height: 60,
+                    width: 64,
+                    height: 64,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF00C977),
+                          Color(0xFF00B369),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00C977).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: const Icon(
                       Icons.build,
@@ -316,53 +380,66 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       children: [
                         Text(
                           serviceName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: isDark ? Colors.white : const Color(0xFF252940),
                           ),
                         ),
                         if (description != null && description.isNotEmpty) ...[
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Text(
                             description,
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.white.withOpacity(0.75),
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              height: 1.4,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
                         Row(
                           children: [
-                            const Icon(
-                              Icons.location_on,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 4),
-                            const Text(
-                              'Ver oficinas próximas',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00C977).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.location_on,
+                                    size: 14,
+                                    color: const Color(0xFF00C977),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Ver oficinas',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: const Color(0xFF00C977),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             if (priceLabel != null) ...[
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(6),
+                                  color: isDark ? Colors.grey[800] : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  priceLabel!,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  priceLabel,
+                                  style: TextStyle(
+                                    color: isDark ? Colors.grey[300] : const Color(0xFF252940),
                                     fontWeight: FontWeight.w600,
                                     fontSize: 12,
                                   ),
@@ -370,10 +447,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
                               ),
                             ],
                             const Spacer(),
-                            const Icon(
+                            Icon(
                               Icons.arrow_forward_ios,
                               size: 16,
-                              color: Colors.white,
+                              color: isDark ? Colors.grey[500] : Colors.grey[400],
                             ),
                           ],
                         ),
@@ -383,6 +460,39 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 ],
               ),
             ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        final isDark = themeService.isDarkMode;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C977),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : const Color(0xFF252940),
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ],
           ),
         );
       },

@@ -20,53 +20,65 @@ class NotificationService {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    // Inicializar timezone database antes de usar
     try {
-      tz_data.initializeTimeZones();
-      tz.setLocalLocation(tz.getLocation('America/Sao_Paulo'));
-    } catch (e) {
-      // Se já estiver inicializado, ignorar erro
-      print('Timezone já inicializado ou erro ao inicializar: $e');
+      // Inicializar timezone database antes de usar
+      try {
+        tz_data.initializeTimeZones();
+        tz.setLocalLocation(tz.getLocation('America/Sao_Paulo'));
+      } catch (e) {
+        // Se já estiver inicializado, ignorar erro
+        print('Timezone já inicializado ou erro ao inicializar: $e');
+      }
+
+      // Configurar notificações locais
+      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
+      
+      const initSettings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      );
+
+      await _localNotifications.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse response) {
+          if (response.payload != null && onNotificationClick != null) {
+            onNotificationClick!(response.payload);
+          }
+        },
+      );
+
+      // Configurar Firebase Messaging (temporariamente desabilitado)
+      // await _firebaseMessaging.requestPermission(
+      //   alert: true,
+      //   badge: true,
+      //   sound: true,
+      // );
+
+      // Obter token FCM (temporariamente desabilitado)
+      // final token = await _firebaseMessaging.getToken();
+      // print('FCM Token: $token');
+
+      _isInitialized = true;
+    } catch (e, stackTrace) {
+      print('Erro ao inicializar NotificationService: $e');
+      print('Stack trace: $stackTrace');
+      // Não marcar como inicializado se houver erro
+      // Mas não lançar exceção para não quebrar o app
     }
-
-    // Configurar notificações locais
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-    
-    const initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-
-    await _localNotifications.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
-        if (response.payload != null && onNotificationClick != null) {
-          onNotificationClick!(response.payload);
-        }
-      },
-    );
-
-    // Configurar Firebase Messaging (temporariamente desabilitado)
-    // await _firebaseMessaging.requestPermission(
-    //   alert: true,
-    //   badge: true,
-    //   sound: true,
-    // );
-
-    // Obter token FCM (temporariamente desabilitado)
-    // final token = await _firebaseMessaging.getToken();
-    // print('FCM Token: $token');
-
-    _isInitialized = true;
   }
 
   Future<void> requestPermissions() async {
-    await Permission.notification.request();
+    try {
+      await Permission.notification.request();
+    } catch (e) {
+      print('Erro ao solicitar permissões de notificação: $e');
+      // Não lançar exceção, apenas logar o erro
+    }
   }
 
   Future<String?> getFCMToken() async {

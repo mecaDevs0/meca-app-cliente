@@ -1,11 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/onesignal_service.dart';
 import '../notifications/recent_notifications_screen.dart';
 import '../../providers/notification_provider.dart';
+import '../../utils/formatters.dart';
 import 'edit_password_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -351,8 +355,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 16),
             _buildInfoRow(Icons.person, 'Nome', '${_customerData?['firstName'] ?? _customerData?['first_name'] ?? ''} ${_customerData?['lastName'] ?? _customerData?['last_name'] ?? ''}'),
             _buildInfoRow(Icons.email, 'Email', _customerData?['email'] ?? ''),
-            _buildInfoRow(Icons.phone, 'Telefone', _customerData?['phone'] ?? ''),
-            _buildInfoRow(Icons.badge, 'CPF', _customerData?['cpf'] ?? _customerData?['document'] ?? _customerData?['cpf_number'] ?? _customerData?['document_number'] ?? 'Não informado'),
+            _buildInfoRow(Icons.phone, 'Telefone', Formatters.formatPhone(_customerData?['phone'] ?? _customerData?['phone_number'])),
+            _buildInfoRow(Icons.badge, 'CPF', Formatters.formatCpf(_customerData?['cpf'] ?? _customerData?['document'] ?? _customerData?['cpf_number'] ?? _customerData?['document_number'])),
           ],
         ),
       ),
@@ -678,9 +682,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: const Text('Fechar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              // Aqui você poderia abrir um chat ou email
+              final emailUri = Uri(
+                scheme: 'mailto',
+                path: 'contato@mecabr.com',
+                query: 'subject=Suporte MECA - Solicitação de Ajuda',
+              );
+              if (await canLaunchUrl(emailUri)) {
+                await launchUrl(emailUri);
+              } else {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Não foi possível abrir o aplicativo de email.'),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                }
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00C977),
@@ -698,7 +718,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       if (result['success'] == true) {
         final provider = Provider.of<NotificationProvider>(context, listen: false);
+        final previousUnread = provider.unreadNotifications;
         provider.setNotificationsFromPayload(result['data']);
+        final currentUnread = provider.unreadNotifications;
+        
+        // Se há novas notificações não lidas, exibir push notification
+        if (currentUnread > previousUnread) {
+          final newNotifications = NotificationProvider.normalizeNotifications(result['data']);
+          final unreadNotifications = newNotifications.where((n) => 
+            (n['read'] != true && n['is_read'] != true)
+          ).toList();
+          
+          // Exibir push notification para as novas notificações não lidas
+          if (unreadNotifications.isNotEmpty) {
+            final notificationService = NotificationService();
+            for (var notification in unreadNotifications.take(3)) { // Limitar a 3 para não sobrecarregar
+              final title = notification['title']?.toString() ?? 'Nova notificação';
+              final message = notification['message']?.toString() ?? '';
+              final notificationId = notification['id']?.toString() ?? '';
+              final bookingId = notification['booking_id'] ?? notification['data']?['booking_id'];
+              
+              String? payload;
+              if (bookingId != null) {
+                payload = NotificationService.createNavigationPayload('booking', bookingId.toString());
+              } else if (notificationId.isNotEmpty) {
+                payload = NotificationService.createNavigationPayload('notifications', notificationId);
+              }
+              
+              await notificationService.showLocalNotification(
+                id: DateTime.now().millisecondsSinceEpoch ~/ 1000 + unreadNotifications.indexOf(notification),
+                title: title,
+                body: message.isNotEmpty ? message : 'Você tem uma nova notificação',
+                payload: payload,
+              );
+            }
+          }
+        }
       }
     } catch (e) {
       if (kDebugMode) {
@@ -762,6 +817,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _forceLogout() async {
     try {
+      // Remover token OneSignal antes de fazer logout
+      try {
+        final playerId = OneSignalService.getSubscriptionId();
+        if (playerId != null) {
+          await _apiService.removeDeviceToken(playerId);
+          await OneSignalService.removeExternalUserId();
+        }
+      } catch (e) {
+        print('Erro ao remover device token: $e');
+      }
+      
       await _apiService.logout();
     } catch (_) {}
     if (!mounted) return;

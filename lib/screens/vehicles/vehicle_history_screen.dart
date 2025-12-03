@@ -337,7 +337,41 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.store, size: 16, color: Color(0xFF00C977)),
+              // Logo da oficina ou ícone padrão
+              Builder(
+                builder: (context) {
+                  final workshopLogoUrl = item['workshop_logo_url']?.toString() ?? 
+                                         item['workshop']?['logo_url']?.toString();
+                  
+                  if (workshopLogoUrl != null && 
+                      workshopLogoUrl.isNotEmpty &&
+                      workshopLogoUrl.startsWith('http')) {
+                    return Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00C977).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Image.network(
+                          workshopLogoUrl,
+                          width: 16,
+                          height: 16,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const Icon(
+                            Icons.store,
+                            size: 16,
+                            color: Color(0xFF00C977),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  return const Icon(Icons.store, size: 16, color: Color(0xFF00C977));
+                },
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(

@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/price_utils.dart';
@@ -27,6 +27,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   final NotificationService _notificationService = NotificationService();
   Map<String, dynamic>? _bookingDetails;
   bool _paymentPromptDisplayed = false;
+  bool _isLoadingDetails = false;
 
   List<Map<String, dynamic>> _coerceUploads(dynamic raw) {
     if (raw == null) return const [];
@@ -235,14 +236,93 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _loadBookingDetails();
+    // Se recebeu apenas ID (vindo de notificação), carregar dados primeiro
+    if (widget.booking.containsKey('id') && widget.booking.length == 1) {
+      _loadBookingDetailsFromId();
+    } else {
+      _loadBookingDetails();
+    }
     _checkBookingStatus();
     _setupBookingStatusListener();
   }
 
+  Future<void> _loadBookingDetailsFromId() async {
+    if (_isLoadingDetails) return;
+    
+    setState(() {
+      _isLoadingDetails = true;
+    });
+
+    try {
+      final bookingId = widget.booking['id']?.toString() ?? '';
+      if (bookingId.isEmpty) {
+        debugPrint('Erro: ID do agendamento não encontrado');
+        if (mounted) {
+          setState(() {
+            _isLoadingDetails = false;
+          });
+          AppAlerts.showError(
+            context,
+            message: 'ID do agendamento não encontrado.',
+          );
+        }
+        return;
+      }
+
+      final result = await _apiService.getBookingDetails(bookingId);
+
+      if (!mounted) return;
+
+      if (result['success'] && result['data'] != null) {
+        final details = Map<String, dynamic>.from(result['data'] as Map);
+        setState(() {
+          _bookingDetails = details;
+          _isLoadingDetails = false;
+          // Atualizar widget.booking com todos os dados carregados
+          widget.booking.clear();
+          widget.booking.addAll(details);
+        });
+        // Verificar status após carregar dados
+        _checkBookingStatus();
+        // Forçar rebuild para atualizar botões de ação
+        if (mounted) {
+          setState(() {});
+        }
+      } else {
+        debugPrint('Erro ao carregar detalhes: ${result['error']}');
+        if (mounted) {
+          setState(() {
+            _isLoadingDetails = false;
+          });
+          AppAlerts.showError(
+            context,
+            message: result['error'] ?? 'Erro ao carregar detalhes do agendamento.',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Erro ao carregar detalhes do agendamento: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingDetails = false;
+        });
+        AppAlerts.showError(
+          context,
+          message: 'Erro ao carregar detalhes do agendamento.',
+        );
+      }
+    }
+  }
+
   Future<void> _loadBookingDetails() async {
     try {
-      final result = await _apiService.getBookingDetails(widget.booking['id']?.toString() ?? '');
+      final bookingId = widget.booking['id']?.toString() ?? '';
+      if (bookingId.isEmpty) {
+        debugPrint('Erro: ID do agendamento não encontrado');
+        return;
+      }
+
+      final result = await _apiService.getBookingDetails(bookingId);
 
       if (!mounted) return;
 
@@ -394,7 +474,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final status = widget.booking['status']?.toString() ?? 'pending';
+    // Se está carregando dados (vindo de notificação), mostrar loading
+    if (_isLoadingDetails) {
+      return Scaffold(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF0F0F0F) : Colors.white,
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.white,
+          foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF252940),
+          title: const Text(
+            'Detalhes do Agendamento',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    // Usar status dos dados carregados ou do widget.booking
+    final merged = _mergeBookingData();
+    final status = merged['status']?.toString() ?? widget.booking['status']?.toString() ?? 'pending';
     final normalizedStatus = _normalizeStatusKey(status);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final canCancel = normalizedStatus == 'pending' || normalizedStatus == 'pending_customer' || normalizedStatus == 'confirmed';
@@ -534,11 +635,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         (_bookingDetails?['workshop_name'] ?? widget.booking['workshop_name'] ?? 'Oficina').toString(),
                       ),
                   _buildWorkshopMapCard(isDarkMode),
-                      _buildLocationRow(
+                      Builder(
+                        builder: (context) {
+                          final workshop = _bookingDetails?['workshop'] ?? widget.booking['workshop'];
+                          return _buildLocationRow(
                         Icons.location_on,
                         _formatWorkshopAddress(_bookingDetails?['workshop_address'] ?? widget.booking['workshop_address']),
-                        _bookingDetails?['latitude'] ?? widget.booking['latitude'],
-                        _bookingDetails?['longitude'] ?? widget.booking['longitude'],
+                            workshop?['latitude'] ?? _bookingDetails?['latitude'] ?? widget.booking['latitude'],
+                            workshop?['longitude'] ?? _bookingDetails?['longitude'] ?? widget.booking['longitude'],
+                          );
+                        },
                       ),
                       if (_bookingDetails?['workshop_city'] != null || _bookingDetails?['workshop_state'] != null)
                         _buildInfoRow(
@@ -841,13 +947,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final status = (merged['status'] ?? widget.booking['status'] ?? '').toString();
     final normalizedStatus = _normalizeStatusKey(status);
     final hasCompletedAt = merged['completed_at'] != null || widget.booking['completed_at'] != null;
+    final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
+    final isFinalQuote = quoteStatus == 'final';
+    
+    // Buscar items do orçamento
+    final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
+    final quoteItems = quoteItemsRaw is List ? quoteItemsRaw : null;
+    final diagnosticValue = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+    final hasDetailedQuote = quoteItems != null && quoteItems.isNotEmpty;
 
     String title;
     String subtitle;
 
     if (normalizedStatus == 'awaiting_payment') {
-      title = 'Orçamento aprovado';
-      subtitle = 'Finalize o pagamento para concluir o serviço.';
+      title = isFinalQuote ? 'Orçamento Final' : 'Orçamento aprovado';
+      subtitle = isFinalQuote 
+          ? 'Valor final após conclusão do serviço. Realize o pagamento.'
+          : 'Finalize o pagamento para concluir o serviço.';
     } else if (hasCompletedAt) {
       title = 'Orçamento final da oficina';
       subtitle = 'Valor definido após o término do serviço.';
@@ -892,16 +1008,146 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               fontSize: 14,
             ),
           ),
+          
+          // Mostrar breakdown detalhado se houver items
+          if (hasDetailedQuote) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Detalhamento do Orçamento',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Items do orçamento
+                  ...List<Widget>.from(quoteItems.map<Widget>((item) {
+                    final description = item['description'] ?? '';
+                    final quantity = item['quantity'] ?? 1;
+                    final unitPrice = (item['unit_price'] ?? 0) / 100.0;
+                    final totalItem = unitPrice * quantity;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  description,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                if (quantity > 1)
+                                  Text(
+                                    'Qtd: $quantity × ${PriceUtils.formatCurrency(unitPrice)}',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.8),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  })),
+                  
+                  // Valor do diagnóstico (se houver)
+                  if (diagnosticValue != null && diagnosticValue > 0) ...[
+                    const Divider(color: Colors.white38, height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Diagnóstico',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          PriceUtils.formatCurrency(diagnosticValue / 100) ?? 'R\$ 0,00',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  
+                  const Divider(color: Colors.white38, height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Total',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        _formatPriceLabel() ?? '—',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildWorkshopMapCard(bool isDarkMode) {
-    final lat = _parseCoordinate(_bookingDetails?['latitude'] ?? widget.booking['latitude']);
-    final lng = _parseCoordinate(_bookingDetails?['longitude'] ?? widget.booking['longitude']);
+    // Buscar latitude/longitude de múltiplas fontes: workshop object, bookingDetails, ou booking direto
+    final workshop = _bookingDetails?['workshop'] ?? widget.booking['workshop'];
+    final lat = _parseCoordinate(
+      workshop?['latitude'] ?? 
+      _bookingDetails?['latitude'] ?? 
+      widget.booking['latitude']
+    );
+    final lng = _parseCoordinate(
+      workshop?['longitude'] ?? 
+      _bookingDetails?['longitude'] ?? 
+      widget.booking['longitude']
+    );
     final hasCoords = lat != null && lng != null;
-    final staticMapUrl = hasCoords ? _buildStaticMapUrl(lat, lng) : null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -924,15 +1170,33 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           child: Stack(
             children: [
               Positioned.fill(
-                child: staticMapUrl != null
-                    ? Image.network(
-                        staticMapUrl,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, progress) {
-                          if (progress == null) return child;
-                          return _buildMapPlaceholder(isDarkMode);
-                        },
-                        errorBuilder: (context, error, stackTrace) => _buildMapPlaceholder(isDarkMode),
+                child: hasCoords
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: LatLng(lat, lng),
+                            zoom: 15.0,
+                          ),
+                          markers: {
+                            Marker(
+                              markerId: const MarkerId('workshopLocation'),
+                              position: LatLng(lat, lng),
+                              infoWindow: InfoWindow(
+                                title: _bookingDetails?['workshop_name'] ?? widget.booking['workshop_name'] ?? 'Oficina',
+                              ),
+                              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+                            ),
+                          },
+                          mapType: MapType.normal,
+                          myLocationEnabled: false,
+                          myLocationButtonEnabled: false,
+                          zoomControlsEnabled: false,
+                          mapToolbarEnabled: false,
+                          onMapCreated: (GoogleMapController controller) {
+                            print('🗺️ [OrderDetail] Mapa interativo criado com sucesso!');
+                          },
+                        ),
                       )
                     : _buildMapPlaceholder(isDarkMode),
               ),
@@ -1050,17 +1314,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   double? _parseCoordinate(dynamic value) {
-    if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value.replaceAll(',', '.'));
+    if (value == null) return null;
+    if (value is num) {
+      final parsed = value.toDouble();
+      if (parsed != 0.0 && !parsed.isNaN && parsed.isFinite) return parsed;
+    return null;
+  }
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty || trimmed == 'null' || trimmed == 'NULL' || trimmed == '') return null;
+      final lower = trimmed.toLowerCase();
+      if (lower == 'n/a' || lower == 'na' || lower == 'null' || lower == '--' || lower == 'undefined') {
+        return null;
+      }
+      final parsed = double.tryParse(trimmed.replaceAll(',', '.'));
+      if (parsed != null && parsed != 0.0 && !parsed.isNaN && parsed.isFinite) {
+        return parsed;
+      }
+    }
     return null;
   }
 
-  String? _buildStaticMapUrl(double lat, double lng) {
-    final key = AppConfig.googleMapsApiKeyBrowser;
-    if (key.isEmpty) return null;
-    final encodedMarker = Uri.encodeComponent('color:0x00C977|label:M|$lat,$lng');
-    return 'https://maps.googleapis.com/maps/api/staticmap?center=$lat,$lng&zoom=15&size=600x360&scale=2&maptype=roadmap&markers=$encodedMarker&key=$key';
-  }
 
   Widget _buildInfoRow(IconData icon, String text) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -1360,7 +1634,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
 
     if (confirm == true) {
-      final result = await _apiService.cancelBooking(widget.booking['id']);
+      final bookingId = widget.booking['id']?.toString() ?? '';
+      debugPrint('🔍 [OrderDetail] Cancelando agendamento ID: $bookingId');
+      
+      if (bookingId.isEmpty) {
+        AppAlerts.showError(
+          context,
+          message: 'Erro: ID do agendamento não encontrado.',
+        );
+        return;
+      }
+      
+      final result = await _apiService.cancelBooking(bookingId);
 
       if (!mounted) return;
 
@@ -1371,6 +1656,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           message: 'Agendamento cancelado com sucesso.',
         );
       } else {
+        debugPrint('❌ [OrderDetail] Erro ao cancelar: ${result['error']}');
         AppAlerts.showError(
           context,
           message: result['error'] ?? 'Não foi possível cancelar o agendamento agora. Tente novamente.',
@@ -1408,20 +1694,38 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       borderColor = Colors.blue.shade200;
       iconColor = Colors.blue.shade700;
     } else if (rawStatus == 'pendente_cliente' || normalizedStatus == 'pending_customer') {
-      final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
-      if (hasCompletedAt) {
-        title = 'Revise o orçamento final';
-        description = 'O serviço terminou e o valor final já está disponível.';
-        nextStep = 'Aprove para liberar o pagamento ou rejeite se houver algo errado.';
+      // Verificar se é sugestão de horário ou orçamento
+      final merged = _mergeBookingData();
+      final suggestedBy = merged['suggested_by'] ?? merged['sugerido_por'];
+      final hasSuggestedDate = merged['suggested_date'] != null || merged['data_sugerida'] != null;
+      final isTimeSuggestion = suggestedBy == 'oficina' && hasSuggestedDate;
+      
+      if (isTimeSuggestion) {
+        // É sugestão de horário da oficina
+        title = 'Nova sugestão de horário';
+        description = 'A oficina sugeriu um novo horário para o agendamento.';
+        nextStep = 'Aceite o horário sugerido ou sugira outro horário.';
+        icon = Icons.schedule;
+        cardColor = Colors.blue.shade50;
+        borderColor = Colors.blue.shade200;
+        iconColor = Colors.blue.shade700;
       } else {
-        title = 'Revise o orçamento';
-        description = 'A oficina enviou o valor para iniciar o serviço.';
-        nextStep = 'Aceite para liberar o início ou rejeite se precisar ajustar.';
+        // É orçamento pendente
+        final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
+        if (hasCompletedAt) {
+          title = 'Revise o orçamento final';
+          description = 'O serviço terminou e o valor final já está disponível.';
+          nextStep = 'Aprove para liberar o pagamento ou rejeite se houver algo errado.';
+        } else {
+          title = 'Revise o orçamento';
+          description = 'A oficina enviou o valor para iniciar o serviço.';
+          nextStep = 'Aceite para liberar o início ou rejeite se precisar ajustar.';
+        }
+        icon = Icons.receipt_long;
+        cardColor = Colors.amber.shade50;
+        borderColor = Colors.amber.shade200;
+        iconColor = Colors.amber.shade800;
       }
-      icon = Icons.receipt_long;
-      cardColor = Colors.amber.shade50;
-      borderColor = Colors.amber.shade200;
-      iconColor = Colors.amber.shade800;
     } else if (normalizedStatus == 'in_progress') {
       title = 'Serviço em andamento';
       description = 'Seu veículo está sendo atendido agora.';
@@ -1524,12 +1828,51 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget _buildActionButtons(String status) {
     final normalizedStatus = _normalizeStatusKey(status);
     final rawStatus = status.toLowerCase();
+    final merged = _mergeBookingData();
+    
+    // DEBUG: Log para verificar detecção de sugestão
+    debugPrint('🔍 [OrderDetail] _buildActionButtons:');
+    debugPrint('  - status: $status');
+    debugPrint('  - rawStatus: $rawStatus');
+    debugPrint('  - merged[sugerido_por]: ${merged['sugerido_por']}');
+    debugPrint('  - merged[suggested_by]: ${merged['suggested_by']}');
+    debugPrint('  - merged[data_sugerida]: ${merged['data_sugerida']}');
+    debugPrint('  - merged[suggested_date]: ${merged['suggested_date']}');
+    debugPrint('  - _bookingDetails[sugerido_por]: ${_bookingDetails?['sugerido_por']}');
+    debugPrint('  - _bookingDetails[suggested_by]: ${_bookingDetails?['suggested_by']}');
+    debugPrint('  - _bookingDetails[data_sugerida]: ${_bookingDetails?['data_sugerida']}');
+    debugPrint('  - _bookingDetails[suggested_date]: ${_bookingDetails?['suggested_date']}');
+    
+    // Verificar sugestão de horário com múltiplas variações de campos
+    final suggestedBy = merged['suggested_by'] ?? 
+                       merged['sugerido_por'] ?? 
+                       _bookingDetails?['suggested_by'] ?? 
+                       _bookingDetails?['sugerido_por'];
+    final suggestedDateRaw = merged['suggested_date'] ?? 
+                            merged['data_sugerida'] ?? 
+                            _bookingDetails?['suggested_date'] ?? 
+                            _bookingDetails?['data_sugerida'];
+    final hasSuggestedDate = suggestedDateRaw != null && suggestedDateRaw.toString().isNotEmpty && suggestedDateRaw.toString() != 'null';
+    final isTimeSuggestion = (suggestedBy == 'oficina' || suggestedBy == 'workshop') && hasSuggestedDate && (rawStatus == 'pendente_cliente' || rawStatus == 'pending_cliente' || normalizedStatus == 'pending_customer');
+    
+    debugPrint('  - suggestedBy: $suggestedBy');
+    debugPrint('  - hasSuggestedDate: $hasSuggestedDate');
+    debugPrint('  - isTimeSuggestion: $isTimeSuggestion');
+    
+    final hasQuote = (merged['final_price'] != null && merged['final_price'] > 0) ||
+                     (_bookingDetails?['final_price'] != null && _bookingDetails!['final_price'] > 0);
+    
     return Container(
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          // Botão para aprovar orçamento quando status for pendente_cliente
-          if (rawStatus == 'pendente_cliente') ...[
+          // Card para sugestão de horário da oficina
+          if (isTimeSuggestion) ...[
+            _buildTimeSuggestionCard(merged),
+            const SizedBox(height: 20),
+          ],
+          // Botão para aprovar orçamento quando status for pendente_cliente E não for sugestão de horário
+          if (rawStatus == 'pendente_cliente' && !isTimeSuggestion && hasQuote) ...[
             // Card destacado com valor do orçamento
             Container(
               padding: const EdgeInsets.all(20),
@@ -1597,14 +1940,156 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  if (_bookingDetails?['final_price'] != null || widget.booking['final_price'] != null)
-                    Container(
+                  if (_bookingDetails?['final_price'] != null || widget.booking['final_price'] != null) ...[
+                    // Buscar items do orçamento
+                    Builder(
+                      builder: (context) {
+                        final merged = _mergeBookingData();
+                        final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
+                        final quoteItems = quoteItemsRaw is List ? quoteItemsRaw : null;
+                        final diagnosticValue = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+                        final hasDetailedQuote = quoteItems != null && quoteItems.isNotEmpty;
+                        final finalPrice = (_bookingDetails?['final_price'] ?? widget.booking['final_price'] ?? 0) / 100.0;
+                        
+                        if (hasDetailedQuote) {
+                          // Mostrar breakdown detalhado
+                          return Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Detalhamento do Orçamento',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                // Items do orçamento
+                                ...List<Widget>.from(quoteItems.map<Widget>((item) {
+                                  final description = item['description'] ?? '';
+                                  final quantity = item['quantity'] ?? 1;
+                                  final unitPrice = (item['unit_price'] ?? 0) / 100.0;
+                                  final totalItem = unitPrice * quantity;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
                       child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                description,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              if (quantity > 1)
+                                                Text(
+                                                  'Qtd: $quantity × ${PriceUtils.formatCurrency(unitPrice)}',
+                                                  style: TextStyle(
+                                                    color: Colors.white.withOpacity(0.8),
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                        Text(
+                                          PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                })),
+                                
+                                // Valor do diagnóstico (se houver)
+                                if (diagnosticValue != null && diagnosticValue > 0) ...[
+                                  const Divider(color: Colors.white38, height: 20),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Diagnóstico',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Análise do veículo',
+                                            style: TextStyle(
+                                              color: Colors.white.withOpacity(0.7),
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Text(
+                                        PriceUtils.formatCurrency(diagnosticValue / 100) ?? 'R\$ 0,00',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                                
+                                const Divider(color: Colors.white38, height: 20),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text(
+                                      'Valor Total:',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      PriceUtils.formatCurrency(finalPrice) ?? 'R\$ 0,00',
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        } else {
+                          // Mostrar apenas valor total (formato antigo)
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
@@ -1616,7 +2101,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             ),
                           ),
                           Text(
-                            'R\$ ${((_bookingDetails?['final_price'] ?? widget.booking['final_price'] ?? 0) / 100).toStringAsFixed(2)}',
+                                  PriceUtils.formatCurrency(finalPrice) ?? 'R\$ 0,00',
                             style: const TextStyle(
                               fontSize: 24,
                               color: Colors.white,
@@ -1625,7 +2110,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           ),
                         ],
                       ),
+                          );
+                        }
+                      },
                     ),
+                  ],
                 ],
               ),
             ),
@@ -1693,37 +2182,64 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
             const SizedBox(height: 16),
             // Mensagem explicativa
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Builder(
-                      builder: (context) {
-                        final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
-                        final message = hasCompletedAt
-                            ? 'Após aprovar, você poderá realizar o pagamento do serviço.'
-                            : 'Após aprovar, a oficina poderá iniciar o serviço.';
-                        return Text(
+            Builder(
+              builder: (context) {
+                final merged = _mergeBookingData();
+                final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
+                final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
+                final isFinalQuote = quoteStatus == 'final';
+                final diagnosticValue = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+                final hasDiagnostic = diagnosticValue != null && diagnosticValue > 0;
+                
+                String message;
+                Color containerColor;
+                Color borderColor;
+                Color iconColor;
+                
+                if (isFinalQuote) {
+                  message = 'Este é o orçamento final após o serviço. Aprove para realizar o pagamento.';
+                  containerColor = Colors.green.shade50;
+                  borderColor = Colors.green.shade200;
+                  iconColor = Colors.green.shade700;
+                } else if (hasCompletedAt) {
+                  message = 'Após aprovar, você poderá realizar o pagamento do serviço.';
+                  containerColor = Colors.blue.shade50;
+                  borderColor = Colors.blue.shade200;
+                  iconColor = Colors.blue.shade700;
+                } else {
+                  message = hasDiagnostic
+                      ? 'Ao aprovar, a oficina iniciará o serviço. Se rejeitar, você pagará apenas o diagnóstico (${PriceUtils.formatCurrency(diagnosticValue / 100)}).'
+                      : 'Após aprovar, a oficina poderá iniciar o serviço.';
+                  containerColor = Colors.blue.shade50;
+                  borderColor = Colors.blue.shade200;
+                  iconColor = Colors.blue.shade700;
+                }
+                
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: containerColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: iconColor, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
                           message,
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.blue.shade900,
+                            color: iconColor == Colors.green.shade700 ? Colors.green.shade900 : (iconColor == Colors.blue.shade700 ? Colors.blue.shade900 : Colors.grey.shade900),
                             fontWeight: FontWeight.w500,
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
             const SizedBox(height: 12),
           ],
@@ -1888,6 +2404,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             _bookingDetails!['status'] = newStatus;
           }
         });
+        
+        // Navegar de volta para a tela de agendamentos no status CONFIRMADOS
+        if (!hasCompletedAt) {
+          // Aguardar um pouco para o usuário ver a mensagem de sucesso
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) {
+            // Navegar de volta e depois para a aba de confirmados
+            Navigator.of(context).popUntil((route) {
+              // Voltar até a tela de agendamentos
+              return route.settings.name == '/orders' || route.isFirst;
+            });
+            // Se não encontrou a rota, apenas pop
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          }
+        }
       } else {
       AppAlerts.showError(
         context,
@@ -1903,10 +2436,436 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
   }
 
+  Widget _buildTimeSuggestionCard(Map<String, dynamic> merged) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final suggestedDateStr = merged['suggested_date'] ?? merged['data_sugerida'];
+    if (suggestedDateStr == null) return const SizedBox.shrink();
+    
+    DateTime? suggestedDate;
+    try {
+      suggestedDate = DateTime.parse(suggestedDateStr.toString());
+    } catch (e) {
+      return const SizedBox.shrink();
+    }
+    
+    final workshopName = merged['workshop_name'] ?? merged['workshop']?['name'] ?? 'Oficina';
+    final cardColor = isDarkMode ? const Color(0xFF1A1A1A) : Colors.white;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final secondaryTextColor = isDarkMode ? Colors.grey[400]! : Colors.grey[600]!;
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withOpacity(0.4),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFF59E0B).withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+            spreadRadius: 0,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+            spreadRadius: -2,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header com gradiente
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFFF59E0B),
+                  const Color(0xFFF97316),
+                ],
+              ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.25),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.schedule_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Nova Sugestão de Horário',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$workshopName sugeriu um novo horário',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withOpacity(0.95),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Conteúdo
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Card de data e hora
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFF59E0B).withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.calendar_today_rounded,
+                          color: Color(0xFFF59E0B),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Data',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: secondaryTextColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              DateFormat('dd/MM/yyyy').format(suggestedDate),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFF59E0B).withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.access_time_rounded,
+                          color: Color(0xFFF59E0B),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Horário',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: secondaryTextColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              DateFormat('HH:mm').format(suggestedDate),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                
+                // Botões
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _rejectTimeSuggestion,
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        label: const Text(
+                          'Recusar',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFEF4444),
+                          side: const BorderSide(color: Color(0xFFEF4444), width: 2),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _acceptTimeSuggestion,
+                        icon: const Icon(Icons.check_circle_rounded, size: 22),
+                        label: const Text(
+                          'Aceitar',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00C977),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                          shadowColor: Colors.transparent,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _acceptTimeSuggestion() async {
+    final bookingId = widget.booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) {
+      AppAlerts.showError(context, message: 'Erro: ID do agendamento não encontrado.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Aceitar Sugestão de Horário'),
+        content: const Text('Deseja aceitar o horário sugerido pela oficina? O agendamento será confirmado.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00C977),
+            ),
+            child: const Text('Aceitar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final result = await _apiService.acceptSchedule(bookingId);
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        await _loadBookingDetails();
+        AppAlerts.showSuccess(
+          context,
+          message: 'Horário aceito com sucesso! O agendamento está confirmado.',
+        );
+        setState(() {
+          widget.booking['status'] = 'confirmado';
+          if (_bookingDetails != null) {
+            _bookingDetails!['status'] = 'confirmado';
+          }
+        });
+        // Navegar de volta após um delay
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+        });
+      } else {
+        AppAlerts.showError(
+          context,
+          message: result['error'] ?? 'Erro ao aceitar sugestão de horário.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppAlerts.showError(
+        context,
+        message: 'Erro ao aceitar sugestão: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<void> _rejectTimeSuggestion() async {
+    final bookingId = widget.booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) {
+      AppAlerts.showError(context, message: 'Erro: ID do agendamento não encontrado.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Recusar Sugestão de Horário'),
+        content: const Text(
+          'Ao recusar a sugestão de horário, o agendamento será cancelado. Deseja continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Recusar e Cancelar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final result = await _apiService.rejectTimeSuggestion(bookingId);
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        AppAlerts.showSuccess(
+          context,
+          message: 'Sugestão recusada. O agendamento foi cancelado e a oficina foi notificada.',
+        );
+        Navigator.pop(context, true);
+      } else {
+        AppAlerts.showError(
+          context,
+          message: result['error'] ?? 'Erro ao recusar sugestão de horário.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppAlerts.showError(
+        context,
+        message: 'Erro ao recusar sugestão: ${e.toString()}',
+      );
+    }
+  }
+
   Future<void> _rejectQuote() async {
     final bookingId = widget.booking['id']?.toString() ?? '';
     if (bookingId.isEmpty) {
       AppAlerts.showError(context, message: 'Erro: ID do agendamento não encontrado.');
+      return;
+    }
+
+    final merged = _mergeBookingData();
+    final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
+    final isFinalQuote = quoteStatus == 'final';
+    final hasCompletedAt = merged['completed_at'] != null || widget.booking['completed_at'] != null;
+    final diagnosticValue = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+    final hasDiagnostic = diagnosticValue != null && diagnosticValue > 0;
+    
+    // Não pode rejeitar orçamento final
+    if (isFinalQuote) {
+      AppAlerts.showError(
+        context,
+        message: 'Este é o orçamento final após o serviço. Não é possível rejeitá-lo. Você deve realizar o pagamento.',
+      );
       return;
     }
 
@@ -1915,13 +2874,70 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Rejeitar Orçamento'),
-        content: Column(
+        content: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Você confirma a rejeição deste orçamento?'),
             const SizedBox(height: 16),
-            if (_bookingDetails?['final_price'] != null || widget.booking['final_price'] != null)
+              
+              // Aviso sobre pagamento do diagnóstico
+              if (!hasCompletedAt && hasDiagnostic)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.orange.shade700),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Atenção',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Ao rejeitar este orçamento, você precisará pagar apenas o valor do diagnóstico:',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.orange.shade900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        PriceUtils.formatCurrency(diagnosticValue / 100) ?? 'R\$ 0,00',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Isso porque a oficina já analisou seu veículo e identificou os problemas.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange.shade800,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (_bookingDetails?['final_price'] != null || widget.booking['final_price'] != null)
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -1955,6 +2971,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ),
           ],
+          ),
         ),
         actions: [
           TextButton(

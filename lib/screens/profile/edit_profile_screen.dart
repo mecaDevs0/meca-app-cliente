@@ -6,6 +6,8 @@ import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
 import '../../utils/phone_formatter.dart';
 import '../../utils/cpf_formatter.dart';
+import '../../utils/email_formatter.dart';
+import '../../utils/formatters.dart';
 import '../../widgets/app_alerts.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -27,6 +29,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _isLoading = false;
   bool _isSaving = false;
   bool _canEditCpf = false;
+  String? _originalCpf; // Armazenar CPF original para sempre enviar
 
   @override
   void initState() {
@@ -55,7 +58,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             (userData['first_name'] ?? userData['firstName'] ?? userData['name'] ?? '').toString();
         _lastNameController.text = (userData['last_name'] ?? userData['lastName'] ?? '').toString();
         _emailController.text = (userData['email'] ?? '').toString();
-        _phoneController.text = (userData['phone'] ?? userData['phone_number'] ?? '').toString();
+        // Formatar telefone ao carregar
+        final phoneValue = userData['phone'] ?? userData['phone_number'] ?? '';
+        _phoneController.text = Formatters.formatPhone(phoneValue.toString());
 
         final cpfValue = userData['cpf'] ??
             userData['document'] ??
@@ -75,6 +80,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             cpfValue.toString().trim().isEmpty ||
             cpfValue.toString() == 'null' ||
             cpfFormatted.isEmpty;
+
+        // Armazenar CPF original (apenas dígitos) para sempre enviar
+        final cpfDigits = cpfFormatted.replaceAll(RegExp(r'\D'), '');
+        if (cpfDigits.length == 11) {
+          _originalCpf = cpfDigits;
+        } else {
+          _originalCpf = null;
+        }
 
         if (mounted) {
           setState(() {
@@ -105,11 +118,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
+      // Preparar CPF: se pode editar, usar o valor do campo; senão, usar o original
+      String? cpfValue;
+      if (_canEditCpf) {
+        final cpfDigits = _cpfController.text.trim().replaceAll(RegExp(r'\D'), '');
+        if (cpfDigits.length == 11) {
+          cpfValue = cpfDigits;
+        }
+      } else {
+        // Se não pode editar, sempre enviar o CPF original para não perder
+        cpfValue = _originalCpf;
+      }
+      
       final payload = {
         'firstName': _firstNameController.text.trim(),
         'lastName': _lastNameController.text.trim().isEmpty ? null : _lastNameController.text.trim(),
-        'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-        'cpf': _canEditCpf ? _cpfController.text.trim().replaceAll(RegExp(r'\D'), '') : null,
+        'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim().replaceAll(RegExp(r'\D'), ''),
+        if (cpfValue != null) 'cpf': cpfValue,
       };
 
       final result = await _apiService.updateProfile(payload);
@@ -117,11 +142,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
-        AppAlerts.showSuccess(
-          context,
-          message: 'Perfil atualizado com sucesso!',
-        );
-        Navigator.pop(context, true);
+        // Usar Future.microtask para evitar crash ao navegar
+        Future.microtask(() {
+          if (mounted) {
+            Navigator.pop(context, true);
+            // Mostrar sucesso após navegar
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (mounted) {
+                AppAlerts.showSuccess(
+                  context,
+                  message: 'Perfil atualizado com sucesso!',
+                );
+              }
+            });
+          }
+        });
       } else {
         AppAlerts.showError(
           context,
@@ -225,6 +260,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           label: 'Email',
                           icon: Icons.email,
                           keyboardType: TextInputType.emailAddress,
+                          inputFormatters: [EmailFormatter()],
                           validator: (value) {
                             if (value == null || value.isEmpty) return 'Por favor, insira seu email';
                             if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) return 'Por favor, insira um email válido';

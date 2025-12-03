@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 
 import '../../services/api_service.dart';
 import '../../services/location_service.dart';
+import '../../utils/cep_formatter.dart';
 import '../../widgets/meca_loading_widget.dart';
 import 'workshop_detail_screen.dart';
 
@@ -37,7 +38,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _cepController = TextEditingController();
   String _selectedService = 'Todos';
-  String _selectedDistance = 'Todos';
+  String _selectedDistance = 'Até 10km'; // Padrão: 10km conforme especificação
   String _selectedRating = 'Todos';
   String _selectedInstallment = 'Todos';
   String _sortBy = 'distancia';
@@ -81,7 +82,34 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         });
       }
 
-      await _fetchWorkshops(targetLat, targetLng);
+      // Converter filtro de distância para km (padrão 10km)
+      double radiusKm = 10.0; // Padrão
+      if (_selectedDistance != 'Todos') {
+        switch (_selectedDistance) {
+          case 'Até 1km':
+            radiusKm = 1.0;
+            break;
+          case 'Até 5km':
+            radiusKm = 5.0;
+            break;
+          case 'Até 10km':
+            radiusKm = 10.0;
+            break;
+          case 'Até 20km':
+            radiusKm = 20.0;
+            break;
+          case 'Até 50km':
+            radiusKm = 50.0;
+            break;
+          case 'Até 100km':
+            radiusKm = 100.0;
+            break;
+          case 'Até 200km':
+            radiusKm = 200.0;
+            break;
+        }
+      }
+      await _fetchWorkshops(targetLat, targetLng, radiusKm: radiusKm);
     } catch (e) {
       String errorMessage = 'Erro ao carregar oficinas';
       if (e.toString().contains('timeout')) {
@@ -98,8 +126,10 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     }
   }
 
-  Future<void> _fetchWorkshops(double userLat, double userLng, {double radiusKm = 10000.0}) async {
-    final result = await _apiService.getNearbyWorkshops(userLat, userLng, radiusKm);
+  Future<void> _fetchWorkshops(double userLat, double userLng, {double radiusKm = 10.0}) async {
+    // Se tiver busca por nome, passar o texto de busca (busca independente de distância)
+    final searchQuery = _searchController.text.trim().isNotEmpty ? _searchController.text.trim() : null;
+    final result = await _apiService.getNearbyWorkshops(userLat, userLng, radiusKm, searchQuery);
       
       if (!mounted) return;
              if (result['success']) {
@@ -113,18 +143,45 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                }
                
                for (var workshop in workshops) {
-                 if (workshop['latitude'] != null && workshop['longitude'] != null) {
-          final double distance = Geolocator.distanceBetween(
-                userLat,
-                userLng,
-                     double.parse(workshop['latitude'].toString()),
-                     double.parse(workshop['longitude'].toString()),
-              ) /
-              1000;
-                   workshop['distance'] = distance;
-                 } else {
-                   workshop['distance'] = 0.0;
+                 // Extrair latitude e longitude de múltiplas fontes
+                 double? workshopLat = _extractLatitude(workshop);
+                 double? workshopLng = _extractLongitude(workshop);
+                 
+                 // Se a API já retornou distância válida, usar ela
+                 final apiDistance = workshop['distance'];
+                 double? finalDistance;
+                 
+                 if (apiDistance != null) {
+                   final parsed = apiDistance is num 
+                       ? apiDistance.toDouble() 
+                       : apiDistance is String 
+                           ? double.tryParse(apiDistance.replaceAll(',', '.'))
+                           : null;
+                   if (parsed != null && parsed > 0) {
+                     finalDistance = parsed;
+                   }
                  }
+                 
+                 // Se não tiver distância da API, calcular se tiver coordenadas
+                 if (finalDistance == null && workshopLat != null && workshopLng != null) {
+                   try {
+                     final double distance = Geolocator.distanceBetween(
+                           userLat,
+                           userLng,
+                           workshopLat,
+                           workshopLng,
+                         ) /
+                         1000;
+                     finalDistance = distance;
+                   } catch (e) {
+                     print('Erro ao calcular distância: $e');
+                     finalDistance = null;
+                   }
+                 }
+                 
+                 workshop['distance'] = finalDistance;
+                 workshop['latitude'] = workshopLat; // Garantir que está disponível
+                 workshop['longitude'] = workshopLng; // Garantir que está disponível
 
                  final addressDetails = _extractAddressDetails(workshop['address']);
                  if (addressDetails != null) {
@@ -276,7 +333,13 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
             elevation: 0,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/home',
+                  (route) => false,
+                );
+              },
             ),
             title: Text(
               'Oficinas Próximas',
@@ -336,7 +399,15 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
               padding: const EdgeInsets.all(16),
               child: TextField(
                 controller: _searchController,
-                onChanged: (value) => _applyFilters(),
+                onChanged: (value) {
+                  // Se tiver texto de busca, fazer nova busca na API
+                  // Se não tiver texto, apenas aplicar filtros locais
+                  if (value.trim().isNotEmpty) {
+                    _loadNearbyWorkshops();
+                  } else {
+                    _applyFilters();
+                  }
+                },
                 decoration: InputDecoration(
                   hintText: 'Buscar por nome ou bairro...',
                   prefixIcon: const Icon(Icons.search, color: Color(0xFF00C977)),
@@ -562,8 +633,8 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                         child: TextField(
                           controller: _cepController,
                           keyboardType: TextInputType.number,
-                          maxLength: 8,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          maxLength: 9,
+                          inputFormatters: [CepFormatter()],
                           cursorColor: const Color(0xFF00C977),
                           style: TextStyle(
                             color: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
@@ -622,13 +693,15 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
 
   Widget _buildWorkshopCard(Map<String, dynamic> workshop) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    // Usar distância real calculada
+    // Usar distância real calculada (pode ser null se oficina não tem coordenadas)
     final distanceRaw = workshop['distance'];
-    final double distance = distanceRaw is num
-        ? distanceRaw.toDouble()
-        : distanceRaw is String
-            ? double.tryParse(distanceRaw.replaceAll(',', '.')) ?? 0.0
-            : 0.0;
+    final double? distance = distanceRaw != null
+        ? (distanceRaw is num
+            ? distanceRaw.toDouble()
+            : distanceRaw is String
+                ? double.tryParse(distanceRaw.replaceAll(',', '.'))
+                : null)
+        : null;
     final double? ratingValue =
         _parseDouble(workshop['rating']) ?? _parseDouble(workshop['average_rating']);
     
@@ -758,9 +831,9 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      ratingValue != null && ratingValue > 0
-                                          ? ratingValue.toStringAsFixed(ratingValue >= 10 ? 0 : 1)
-                                          : '--',
+                                      (ratingValue != null && ratingValue > 0 && ratingValue <= 5)
+                                          ? ratingValue.toStringAsFixed(1)
+                                          : '-',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
@@ -773,26 +846,35 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF00C977).withOpacity(0.1),
+                                  // Se distância > 200km, usar vermelho; senão, verde
+                                  color: distance != null && distance > 200.0 
+                                      ? Colors.red.withOpacity(0.1)
+                                      : const Color(0xFF00C977).withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(
+                                    Icon(
                                       Icons.navigation,
-                                      color: Color(0xFF00C977),
+                                      // Se distância > 200km, usar vermelho; senão, verde
+                                      color: distance != null && distance > 200.0 
+                                          ? Colors.red
+                                          : const Color(0xFF00C977),
                                       size: 16,
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      distance > 0
+                                      distance != null && distance > 0
                                           ? _formatDistance(distance)
                                           : 'Distância não disponível',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
-                                        color: isDarkMode ? const Color(0xFF00C977) : const Color(0xFF00C977),
+                                        // Se distância > 200km, usar vermelho; senão, verde
+                                        color: distance != null && distance > 200.0 
+                                            ? Colors.red
+                                            : (isDarkMode ? const Color(0xFF00C977) : const Color(0xFF00C977)),
                                       ),
                                     ),
                                   ],
@@ -918,6 +1000,15 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
               break;
             case 'Até 20km':
               if (distanceValue > 20.0) return false;
+              break;
+            case 'Até 50km':
+              if (distanceValue > 50.0) return false;
+              break;
+            case 'Até 100km':
+              if (distanceValue > 100.0) return false;
+              break;
+            case 'Até 200km':
+              if (distanceValue > 200.0) return false;
               break;
           }
         }
@@ -1157,7 +1248,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                               _buildFilterSection(
                                 'Distância',
                                 _selectedDistance,
-                                ['Todos', 'Até 1km', 'Até 5km', 'Até 10km', 'Até 20km'],
+                                ['Todos', 'Até 1km', 'Até 5km', 'Até 10km', 'Até 20km', 'Até 50km', 'Até 100km', 'Até 200km'],
                                 isDarkMode,
                                 (value) {
                                   setModalState(() {
@@ -1166,6 +1257,9 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                   setState(() {
                                     _selectedDistance = value;
                                   });
+                                  // Recarregar oficinas com novo filtro de distância
+                                  Navigator.pop(context);
+                                  _loadNearbyWorkshops();
                                 },
                               ),
                               const SizedBox(height: 16),
@@ -1410,16 +1504,79 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     return null;
   }
 
+  // Extrair latitude de múltiplas fontes possíveis
+  double? _extractLatitude(Map<String, dynamic> workshop) {
+    final addressDetails = workshop['address_details'] as Map<String, dynamic>?;
+    final address = workshop['address'];
+    final addressMap = address is Map ? Map<String, dynamic>.from(address) : null;
+    
+    final sources = [
+      workshop['latitude'],
+      workshop['lat'],
+      addressDetails?['latitude'],
+      addressDetails?['lat'],
+      addressMap?['latitude'],
+      addressMap?['lat'],
+    ];
+    
+    for (final source in sources) {
+      if (source == null) continue;
+      final parsed = _parseDouble(source);
+      if (parsed != null && parsed != 0.0) {
+        // Validar se é uma latitude válida (-90 a 90)
+        if (parsed >= -90 && parsed <= 90) {
+          return parsed;
+        }
+      }
+    }
+    return null;
+  }
+
+  // Extrair longitude de múltiplas fontes possíveis
+  double? _extractLongitude(Map<String, dynamic> workshop) {
+    final addressDetails = workshop['address_details'] as Map<String, dynamic>?;
+    final address = workshop['address'];
+    final addressMap = address is Map ? Map<String, dynamic>.from(address) : null;
+    
+    final sources = [
+      workshop['longitude'],
+      workshop['lng'],
+      workshop['lon'],
+      addressDetails?['longitude'],
+      addressDetails?['lng'],
+      addressDetails?['lon'],
+      addressMap?['longitude'],
+      addressMap?['lng'],
+      addressMap?['lon'],
+    ];
+    
+    for (final source in sources) {
+      if (source == null) continue;
+      final parsed = _parseDouble(source);
+      if (parsed != null && parsed != 0.0) {
+        // Validar se é uma longitude válida (-180 a 180)
+        if (parsed >= -180 && parsed <= 180) {
+          return parsed;
+        }
+      }
+    }
+    return null;
+  }
+
   double? _parseDouble(dynamic value) {
+    if (value == null) return null;
     if (value is num) return value.toDouble();
     if (value is String) {
       final trimmed = value.trim();
-      if (trimmed.isEmpty) return null;
+      if (trimmed.isEmpty || trimmed == 'null' || trimmed == 'NULL' || trimmed == '') return null;
       final lower = trimmed.toLowerCase();
-      if (lower == 'n/a' || lower == 'na' || lower == 'null' || lower == '--') {
+      if (lower == 'n/a' || lower == 'na' || lower == 'null' || lower == '--' || lower == 'undefined') {
         return null;
       }
-      return double.tryParse(trimmed.replaceAll(',', '.'));
+      final parsed = double.tryParse(trimmed.replaceAll(',', '.'));
+      if (parsed != null && parsed != 0.0 && !parsed.isNaN && parsed.isFinite) {
+        return parsed;
+      }
     }
     return null;
   }

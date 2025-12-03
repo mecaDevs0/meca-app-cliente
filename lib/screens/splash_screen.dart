@@ -2,8 +2,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../services/api_service.dart';
+import '../services/onesignal_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -40,17 +42,37 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   Future<void> _initializeApp() async {
-    await Future.delayed(const Duration(seconds: 2));
-    
-    await _apiService.loadToken();
-    
-    if (mounted) {
+    try {
+      await Future.delayed(const Duration(seconds: 2));
+      
+      if (!mounted) return;
+      
+      await _apiService.loadToken();
+      
+      if (!mounted) return;
+      
       // Check if user is logged in
       final result = await _apiService.getProfile();
       
+      if (!mounted) return;
+      
       if (result['success'] == true) {
+        // Se usuário já está logado, salvar device token
+        try {
+          final playerId = OneSignalService.getSubscriptionId();
+          if (playerId != null) {
+            await _apiService.saveDeviceToken(playerId);
+          }
+        } catch (e) {
+          // Silenciar erro
+        }
         Navigator.pushReplacementNamed(context, '/home');
       } else {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    } catch (e) {
+      if (mounted) {
+        // Em caso de erro, ir para login
         Navigator.pushReplacementNamed(context, '/login');
       }
     }

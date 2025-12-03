@@ -32,6 +32,17 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
   String _error = '';
   Position? _currentPosition;
 
+  // Helper para converter rating de forma segura (String ou num para double)
+  double? _parseRating(dynamic rating) {
+    if (rating == null) return null;
+    if (rating is num) return rating.toDouble();
+    if (rating is String) {
+      final parsed = double.tryParse(rating);
+      return parsed;
+    }
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -55,7 +66,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         });
       }
     } catch (e) {
-      print('Erro ao resolver localização do serviço: $e');
+      // Silenciar erro de localização
     }
   }
 
@@ -94,11 +105,16 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
       if (workshopsResult['success']) {
         final list = (workshopsResult['data'] as List?) ?? [];
         setState(() {
-          _workshops = list.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
+          _workshops = list.map<Map<String, dynamic>>((e) {
+            final workshop = Map<String, dynamic>.from(e as Map);
+            // Normalizar rating para garantir que seja double (não String)
+            workshop['rating'] = _parseRating(workshop['rating']);
+            return workshop;
+          }).toList();
         });
       } else {
         // Não definir erro se falhar ao carregar oficinas, apenas mostrar lista vazia
-        print('Aviso: Não foi possível carregar oficinas: ${workshopsResult['error']}');
+        // Silenciar aviso
       }
     } catch (e) {
       if (!mounted) return;
@@ -106,7 +122,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         _error = 'Erro ao carregar detalhes do serviço: ${e.toString()}';
         _loading = false;
       });
-      print('Erro detalhado ao carregar serviço: $e');
+      // Silenciar erro
     } finally {
       if (!mounted) return;
       if (!_error.isNotEmpty) {
@@ -329,13 +345,18 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Oficinas que oferecem este serviço',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Text(
+                'Oficinas que oferecem este serviço',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -513,12 +534,19 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                             color: Colors.amber[600],
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            '${workshop['rating'] ?? 4.5}',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
+                          Builder(
+                            builder: (context) {
+                              final ratingValue = _parseRating(workshop['rating']);
+                              return Text(
+                                (ratingValue != null && ratingValue > 0 && ratingValue <= 5)
+                                    ? ratingValue.toStringAsFixed(1)
+                                    : '-',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -624,6 +652,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
           servicePrice: _service?['price']?.toString() ?? '0',
           serviceDuration: _service?['duration']?.toString() ?? '',
           workshopName: workshop['name'] ?? 'Oficina',
+          workshopLogoUrl: workshop['logo_url']?.toString(),
         ),
       ),
     );

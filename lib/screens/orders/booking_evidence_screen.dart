@@ -42,15 +42,42 @@ class _BookingEvidenceScreenState extends State<BookingEvidenceScreen> {
       if (result['success']) {
         setState(() {
           final data = result['data'];
+          List<Map<String, dynamic>> rawEvidence = [];
+          
           if (data is List) {
-            _evidence = data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+            rawEvidence = data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
           } else if (data is Map && data['evidence'] is List) {
-            _evidence = List<Map<String, dynamic>>.from(
+            rawEvidence = List<Map<String, dynamic>>.from(
               (data['evidence'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
             );
-          } else {
-            _evidence = [];
           }
+          
+          // Normalizar campos: aceitar tanto camelCase quanto snake_case
+          _evidence = rawEvidence.map((e) {
+            final normalized = Map<String, dynamic>.from(e);
+            
+            // Normalizar URL: usar signed_url ou signedUrl ou url
+            if (normalized['signed_url'] != null) {
+              normalized['signedUrl'] = normalized['signed_url'];
+            } else if (normalized['signedUrl'] == null && normalized['url'] != null) {
+              normalized['signedUrl'] = normalized['url'];
+            }
+            
+            // Normalizar fileName: usar file_name ou fileName
+            if (normalized['file_name'] != null) {
+              normalized['fileName'] = normalized['file_name'];
+            } else if (normalized['fileName'] == null && normalized['file_name'] == null) {
+              normalized['fileName'] = 'Evidência';
+            }
+            
+            // Normalizar uploadedAt: usar uploaded_at ou uploadedAt
+            if (normalized['uploaded_at'] != null) {
+              normalized['uploadedAt'] = normalized['uploaded_at'];
+            }
+            
+            return normalized;
+          }).toList();
+          
           _loading = false;
         });
       } else {
@@ -184,8 +211,6 @@ class _BookingEvidenceScreenState extends State<BookingEvidenceScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _buildInfoChip('Data', _formatDate(widget.booking['scheduled_date'])),
-              const SizedBox(width: 12),
               _buildInfoChip('Provas', '${_evidence.length}'),
             ],
           ),
@@ -293,7 +318,7 @@ class _BookingEvidenceScreenState extends State<BookingEvidenceScreen> {
             children: [
               // Imagem da evidência
               CachedNetworkImage(
-                imageUrl: evidence['signedUrl'] ?? '',
+                imageUrl: evidence['signedUrl'] ?? evidence['signed_url'] ?? evidence['url'] ?? '',
                 width: double.infinity,
                 height: double.infinity,
                 fit: BoxFit.cover,
@@ -337,7 +362,7 @@ class _BookingEvidenceScreenState extends State<BookingEvidenceScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        evidence['fileName'] ?? 'Arquivo',
+                        evidence['fileName'] ?? evidence['file_name'] ?? 'Evidência',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -346,6 +371,26 @@ class _BookingEvidenceScreenState extends State<BookingEvidenceScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if (evidence['uploadedAt'] != null || evidence['uploaded_at'] != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.calendar_today,
+                              color: Colors.white70,
+                              size: 12,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatDate(evidence['uploadedAt'] ?? evidence['uploaded_at']),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -456,7 +501,7 @@ class _EvidenceFullScreenState extends State<EvidenceFullScreen> {
           final evidence = widget.allEvidence[index];
           return Center(
             child: CachedNetworkImage(
-              imageUrl: evidence['signedUrl'] ?? '',
+              imageUrl: evidence['signedUrl'] ?? evidence['signed_url'] ?? evidence['url'] ?? '',
               fit: BoxFit.contain,
               placeholder: (context, url) => const Center(
                 child: CircularProgressIndicator(

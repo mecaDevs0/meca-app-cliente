@@ -1,6 +1,6 @@
 name: meca_app_cliente
 description: MECA - App do Cliente para agendamento de serviços automotivos
-version: 1.0.0+1
+version: 1.7.8+162
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -27,12 +27,9 @@ dependencies:
   google_maps_flutter: ^2.5.3
   
   # Auth
-  google_sign_in: ^6.1.6
-  sign_in_with_apple: ^7.0.1
   
-  # Push Notifications (temporariamente comentado para resolver conflito)
-  # firebase_core: ^2.24.2
-  # firebase_messaging: ^14.7.9
+  # Push Notifications
+  onesignal_flutter: ^5.0.0
   flutter_local_notifications: ^16.3.0
   permission_handler: ^11.2.0
   
@@ -48,6 +45,12 @@ dependencies:
   another_flushbar: ^1.12.30
   local_auth: ^2.1.7
   flutter_secure_storage: ^9.0.0
+  timezone: ^0.9.4
+  
+  # Photo & Image Processing
+  flutter_image_compress: ^2.3.0
+  path_provider: ^2.1.5
+  camera: ^0.11.0+1
 
 dev_dependencies:
   flutter_test:
@@ -61,49 +64,4 @@ flutter:
     - assets/images/
     - assets/logos/
     - assets/animations/
-
-    - assets/images/
-    - assets/logos/
-    - assets/animations/
-
-
-
-    - assets/images/
-    - assets/logos/
-    - assets/animations/
-
-    - assets/images/
-    - assets/logos/
-    - assets/animations/
-
-
-
-    - assets/images/
-    - assets/logos/
-    - assets/animations/
-
-    - assets/images/
-    - assets/logos/
-    - assets/animations/
-
-
-
-    - assets/images/
-    - assets/logos/
-    - assets/animations/
-
-    - assets/images/
-    - assets/logos/
-    - assets/animations/
-
-
-
-    - assets/images/
-    - assets/logos/
-    - assets/animations/
-
-    - assets/images/
-    - assets/logos/
-    - assets/animations/
-
 

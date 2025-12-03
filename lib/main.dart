@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/auth/login_screen.dart';
@@ -16,53 +17,133 @@ import 'screens/vehicles/my_vehicles_screen.dart';
 import 'screens/workshops/workshop_detail_screen.dart';
 import 'services/theme_service.dart';
 import 'services/notification_service.dart';
+import 'services/onesignal_service.dart';
+import 'services/api_service.dart';
 import 'providers/notification_provider.dart';
 
 // Global navigator key para navegação de notificações
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Inicializar serviço de notificações
-  final notificationService = NotificationService();
-  await notificationService.initialize();
-  await notificationService.requestPermissions();
-  
-  // Configurar handler de navegação de notificações
-  NotificationService.onNotificationClick = (String? payload) {
-    if (payload == null) return;
-    
-    try {
-      final data = payload.split('|');
-      if (data.length >= 2) {
-        final type = data[0];
-        final id = data[1];
-        
-        switch (type) {
-          case 'booking':
-          case 'order':
-            navigatorKey.currentState?.pushNamed('/order-detail', arguments: {'id': id});
-            break;
-          case 'workshop':
-            navigatorKey.currentState?.pushNamed('/workshop-detail', arguments: {'id': id});
-            break;
-          case 'notifications':
-            navigatorKey.currentState?.pushNamed('/notifications');
-            break;
-          case 'orders':
-            navigatorKey.currentState?.pushNamed('/orders');
-            break;
-          default:
-            break;
-        }
-      }
-    } catch (e) {
-      print('Erro ao navegar a partir de notificação: $e');
-    }
+  // Wrapper para capturar erros não tratados
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    print('Flutter Error: ${details.exception}');
+    print('Stack: ${details.stack}');
   };
   
-  runApp(const MecaClienteApp());
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+  } catch (e) {
+    // Silenciar erro de inicialização
+  }
+  
+  // Inicializar serviços de notificações de forma assíncrona (não bloqueia o app)
+  // IMPORTANTE: Não usar await aqui para não bloquear a inicialização
+  Future.microtask(() async {
+    try {
+      // Inicializar OneSignal
+      await OneSignalService.initialize();
+      
+      // Inicializar notificações locais
+      final notificationService = NotificationService();
+      await notificationService.initialize();
+      await notificationService.requestPermissions();
+      
+      // Configurar handler de navegação de notificações
+      NotificationService.onNotificationClick = (String? payload) {
+        if (payload == null) return;
+        
+        try {
+          final data = payload.split('|');
+          if (data.length >= 2) {
+            final type = data[0];
+            final id = data[1];
+            
+            switch (type) {
+              case 'booking':
+              case 'order':
+                navigatorKey.currentState?.pushNamed('/order-detail', arguments: {'id': id});
+                break;
+              case 'workshop':
+                navigatorKey.currentState?.pushNamed('/workshop-detail', arguments: {'id': id});
+                break;
+              case 'notifications':
+                navigatorKey.currentState?.pushNamed('/notifications');
+                break;
+              case 'orders':
+                navigatorKey.currentState?.pushNamed('/orders');
+                break;
+              default:
+                break;
+            }
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print('Erro ao navegar a partir de notificação: $e');
+          }
+        }
+      };
+      
+      // Aguardar um pouco para garantir que o token está disponível
+      // Tentar salvar o token periodicamente até conseguir
+      Future.delayed(const Duration(seconds: 2), () async {
+        for (int attempt = 0; attempt < 5; attempt++) {
+          try {
+            final playerId = OneSignalService.getSubscriptionId();
+            if (playerId != null && playerId.isNotEmpty) {
+              // Salvar token no backend se usuário estiver logado
+              final apiService = ApiService();
+              final prefs = await apiService.getStorage();
+              final token = prefs.getString('token');
+              if (token != null) {
+                // Associar external user ID ao OneSignal
+                try {
+                  final userId = prefs.getString('user_id');
+                  if (userId != null) {
+                    await OneSignalService.setExternalUserId(userId);
+                  }
+                } catch (e) {
+                  // Silenciar erro
+                }
+                
+                final result = await apiService.saveDeviceToken(playerId);
+                if (result['success'] == true) {
+                  break; // Sucesso, parar tentativas
+                }
+              } else {
+                break; // Usuário não logado, não precisa continuar
+              }
+            }
+          } catch (e) {
+            // Silenciar erro
+          }
+          
+          // Aguardar antes da próxima tentativa
+          if (attempt < 4) {
+            await Future.delayed(const Duration(seconds: 1));
+          }
+        }
+      });
+  } catch (e) {
+    // Silenciar erro de inicialização de serviços
+  }
+  });
+  
+  try {
+    runApp(const MecaClienteApp());
+  } catch (e) {
+    // Tentar rodar app básico em caso de erro
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Text('Erro ao inicializar app: $e'),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class MecaClienteApp extends StatelessWidget {
@@ -120,9 +201,13 @@ class MecaClienteApp extends StatelessWidget {
                     builder: (_) => CoreScreen(initialIndex: 2, ordersInitialTab: ordersTab),
                   );
                 case '/order-detail':
-                  final args = settings.arguments as Map<String, dynamic>;
+                  final args = settings.arguments as Map<String, dynamic>? ?? {};
+                  // Se receber apenas ID, criar objeto booking mínimo para carregar dados depois
+                  final booking = args.containsKey('id') && !args.containsKey('status')
+                      ? {'id': args['id']}
+                      : args;
                   return MaterialPageRoute(
-                    builder: (_) => OrderDetailScreen(booking: args),
+                    builder: (_) => OrderDetailScreen(booking: booking),
                   );
                 case '/profile':
                   return MaterialPageRoute(builder: (_) => const ProfileScreen());

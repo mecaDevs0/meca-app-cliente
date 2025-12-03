@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../booking/booking_screen.dart';
 
@@ -45,15 +45,18 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       if (!mounted) return;
       
       if (result['success']) {
+        // O ApiService agora retorna data diretamente, não data.workshop
         final rawWorkshop = Map<String, dynamic>.from(
-          result['data']?['workshop'] ?? result['data'] ?? {},
+          result['data'] ?? {},
         );
 
         final services = await _loadWorkshopServices();
 
         if (!mounted) return;
+        final normalizedWorkshop = _normalizeWorkshop(rawWorkshop);
+        
         setState(() {
-          _workshop = _normalizeWorkshop(rawWorkshop);
+          _workshop = normalizedWorkshop;
           _services = services;
           _loading = false;
           _error = '';
@@ -161,7 +164,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
     final String workshopName = (_workshop!['name'] ?? 'Oficina').toString();
     final double? rating = _getWorkshopRating();
-    final String logoUrl = (_workshop!['logo_url'] ?? _workshop!['logo'] ?? '').toString();
+    
+    // Seguir EXATAMENTE a mesma lógica da tela de oficinas (linha 753-756)
+    // Na tela de lista usa: workshop['logo_url'] diretamente
+    // Garantir que seja string (como na tela de lista)
+    final logoUrl = _workshop!['logo_url']?.toString();
 
     return CustomScrollView(
       slivers: [
@@ -204,10 +211,15 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                         ],
                       ),
                       child: ClipOval(
-                        child: logoUrl.isNotEmpty && logoUrl.startsWith('http')
+                        child: logoUrl != null && 
+                               logoUrl.isNotEmpty && 
+                               logoUrl != '' &&
+                               logoUrl.startsWith('http')
                             ? Image.network(
                                 logoUrl,
                                 fit: BoxFit.cover,
+                                width: 100,
+                                height: 100,
                                 errorBuilder: (context, error, stackTrace) {
                                   return const Icon(
                                     Icons.build,
@@ -249,9 +261,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                           const Icon(Icons.star, color: Colors.white, size: 16),
                           const SizedBox(width: 4),
                           Text(
-                            rating != null && rating > 0
-                                ? rating.toStringAsFixed(rating >= 10 ? 0 : 1)
-                                : '--',
+                            (rating != null && rating > 0 && rating <= 5)
+                                ? rating.toStringAsFixed(1)
+                                : '-',
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -347,12 +359,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
             const SizedBox(height: 16),
             _buildInfoRow(Icons.location_on, 'Endereço', _workshop!['address'] ?? 'Não informado'),
             _buildInfoRow(Icons.phone, 'Telefone', _workshop!['phone'] ?? 'Não informado'),
-            _buildInfoRow(Icons.email, 'Email', _workshop!['email'] ?? 'Não informado'),
-                _buildInfoRow(
-                  Icons.star,
-                  'Avaliação',
-                  _formatRatingWithStar(),
-                ),
+            _buildInfoRow(
+              Icons.star,
+              'Avaliação',
+              _formatRatingWithStar(),
+            ),
             if (_workshop!['description'] != null && _workshop!['description'].isNotEmpty)
               _buildInfoRow(Icons.description, 'Descrição', _workshop!['description']),
           ],
@@ -397,10 +408,13 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   Widget _buildLocationMapCard() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final String addressText = (_workshop?['address_text'] ?? _workshop?['address'] ?? 'Endereço não informado').toString();
-    final double? latitude = _extractWorkshopLatitude();
-    final double? longitude = _extractWorkshopLongitude();
-    final bool hasCoords = latitude != null && longitude != null;
-    final String? staticMapUrl = hasCoords ? _buildStaticMapUrl(latitude!, longitude!) : null;
+    final double? latitudeRaw = _extractWorkshopLatitude();
+    final double? longitudeRaw = _extractWorkshopLongitude();
+    final bool hasCoords = latitudeRaw != null && longitudeRaw != null;
+    
+    // Usar variáveis não-nullable quando temos coordenadas
+    final double? latitude = hasCoords ? latitudeRaw : null;
+    final double? longitude = hasCoords ? longitudeRaw : null;
 
     return Container(
       decoration: BoxDecoration(
@@ -467,7 +481,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: GestureDetector(
-                onTap: hasCoords ? () => _showMapOptions(latitude!, longitude!) : null,
+                onTap: hasCoords && latitude != null && longitude != null 
+                    ? () => _showMapOptions(latitude, longitude) 
+                    : null,
                 child: Container(
                   height: 220,
                   decoration: BoxDecoration(
@@ -483,15 +499,32 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                   child: Stack(
                     children: [
                       Positioned.fill(
-                        child: staticMapUrl != null
-                            ? Image.network(
-                                staticMapUrl,
-                                fit: BoxFit.cover,
-                                loadingBuilder: (context, child, progress) {
-                                  if (progress == null) return child;
-                                  return _buildMapPlaceholder(isDarkMode);
-                                },
-                                errorBuilder: (_, __, ___) => _buildMapPlaceholder(isDarkMode),
+                        child: hasCoords && latitude != null && longitude != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: GoogleMap(
+                                  initialCameraPosition: CameraPosition(
+                                    target: LatLng(latitude, longitude),
+                                    zoom: 15.0,
+                                  ),
+                                  markers: {
+                                    Marker(
+                                      markerId: const MarkerId('workshopLocation'),
+                                      position: LatLng(latitude, longitude),
+                                      infoWindow: InfoWindow(
+                                        title: _workshop?['name'] ?? 'Oficina',
+                                      ),
+                                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+                                    ),
+                                  },
+                                  mapType: MapType.normal,
+                                  myLocationEnabled: false,
+                                  myLocationButtonEnabled: false,
+                                  zoomControlsEnabled: false,
+                                  mapToolbarEnabled: false,
+                                  onMapCreated: (GoogleMapController controller) {
+                                  },
+                                ),
                               )
                             : _buildMapPlaceholder(isDarkMode),
                       ),
@@ -520,29 +553,6 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                           ),
                         ),
                       ),
-                      if (hasCoords)
-                        Positioned(
-                          right: 16,
-                          bottom: 16,
-                          child: ElevatedButton.icon(
-                            onPressed: () => _showMapOptions(latitude!, longitude!),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF00C977),
-                              shadowColor: Colors.black54,
-                              elevation: 6,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            icon: const Icon(Icons.directions),
-                            label: const Text(
-                              'Traçar rota',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -553,7 +563,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: hasCoords ? () => _launchGoogleMaps(latitude!, longitude!) : null,
+                    onPressed: hasCoords && latitude != null && longitude != null 
+                        ? () => _launchGoogleMaps(latitude, longitude) 
+                        : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00C977),
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -569,7 +581,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: hasCoords ? () => _launchWaze(latitude!, longitude!) : null,
+                    onPressed: hasCoords && latitude != null && longitude != null 
+                        ? () => _launchWaze(latitude, longitude) 
+                        : null,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       side: BorderSide(color: const Color(0xFF00C977).withOpacity(0.6)),
@@ -621,42 +635,92 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   }
 
   double? _extractWorkshopLatitude() {
+    if (_workshop == null) return null;
+    
+    // Tentar múltiplas fontes de dados
     final addressDetails = _workshop?['address_details'] as Map<String, dynamic>?;
+    final address = _workshop?['address'];
+    final addressMap = address is Map ? Map<String, dynamic>.from(address) : null;
+    
     final sources = [
       _workshop?['latitude'],
       _workshop?['lat'],
       addressDetails?['latitude'],
       addressDetails?['lat'],
+      addressMap?['latitude'],
+      addressMap?['lat'],
+      // Tentar parsear se vier como string JSON
+      _tryParseFromString(_workshop?['latitude']),
+      _tryParseFromString(_workshop?['lat']),
     ];
+    
     for (final source in sources) {
+      if (source == null) continue;
       final parsed = _parseDouble(source);
-      if (parsed != null) return parsed;
+      if (parsed != null && parsed != 0.0) {
+        // Validar se é uma latitude válida (-90 a 90)
+        if (parsed >= -90 && parsed <= 90) {
+          return parsed;
+        }
+      }
     }
     return null;
   }
 
   double? _extractWorkshopLongitude() {
+    if (_workshop == null) return null;
+    
+    // Tentar múltiplas fontes de dados
     final addressDetails = _workshop?['address_details'] as Map<String, dynamic>?;
+    final address = _workshop?['address'];
+    final addressMap = address is Map ? Map<String, dynamic>.from(address) : null;
+    
     final sources = [
       _workshop?['longitude'],
       _workshop?['lng'],
+      _workshop?['lon'],
       addressDetails?['longitude'],
       addressDetails?['lng'],
+      addressDetails?['lon'],
+      addressMap?['longitude'],
+      addressMap?['lng'],
+      addressMap?['lon'],
+      // Tentar parsear se vier como string JSON
+      _tryParseFromString(_workshop?['longitude']),
+      _tryParseFromString(_workshop?['lng']),
     ];
+    
     for (final source in sources) {
+      if (source == null) continue;
       final parsed = _parseDouble(source);
-      if (parsed != null) return parsed;
+      if (parsed != null && parsed != 0.0) {
+        // Validar se é uma longitude válida (-180 a 180)
+        if (parsed >= -180 && parsed <= 180) {
+          return parsed;
+        }
+      }
     }
     return null;
   }
 
-  String? _buildStaticMapUrl(double lat, double lng) {
-    final key = AppConfig.googleMapsApiKeyBrowser;
-    if (key.isEmpty) return null;
-    final encodedMarker = Uri.encodeComponent('color:0x00C977|label:M|$lat,$lng');
-    return 'https://maps.googleapis.com/maps/api/staticmap?center=$lat,$lng&zoom=15&size=640x360&scale=2'
-        '&maptype=roadmap&markers=$encodedMarker&key=$key';
+  // Helper para tentar parsear coordenadas que podem vir como string
+  dynamic _tryParseFromString(dynamic value) {
+    if (value is String) {
+      // Tentar parsear como double direto
+      final parsed = double.tryParse(value.replaceAll(',', '.'));
+      if (parsed != null) return parsed;
+      
+      // Tentar extrair de string JSON
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is num) return decoded;
+      } catch (_) {
+        // Ignorar erro de parse JSON
+      }
+    }
+    return value;
   }
+
 
   void _showMapOptions(double lat, double lng) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -780,7 +844,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 ),
                 const SizedBox(width: 12),
                 const Text(
-                  'Horários de Funcionamento',
+                  'Horários',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -849,36 +913,33 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final services = _services;
     
-    // Serviços padrão se não houver dados
-    final defaultServices = [
-      {
-        'id': '1',
-        'name': 'Troca de Óleo',
-        'description': 'Troca completa de óleo do motor',
-        'price': 80.00,
-        'duration': 30,
-      },
-      {
-        'id': '2', 
-        'name': 'Alinhamento e Balanceamento',
-        'description': 'Alinhamento e balanceamento das rodas',
-        'price': 120.00,
-        'duration': 45,
-      },
-      {
-        'id': '3',
-        'name': 'Revisão Geral',
-        'description': 'Revisão completa do veículo',
-        'price': 200.00,
-        'duration': 120,
-      },
-    ];
+    // Dividir serviços em Gerais e Especializados
+    final generalServicesNames = ['Mecânica Geral', 'Mecanica Geral', 'Estética Automotiva', 'Estetica Automotiva', 'Funilaria e Pintura', 'Funilaria e Pintura'];
+    final generalServices = services.where((service) {
+      final name = (service['name'] ?? '').toString();
+      return generalServicesNames.any((generalName) => 
+        name.toLowerCase().contains(generalName.toLowerCase()) ||
+        generalName.toLowerCase().contains(name.toLowerCase())
+      );
+    }).toList();
     
-    final servicesList = services.isNotEmpty ? services : defaultServices;
-    final bool hasMoreThanThree = servicesList.length > 3;
+    final specializedServices = services.where((service) {
+      final name = (service['name'] ?? '').toString();
+      return !generalServicesNames.any((generalName) => 
+        name.toLowerCase().contains(generalName.toLowerCase()) ||
+        generalName.toLowerCase().contains(name.toLowerCase())
+      );
+    }).toList()..sort((a, b) {
+      final nameA = (a['name'] ?? '').toString().toLowerCase();
+      final nameB = (b['name'] ?? '').toString().toLowerCase();
+      return nameA.compareTo(nameB);
+    });
+    
+    final allServices = [...generalServices, ...specializedServices];
+    final bool hasMoreThanThree = allServices.length > 3;
     final List<Map<String, dynamic>> visibleServices = _showAllServices
-        ? servicesList
-        : servicesList.take(3).toList();
+        ? allServices
+        : allServices.take(3).toList();
     
     return Container(
       decoration: BoxDecoration(
@@ -922,53 +983,99 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            ...visibleServices.map<Widget>((service) {
-              final String serviceId = (service['id'] ?? service['service_id'] ?? '').toString();
-              final String serviceName = (service['name'] ?? 'Serviço').toString();
-              final String? description = service['description']?.toString();
-              final dynamic rawPrice = service['price'] ?? service['service_price'];
-              final double? price = _parseDouble(rawPrice);
-              final dynamic rawDuration = service['duration'] ?? service['duration_minutes'];
-              final int? duration = rawDuration is num
-                  ? rawDuration.toInt()
-                  : rawDuration is String
-                      ? int.tryParse(rawDuration)
-                      : null;
-              final String workshopName = (_workshop?['name'] ?? 'Oficina').toString();
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFF00C977).withOpacity(0.2),
+            // Mostrar seções se mostrar todos os serviços
+            if (_showAllServices && generalServices.isNotEmpty && specializedServices.isNotEmpty) ...[
+              _buildServiceSectionHeader('Serviços Gerais', isDarkMode),
+              const SizedBox(height: 12),
+              ...generalServices.map<Widget>((service) => _buildServiceItem(service, isDarkMode)),
+              const SizedBox(height: 20),
+              _buildServiceSectionHeader('Serviços Especializados', isDarkMode),
+              const SizedBox(height: 12),
+              ...specializedServices.map<Widget>((service) => _buildServiceItem(service, isDarkMode)),
+            ] else ...[
+              ...visibleServices.map<Widget>((service) => _buildServiceItem(service, isDarkMode)),
+            ],
+            if (hasMoreThanThree)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: TextButton(
+                  onPressed: () {
+                    setState(() => _showAllServices = !_showAllServices);
+                  },
+                  child: Text(
+                    _showAllServices ? 'Ver menos' : 'Ver mais',
+                    style: const TextStyle(
+                      color: Color(0xFF00C977),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () {
-                      // Navegar direto para agendamento ao selecionar serviço
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => BookingScreen(
-                            serviceId: serviceId,
-                            workshopId: widget.workshopId,
-                            serviceName: serviceName,
-                            servicePrice: price != null && price > 0 ? price.toString() : '',
-                            serviceDuration: duration?.toString() ?? rawDuration?.toString() ?? '',
-                            workshopName: workshopName,
-                          ),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServiceSectionHeader(String title, bool isDarkMode) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: isDarkMode ? Colors.white : const Color(0xFF252940),
+      ),
+    );
+  }
+
+  Widget _buildServiceItem(Map<String, dynamic> service, bool isDarkMode) {
+    final String serviceId = (service['id'] ?? service['service_id'] ?? '').toString();
+    final String serviceName = (service['name'] ?? 'Serviço').toString();
+    final String? description = service['description']?.toString();
+    final dynamic rawPrice = service['price'] ?? service['service_price'];
+    final double? price = _parseDouble(rawPrice);
+    final dynamic rawDuration = service['duration'] ?? service['duration_minutes'];
+    final int? duration = rawDuration is num
+        ? rawDuration.toInt()
+        : rawDuration is String
+            ? int.tryParse(rawDuration)
+            : null;
+    final String workshopName = (_workshop?['name'] ?? 'Oficina').toString();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF00C977).withOpacity(0.2),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            // Navegar direto para agendamento ao selecionar serviço
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => BookingScreen(
+                  serviceId: serviceId,
+                  workshopId: widget.workshopId,
+                  serviceName: serviceName,
+                  servicePrice: price != null && price > 0 ? price.toString() : '',
+                  serviceDuration: duration?.toString() ?? rawDuration?.toString() ?? '',
+                  workshopName: workshopName,
+                  workshopLogoUrl: _workshop?['logo_url']?.toString(),
+                ),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
                           Container(
                             width: 60,
                             height: 60,
@@ -1056,27 +1163,6 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                   ),
                 ),
               );
-            }).toList(),
-            if (hasMoreThanThree)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: TextButton(
-                  onPressed: () {
-                    setState(() => _showAllServices = !_showAllServices);
-                  },
-                  child: Text(
-                    _showAllServices ? 'Ver menos' : 'Ver mais',
-                    style: const TextStyle(
-                      color: Color(0xFF00C977),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
   }
   
   Widget _buildBookingButton() {
@@ -1111,6 +1197,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                   servicePrice: '0',
                   serviceDuration: '',
                   workshopName: _workshop?['name'] ?? 'Oficina',
+                  workshopLogoUrl: _workshop?['logo_url']?.toString(),
                 ),
               ),
             );
@@ -1162,7 +1249,39 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     normalized['address'] = _formatAddress(addressDetails ?? normalized['address']);
     normalized['address_text'] = normalized['address'];
     normalized['rating'] = _parseDouble(normalized['rating']);
+    
+    // Garantir que logo_url seja preservado corretamente (mesma lógica da tela de lista)
     normalized['logo_url'] = normalized['logo_url'] ?? normalized['logo'];
+    
+    // Garantir que logo_url seja uma string válida (não vazia)
+    if (normalized['logo_url'] != null && normalized['logo_url'].toString().trim().isEmpty) {
+      normalized['logo_url'] = null;
+    }
+    
+    // Garantir que latitude e longitude sejam sempre números quando disponíveis
+    
+    // Normalizar latitude
+    final latRaw = normalized['latitude'];
+    if (latRaw != null) {
+      final lat = _parseDouble(latRaw);
+      normalized['latitude'] = lat;
+      print('   Latitude normalizada: $lat');
+    } else {
+      normalized['latitude'] = null;
+      print('   Latitude é null');
+    }
+    
+    // Normalizar longitude
+    final lngRaw = normalized['longitude'];
+    if (lngRaw != null) {
+      final lng = _parseDouble(lngRaw);
+      normalized['longitude'] = lng;
+      print('   Longitude normalizada: $lng');
+    } else {
+      normalized['longitude'] = null;
+      print('   Longitude é null');
+    }
+    
     return normalized;
   }
 
@@ -1196,15 +1315,19 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   }
 
   double? _parseDouble(dynamic value) {
+    if (value == null) return null;
     if (value is num) return value.toDouble();
     if (value is String) {
       final trimmed = value.trim();
-      if (trimmed.isEmpty) return null;
+      if (trimmed.isEmpty || trimmed == 'null' || trimmed == 'NULL' || trimmed == '') return null;
       final lower = trimmed.toLowerCase();
-      if (lower == 'n/a' || lower == 'na' || lower == 'null' || lower == '--') {
+      if (lower == 'n/a' || lower == 'na' || lower == 'null' || lower == '--' || lower == 'undefined') {
         return null;
       }
-      return double.tryParse(trimmed.replaceAll(',', '.'));
+      final parsed = double.tryParse(trimmed.replaceAll(',', '.'));
+      if (parsed != null && parsed != 0.0 && !parsed.isNaN && parsed.isFinite) {
+        return parsed;
+      }
     }
     return null;
   }
@@ -1217,10 +1340,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
   String _formatRatingWithStar() {
     final rating = _getWorkshopRating();
-    if (rating == null || rating <= 0) {
-      return 'Sem avaliações';
+    if (rating == null || rating <= 0 || rating > 5) {
+      return '- ⭐';
     }
-    final formatted = rating.toStringAsFixed(rating >= 10 ? 0 : 1);
+    final formatted = rating.toStringAsFixed(1);
     return '$formatted ⭐';
   }
 

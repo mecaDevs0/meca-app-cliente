@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_alerts.dart';
+import '../../utils/email_formatter.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({Key? key}) : super(key: key);
@@ -126,15 +127,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const SizedBox(height: 30),
           TextFormField(
             controller: _emailController,
-            style: const TextStyle(color: Colors.black),
-            decoration: const InputDecoration(
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
               labelText: 'Email',
-              prefixIcon: Icon(Icons.email),
-              border: OutlineInputBorder(),
+              labelStyle: const TextStyle(color: Colors.white70),
+              prefixIcon: const Icon(Icons.email, color: Colors.white70),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Colors.white70),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Colors.white70),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Colors.white, width: 2),
+              ),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: Colors.black.withOpacity(0.3),
             ),
             keyboardType: TextInputType.emailAddress,
+            inputFormatters: [EmailFormatter()],
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return 'Por favor, insira seu email';
