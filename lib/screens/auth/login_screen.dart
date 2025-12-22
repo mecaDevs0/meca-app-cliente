@@ -32,6 +32,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   bool _isLoading = false;
   bool _obscurePassword = true;
   late TabController _tabController;
+  DateTime? _lastSubmitAttempt;
 
   @override
   void initState() {
@@ -58,26 +59,59 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Prevenir múltiplas tentativas simultâneas
+    if (_isLoading) {
+      if (kDebugMode) {
+        print('[Login] Tentativa bloqueada - já está processando');
+      }
+      return;
+    }
+
+    // Prevenir tentativas muito rápidas (debounce de 2 segundos)
+    final now = DateTime.now();
+    if (_lastSubmitAttempt != null) {
+      final difference = now.difference(_lastSubmitAttempt!);
+      if (difference.inSeconds < 2) {
+        if (kDebugMode) {
+          print('[Login] Tentativa bloqueada - muito rápida (${difference.inMilliseconds}ms)');
+        }
+        return;
+      }
+    }
+    _lastSubmitAttempt = now;
+
     setState(() => _isLoading = true);
 
     Map<String, dynamic> result;
 
-    if (_isLogin) {
-      result = await _apiService.login(
-        _emailController.text,
-        _passwordController.text,
-      );
-    } else {
-      result = await _apiService.register(
-        _nameController.text,
-        _emailController.text,
-        _passwordController.text,
-        _phoneController.text.replaceAll(RegExp(r'\D'), ''),
-        _cpfController.text.replaceAll(RegExp(r'\D'), ''),
-      );
+    try {
+      if (_isLogin) {
+        result = await _apiService.login(
+          _emailController.text,
+          _passwordController.text,
+        );
+      } else {
+        result = await _apiService.register(
+          _nameController.text,
+          _emailController.text,
+          _passwordController.text,
+          _phoneController.text.replaceAll(RegExp(r'\D'), ''),
+          _cpfController.text.replaceAll(RegExp(r'\D'), ''),
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[Login] Erro inesperado: $e');
+      }
+      result = {
+        'success': false,
+        'error': 'Erro inesperado. Tente novamente.',
+      };
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-
-    setState(() => _isLoading = false);
 
     if (result['success']) {
       if (!_isLogin) {
@@ -351,7 +385,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       width: double.infinity,
                                       height: 50,
                                       child: ElevatedButton(
-                                        onPressed: _handleSubmit,
+                                        onPressed: _isLoading ? null : _handleSubmit,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: const Color(0xFF00C977),
                                           elevation: 3,
@@ -508,7 +542,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       width: double.infinity,
                                       height: 50,
                                       child: ElevatedButton(
-                                        onPressed: _handleSubmit,
+                                        onPressed: _isLoading ? null : _handleSubmit,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: const Color(0xFF00C977),
                                           elevation: 3,

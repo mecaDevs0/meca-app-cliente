@@ -170,6 +170,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
       );
     }).toList();
     
+    // Ordenar para colocar Mecânica Geral primeiro
+    generalServices.sort((a, b) {
+      final nameA = (a['name'] ?? '').toString().toLowerCase();
+      final nameB = (b['name'] ?? '').toString().toLowerCase();
+      final isMecanicaA = nameA.contains('mecânica geral') || nameA.contains('mecanica geral');
+      final isMecanicaB = nameB.contains('mecânica geral') || nameB.contains('mecanica geral');
+      
+      if (isMecanicaA && !isMecanicaB) return -1;
+      if (!isMecanicaA && isMecanicaB) return 1;
+      return nameA.compareTo(nameB);
+    });
+    
     final specializedServices = filteredServices.where((service) {
       final name = (service['name'] ?? '').toString();
       return !generalServicesNames.any((generalName) => 
@@ -303,14 +315,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 if (generalServices.isNotEmpty) ...[
                   _buildSectionHeader('Serviços Gerais'),
                   const SizedBox(height: 12),
-                  ...generalServices.map((service) => _buildServiceCard(service)),
+                  ...generalServices.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final service = entry.value;
+                    return _buildServiceCard(service, isGeneral: true, generalIndex: index);
+                  }),
                   const SizedBox(height: 24),
                 ],
                 // Seção de Serviços Especializados
                 if (specializedServices.isNotEmpty) ...[
                   _buildSectionHeader('Serviços Especializados'),
                   const SizedBox(height: 12),
-                  ...specializedServices.map((service) => _buildServiceCard(service)),
+                  ...specializedServices.map((service) => _buildServiceCard(service, isGeneral: false)),
                 ],
               ],
             ),
@@ -319,7 +335,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 
-  Widget _buildServiceCard(Map<String, dynamic> service) {
+  Widget _buildServiceCard(Map<String, dynamic> service, {bool isGeneral = false, int? generalIndex}) {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         final String serviceName = (service['name'] ?? 'Serviço').toString();
@@ -327,14 +343,41 @@ class _ServicesScreenState extends State<ServicesScreen> {
         final String? priceLabel = PriceUtils.formatCurrency(service['price'] ?? service['service_price']);
         final isDark = themeService.isDarkMode;
 
+        // Cores para bordas dos serviços gerais (com opacidade 35% para efeito elegante)
+        Color borderColor;
+        if (isGeneral && generalIndex != null) {
+          // Identificar o serviço pelo nome para aplicar a cor correta
+          final nameLower = serviceName.toLowerCase();
+          if (nameLower.contains('estética') || nameLower.contains('estetica')) {
+            // Estética Automotiva → Cyan (Aqua)
+            borderColor = const Color(0xFF00E5FF).withOpacity(0.35);
+          } else if (nameLower.contains('funilaria') || nameLower.contains('pintura')) {
+            // Funilaria e Pintura → Indigo (Violeta Elétrico)
+            borderColor = const Color(0xFF7C4DFF).withOpacity(0.35);
+          } else if (nameLower.contains('mecânica') || nameLower.contains('mecanica')) {
+            // Mecânica Geral → Tech Blue (Azul Real)
+            borderColor = const Color(0xFF2979FF).withOpacity(0.35);
+          } else {
+            // Fallback: usar por índice se não identificar pelo nome
+            final List<Color> fallbackColors = [
+              const Color(0xFF00E5FF).withOpacity(0.35), // Cyan
+              const Color(0xFF7C4DFF).withOpacity(0.35), // Indigo
+              const Color(0xFF2979FF).withOpacity(0.35), // Blue
+            ];
+            borderColor = fallbackColors[generalIndex % fallbackColors.length];
+          }
+        } else {
+          borderColor = isDark ? Colors.grey[800]! : Colors.grey[200]!;
+        }
+
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(
-              color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
-              width: 1,
+              color: borderColor,
+              width: isGeneral ? 1.5 : 1,
             ),
           ),
           color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
@@ -378,15 +421,97 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          serviceName,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : const Color(0xFF252940),
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                serviceName,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : const Color(0xFF252940),
+                                ),
+                              ),
+                            ),
+                            // Badge para Mecânica Geral
+                            if (serviceName.toLowerCase().contains('mecânica geral') || 
+                                serviceName.toLowerCase().contains('mecanica geral')) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2196F3).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFF2196F3).withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline_rounded,
+                                      size: 14,
+                                      color: const Color(0xFF2196F3),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Genérico',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF2196F3),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                          ],
                         ),
-                        if (description != null && description.isNotEmpty) ...[
+                        // Aviso expandido para Mecânica Geral
+                        if (serviceName.toLowerCase().contains('mecânica geral') || 
+                            serviceName.toLowerCase().contains('mecanica geral')) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2196F3).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: const Color(0xFF2196F3).withOpacity(0.25),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 18,
+                                  color: const Color(0xFF2196F3),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Para quem não sabe exatamente qual serviço selecionar.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        // Não exibir descrição para Mecânica Geral (já tem aviso genérico)
+                        if (description != null && description.isNotEmpty && 
+                            !serviceName.toLowerCase().contains('mecânica geral') && 
+                            !serviceName.toLowerCase().contains('mecanica geral')) ...[
                           const SizedBox(height: 6),
                           Text(
                             description,

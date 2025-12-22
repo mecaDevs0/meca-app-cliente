@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
-import '../../utils/phone_formatter.dart';
 import '../../utils/cpf_formatter.dart';
 import '../../utils/email_formatter.dart';
 import '../../utils/formatters.dart';
+import '../../utils/phone_formatter.dart';
 import '../../widgets/app_alerts.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -202,27 +202,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               onPressed: () => Navigator.pop(context),
             ),
-            actions: [
-              TextButton(
-                onPressed: _isSaving ? null : _saveProfile,
-                child: _isSaving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xFF00C977),
-                        ),
-                      )
-                    : const Text(
-                        'Salvar',
-                        style: TextStyle(
-                          color: Color(0xFF00C977),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
-            ],
+            // Botão de salvar removido do header - apenas no final do formulário
           ),
           body: _isLoading
               ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))

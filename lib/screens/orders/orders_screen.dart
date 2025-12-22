@@ -1,11 +1,16 @@
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../providers/notification_provider.dart';
 import '../../services/api_service.dart';
 import '../../utils/price_utils.dart';
-import '../../widgets/meca_loading_widget.dart';
 import '../../widgets/app_alerts.dart';
+import '../../widgets/meca_loading_widget.dart';
+import 'expired_bookings_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({Key? key}) : super(key: key);
@@ -34,13 +39,48 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           _currentStatus = statuses[index];
         }
       });
-      _loadBookings();
+      // IMPORTANTE: Forçar refresh ao mudar de aba para garantir dados atualizados
+      _loadBookings(forceRefresh: true);
     });
     _loadBookings();
+    // Marcar todas as notificações como lidas automaticamente ao entrar na tela
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _markAllNotificationsAsRead();
+    });
   }
 
-  Future<void> _loadBookings() async {
+  // Marcar todas as notificações como lidas silenciosamente
+  Future<void> _markAllNotificationsAsRead() async {
+    try {
+      final result = await _apiService.markAllNotificationsRead();
+      // Atualizar provider de notificações
+      if (mounted && result['success'] == true) {
+        final provider = Provider.of<NotificationProvider>(context, listen: false);
+        // Marcar todas as notificações no provider como lidas
+        final updatedNotifications = provider.notifications.map((n) {
+          return Map<String, dynamic>.from(n)
+            ..['is_read'] = true
+            ..['read'] = true;
+        }).toList();
+        provider.setNotifications(updatedNotifications);
+        provider.setUnreadNotifications(0, resetBadge: true);
+        // Recarregar notificações para garantir sincronização
+        _loadBookings(forceRefresh: false);
+      }
+    } catch (e) {
+      // Silenciar erros
+      print('Erro ao marcar notificações como lidas: $e');
+    }
+  }
+
+  Future<void> _loadBookings({bool forceRefresh = false}) async {
     if (!mounted) return;
+    
+    // IMPORTANTE: Invalidar cache se forçar refresh
+    if (forceRefresh) {
+      _apiService.invalidateBookingsCache();
+    }
+    
     setState(() => _loading = true);
     
     final result = await _apiService.getBookings();
@@ -48,28 +88,41 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     if (!mounted) return;
     
     if (result['success']) {
-      var bookings = (result['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      // IMPORTANTE: Normalizar resposta (pode vir como array direto ou objeto com bookings)
+      final data = result['data'];
+      List<Map<String, dynamic>> bookings = [];
+      if (data is List) {
+        bookings = data.cast<Map<String, dynamic>>();
+      } else if (data is Map && data['bookings'] != null) {
+        bookings = (data['bookings'] as List).cast<Map<String, dynamic>>();
+      } else if (data is Map) {
+        // Se data for um objeto vazio ou com outras propriedades, tentar extrair bookings
+        bookings = [];
+      }
       
       // Filtrar por status - mapear corretamente
       bookings = bookings.where((b) {
         final bookingStatus = b['status'] ?? '';
         final suggestedBy = b['suggested_by'] ?? b['sugerido_por'];
         final hasSuggestedDate = b['suggested_date'] != null || b['data_sugerida'] != null;
-        final isTimeSuggestion = suggestedBy == 'oficina' && hasSuggestedDate;
+        // final isTimeSuggestion = (suggestedBy == 'oficina' || suggestedBy == 'workshop') && hasSuggestedDate; // Removido: variável não utilizada
         
         if (_currentStatus == 'pendente_oficina') {
-          // Incluir pendentes E agendamentos com sugestão de horário pendente (pendente_cliente)
+          // IMPORTANTE: A aba "Pendentes" deve mostrar TODOS os agendamentos aguardando ação do cliente:
+          // - pendente_oficina: aguardando oficina aceitar
+          // - pendente_cliente: aguardando cliente aprovar orçamento OU sugestão de horário
+          // O status pendente_cliente significa que está aguardando ação do cliente, independente de ter sugestão de horário ou não
           return bookingStatus == 'pendente_oficina' || 
                  bookingStatus == 'pending' ||
-                 (isTimeSuggestion && bookingStatus == 'pendente_cliente'); // Sugestão de horário aguardando aprovação
+                 bookingStatus == 'pendente_cliente'; // SEMPRE incluir pendente_cliente (orçamento ou sugestão aguardando aprovação)
         } else if (_currentStatus == 'confirmado') {
-          // Incluir confirmado, em_andamento, mas NÃO incluir pendente_cliente com sugestão (fica em pendentes)
+          // Incluir confirmado, em_andamento, mas NÃO incluir pendente_cliente (fica em pendentes)
           return (bookingStatus == 'confirmado' || 
                  bookingStatus == 'confirmado_oficina' || 
                  bookingStatus == 'confirmed' ||
                  bookingStatus == 'em_andamento' ||
                  bookingStatus == 'in_progress') &&
-                 !(isTimeSuggestion && bookingStatus == 'pendente_cliente'); // Excluir sugestões pendentes
+                 bookingStatus != 'pendente_cliente'; // Excluir pendente_cliente (fica em pendentes)
         } else if (_currentStatus == 'finalizado_cliente') {
           return bookingStatus == 'finalizado_cliente' || 
                  bookingStatus == 'finalizado_aguardando_pagamento' ||
@@ -79,7 +132,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         }
         
         return b['status'] == _currentStatus;
-      }).toList();
+      }).toList().cast<Map<String, dynamic>>();
       
       // Ordenar agendamentos pendentes por data mais próxima da atual
       if (_currentStatus == 'pendente_oficina') {
@@ -279,10 +332,10 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   fontWeight: FontWeight.w500,
                   fontSize: 13,
                 ),
-                tabs: const [
-                  Tab(text: 'Pendentes'),
-                  Tab(text: 'Confirmados'),
-                  Tab(text: 'Concluídos'),
+                tabs: [
+                  _buildTabWithBadge('Pendentes', 'pendente_oficina'),
+                  _buildTabWithBadge('Confirmados', 'confirmado'),
+                  _buildTabWithBadge('Concluídos', 'finalizado_cliente'),
                 ],
               ),
               isDarkMode: isDarkMode,
@@ -342,7 +395,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                         : ListView.builder(
                             padding: const EdgeInsets.all(15),
                             itemCount: isPendingTab
-                                ? pendingUpcoming.length + (hasExpiredSection ? 1 : 0) + pendingExpired.length
+                                ? pendingUpcoming.length + (hasExpiredSection ? 1 : 0)
                                 : _bookings.length,
                             itemBuilder: (context, index) {
                               if (!isPendingTab) {
@@ -355,15 +408,11 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                               }
 
                               if (hasExpiredSection && index == pendingUpcoming.length) {
-                                return _buildExpiredDivider(pendingExpired.length);
+                                return _buildExpiredDivider(pendingExpired.length, pendingExpired);
                               }
 
-                              final expiredIndex =
-                                  index - pendingUpcoming.length - (hasExpiredSection ? 1 : 0);
-                              return _buildBookingCard(
-                                pendingExpired[expiredIndex],
-                                isExpired: true,
-                              );
+                              // Agendamentos expirados não aparecem mais aqui, apenas na tela dedicada
+                              return const SizedBox.shrink();
                             },
                           ),
                   ),
@@ -375,8 +424,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
 
   Widget _buildBookingCard(Map<String, dynamic> booking, {bool isExpired = false}) {
     final status = booking['status'] ?? 'pending';
-    final statusConfig = _getStatusConfig(status);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final statusConfig = _getStatusConfig(status, isDarkMode: isDarkMode);
     final attachments = (booking['customer_uploads'] is List)
         ? List<Map<String, dynamic>>.from(booking['customer_uploads'])
         : (booking['customerUploads'] is List)
@@ -415,12 +464,18 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            Navigator.pushNamed(
+          onTap: () async {
+            // IMPORTANTE: Aguardar resultado para atualizar se necessário
+            final result = await Navigator.pushNamed(
               context,
               '/order-detail',
               arguments: booking,
             );
+            // Se retornou true, significa que houve atualização e precisa recarregar
+            if (result == true && mounted) {
+              // IMPORTANTE: Forçar refresh sem usar cache
+              await _loadBookings(forceRefresh: true);
+            }
           },
           borderRadius: BorderRadius.circular(20),
           child: Padding(
@@ -492,27 +547,74 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 ),
                 const SizedBox(height: 15),
 
-                // Date & Time
-                Row(
-                  children: [
-                    Icon(Icons.calendar_today, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
-                    const SizedBox(width: 8),
-                    Text(
-                      booking['appointment_date'] != null
-                          ? DateFormat('dd/MM/yyyy').format(DateTime.parse(booking['appointment_date']))
-                          : 'Data não definida',
-                      style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
-                    ),
-                    const SizedBox(width: 15),
-                    Icon(Icons.access_time, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
-                    const SizedBox(width: 8),
-                    Text(
-                      booking['appointment_date'] != null
-                          ? DateFormat('HH:mm').format(DateTime.parse(booking['appointment_date']))
-                          : '00:00',
-                      style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
-                    ),
-                  ],
+                // Date & Time - Suporte para janela de horários
+                Builder(
+                  builder: (context) {
+                    final scheduleType = booking['schedule_type']?.toString() ?? 'specific_time';
+                    final isTimeWindow = scheduleType == 'time_window';
+                    
+                    if (isTimeWindow && booking['time_window_start'] != null && booking['time_window_end'] != null) {
+                      // Exibir janela de horários
+                      try {
+                        final startTime = DateTime.parse(booking['time_window_start']);
+                        final endTime = DateTime.parse(booking['time_window_end']);
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.calendar_today, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
+                                const SizedBox(width: 8),
+                                Text(
+                                  DateFormat('dd/MM/yyyy').format(startTime),
+                                  style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.schedule, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${DateFormat('HH:mm').format(startTime)} até ${DateFormat('HH:mm').format(endTime)}',
+                                  style: TextStyle(
+                                    color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
+                      } catch (e) {
+                        // Fallback para exibição padrão se houver erro ao parsear
+                      }
+                    }
+                    
+                    // Exibição padrão para horário específico
+                    return Row(
+                      children: [
+                        Icon(Icons.calendar_today, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
+                        const SizedBox(width: 8),
+                        Text(
+                          booking['appointment_date'] != null
+                              ? DateFormat('dd/MM/yyyy').format(DateTime.parse(booking['appointment_date']))
+                              : 'Data não definida',
+                          style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+                        ),
+                        const SizedBox(width: 15),
+                        Icon(Icons.access_time, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
+                        const SizedBox(width: 8),
+                        Text(
+                          booking['appointment_date'] != null
+                              ? DateFormat('HH:mm').format(DateTime.parse(booking['appointment_date']))
+                              : '00:00',
+                          style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 10),
 
@@ -577,7 +679,17 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   double? finalPrice;
                   
                   // Primeiro, tentar final_price (orçamento aprovado)
-                  finalPrice = PriceUtils.extractPrice(booking['final_price'] ?? booking['finalPrice']);
+                  final rawFinalPrice = booking['final_price'] ?? booking['finalPrice'];
+                  
+                  // DEBUG: Log para verificar valor bruto
+                  debugPrint('💰 [OrdersScreen] final_price raw: $rawFinalPrice, type: ${rawFinalPrice?.runtimeType}');
+                  
+                  finalPrice = PriceUtils.extractPrice(rawFinalPrice);
+                  
+                  // DEBUG: Log para verificar valor convertido
+                  if (finalPrice != null) {
+                    debugPrint('💰 [OrdersScreen] finalPrice converted: $finalPrice (R\$ ${finalPrice.toStringAsFixed(2)})');
+                  }
                   
                   // Se não tiver final_price, tentar outros campos
                   if (finalPrice == null) {
@@ -592,7 +704,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                     );
                   }
                   
-                  final totalLabel = finalPrice != null ? PriceUtils.formatCurrency(finalPrice) : null;
+                  // IMPORTANTE: finalPrice já está convertido para reais, formatar diretamente
+                  final totalLabel = finalPrice != null ? 'R\$ ${finalPrice.toStringAsFixed(2).replaceAll('.', ',')}' : null;
                   if (totalLabel == null) return const SizedBox.shrink();
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -619,9 +732,17 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 // Botões para aceitar/recusar sugestão de horário
                 Builder(
                   builder: (context) {
+                    // IMPORTANTE: Não exibir se já está confirmado
+                    final currentStatus = (status ?? '').toString().toLowerCase().trim();
+                    if (currentStatus == 'confirmado' || currentStatus == 'confirmed') {
+                      return const SizedBox.shrink();
+                    }
+                    
                     final suggestedBy = booking['suggested_by'] ?? booking['sugerido_por'];
                     final hasSuggestedDate = booking['suggested_date'] != null || booking['data_sugerida'] != null;
-                    final isTimeSuggestion = suggestedBy == 'oficina' && hasSuggestedDate && status.toLowerCase() == 'pendente_cliente';
+                    final isTimeSuggestion = (suggestedBy == 'oficina' || suggestedBy == 'workshop') && 
+                                            hasSuggestedDate && 
+                                            currentStatus == 'pendente_cliente';
                     
                     if (!isTimeSuggestion) return const SizedBox.shrink();
                     
@@ -764,6 +885,171 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                     );
                   },
                 ),
+                
+                // Seção de contato WhatsApp - APENAS quando status = em_andamento
+                Builder(
+                  builder: (context) {
+                    final normalizedStatus = status.toString().toLowerCase();
+                    final isInProgress = normalizedStatus == 'em_andamento' || normalizedStatus == 'in_progress';
+                    
+                    if (!isInProgress) return const SizedBox.shrink();
+                    
+                    // Obter telefone da oficina
+                    final workshopPhone = booking['workshop_phone'] ?? 
+                                        booking['workshop']?['phone'] ?? 
+                                        booking['oficina_phone'] ?? 
+                                        '';
+                    
+                    if (workshopPhone.toString().isEmpty || workshopPhone == 'Telefone não informado') {
+                      return const SizedBox.shrink();
+                    }
+                    
+                    // Limpar telefone (remover caracteres não numéricos)
+                    final cleanPhone = workshopPhone.toString().replaceAll(RegExp(r'[^0-9]'), '');
+                    if (cleanPhone.isEmpty) return const SizedBox.shrink();
+                    
+                    // Formatar telefone para WhatsApp (adicionar código do país se necessário)
+                    String whatsappNumber = cleanPhone;
+                    if (!whatsappNumber.startsWith('55') && cleanPhone.length >= 10) {
+                      whatsappNumber = '55$cleanPhone';
+                    }
+                    
+                    return Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                const Color(0xFF25D366).withOpacity(isDarkMode ? 0.2 : 0.1),
+                                const Color(0xFF128C7E).withOpacity(isDarkMode ? 0.15 : 0.08),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFF25D366).withOpacity(0.3),
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF25D366).withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF25D366).withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.chat_bubble_outline_rounded,
+                                      color: Color(0xFF25D366),
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Contato com a Oficina',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDarkMode ? Colors.white : Colors.black87,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Entre em contato via WhatsApp',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () {
+                                        final url = 'https://wa.me/$whatsappNumber';
+                                        // ignore: avoid_print
+                                        print('Abrindo WhatsApp: $url');
+                                        // Usar url_launcher para abrir WhatsApp
+                                        // ignore: unawaited_futures
+                                        launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                                      },
+                                      icon: const Icon(Icons.chat, size: 18),
+                                      label: const Text(
+                                        'Abrir WhatsApp',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF25D366),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        elevation: 0,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      // Copiar número para área de transferência
+                                      Clipboard.setData(ClipboardData(text: cleanPhone));
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: const Text('Número copiado!'),
+                                          backgroundColor: const Color(0xFF25D366),
+                                          duration: const Duration(seconds: 2),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.copy, size: 18),
+                                    label: const Text('Copiar'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF25D366),
+                                      side: const BorderSide(color: Color(0xFF25D366), width: 1.5),
+                                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -772,7 +1058,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildExpiredDivider(int expiredCount) {
+  Widget _buildExpiredDivider(int expiredCount, List<Map<String, dynamic>> expiredBookings) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -783,46 +1069,62 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
             color: isDarkMode ? Colors.white12 : Colors.grey.shade300,
             thickness: 1,
           ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.orange.withOpacity(0.4),
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.info_outline, color: Colors.orange),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Agendamentos pendentes expirados',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        expiredCount == 1
-                            ? 'Este agendamento passou da data prevista e aguarda ação manual.'
-                            : '$expiredCount agendamentos pendentes passaram da data prevista e aguardam ação manual.',
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ExpiredBookingsScreen(expiredBookings: expiredBookings),
                 ),
-              ],
+              );
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.orange.withOpacity(0.4),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.orange),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Agendamentos pendentes expirados',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          expiredCount == 1
+                              ? 'Este agendamento passou da data prevista e aguarda ação manual.'
+                              : '$expiredCount agendamentos pendentes passaram da data prevista e aguardam ação manual.',
+                          style: TextStyle(
+                            color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: Colors.orange.withOpacity(0.7),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -854,7 +1156,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     return null;
   }
 
-  Map<String, dynamic> _getStatusConfig(String status) {
+  Map<String, dynamic> _getStatusConfig(String status, {bool isDarkMode = false}) {
     // Normalizar o status para minúsculas e remover espaços
     final normalizedStatus = status.toString().toLowerCase().trim();
     
@@ -883,45 +1185,134 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     
     final mappedStatus = statusMap[normalizedStatus] ?? normalizedStatus;
     
+    // Cores adaptadas para modo escuro e claro
     final configs = {
       'pending': {
         'label': 'Pendente',
-        'color': const Color(0xFFFCF4E5),
-        'textColor': const Color(0xFFDBA800),
+        'color': isDarkMode ? const Color(0xFF3D2F1A) : const Color(0xFFFCF4E5),
+        'textColor': isDarkMode ? const Color(0xFFFFC94A) : const Color(0xFFDBA800),
       },
       'pending_customer': {
         'label': 'Aguardando você',
-        'color': const Color(0xFFFFF4E6),
-        'textColor': const Color(0xFFEF8E1C),
+        'color': isDarkMode ? const Color(0xFF3D2A1A) : const Color(0xFFFFF4E6),
+        'textColor': isDarkMode ? const Color(0xFFFF9F4A) : const Color(0xFFEF8E1C),
       },
       'confirmed': {
         'label': 'Confirmado',
-        'color': const Color(0xFFE3EDFA),
-        'textColor': const Color(0xFF7896D8),
+        'color': isDarkMode ? const Color(0xFF1A2332) : const Color(0xFFE3EDFA),
+        'textColor': isDarkMode ? const Color(0xFF6BA3FF) : const Color(0xFF7896D8),
       },
       'in_progress': {
         'label': 'Em Andamento',
-        'color': const Color(0xFFE8FFEE),
-        'textColor': const Color(0xFF2FD65C),
+        'color': isDarkMode ? const Color(0xFF1A2E1F) : const Color(0xFFE8FFEE),
+        'textColor': isDarkMode ? const Color(0xFF4ADE80) : const Color(0xFF2FD65C),
       },
       'awaiting_payment': {
         'label': 'Aguardando Pagamento',
-        'color': const Color(0xFFE0F2FF),
-        'textColor': const Color(0xFF1B6DC1),
+        'color': isDarkMode ? const Color(0xFF1A2338) : const Color(0xFFE0F2FF),
+        'textColor': isDarkMode ? const Color(0xFF5BA3FF) : const Color(0xFF1B6DC1),
       },
       'completed': {
         'label': 'Concluído',
-        'color': const Color(0xFFE8FFEE),
-        'textColor': const Color(0xFF2FD65C),
+        'color': isDarkMode ? const Color(0xFF1A2E1F) : const Color(0xFFE8FFEE),
+        'textColor': isDarkMode ? const Color(0xFF4ADE80) : const Color(0xFF2FD65C),
       },
       'cancelled': {
         'label': 'Cancelado',
-        'color': const Color(0xFFFEE2E2),
-        'textColor': const Color(0xFFE8867C),
+        'color': isDarkMode ? const Color(0xFF3D1F1F) : const Color(0xFFFEE2E2),
+        'textColor': isDarkMode ? const Color(0xFFFF6B6B) : const Color(0xFFE8867C),
       },
     };
     
     return configs[mappedStatus] ?? configs['pending']!;
+  }
+
+  Widget _buildTabWithBadge(String label, String status) {
+    return Consumer<NotificationProvider>(
+      builder: (context, notificationProvider, child) {
+        final hasUnread = _hasUnreadNotificationsForStatus(notificationProvider, status);
+        return Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(label),
+              if (hasUnread) ...[
+                const SizedBox(width: 6),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  bool _hasUnreadNotificationsForStatus(NotificationProvider provider, String status) {
+    for (final notification in provider.notifications) {
+      final isRead = notification['read'] == true || notification['is_read'] == true;
+      if (isRead) continue;
+
+      final type = (notification['type'] ?? '').toString().toLowerCase();
+      final title = (notification['title'] ?? '').toString().toLowerCase();
+      final message = (notification['message'] ?? '').toString().toLowerCase();
+      final bookingStatus = notification['booking_status']?.toString().toLowerCase() ?? 
+                           notification['data']?['booking_status']?.toString().toLowerCase() ?? '';
+
+      // Verificar se é notificação relacionada a agendamento
+      final bool isBookingRelated = type.contains('booking') ||
+          type.contains('agendamento') ||
+          title.contains('agendamento') ||
+          message.contains('agendamento') ||
+          title.contains('oficina') ||
+          message.contains('oficina');
+
+      if (!isBookingRelated) continue;
+
+      // Mapear status para verificar correspondência
+      final normalizedStatus = status.toLowerCase();
+      if (normalizedStatus == 'pendente_oficina') {
+        // Notificações de pendentes: quando oficina sugere horário, confirma, etc
+        if (title.contains('pendente') || 
+            title.contains('sugestão') || 
+            title.contains('horário') ||
+            message.contains('pendente') ||
+            message.contains('sugestão') ||
+            bookingStatus.contains('pendente')) {
+          return true;
+        }
+      } else if (normalizedStatus == 'confirmado') {
+        // Notificações de confirmados: quando oficina confirma agendamento
+        if (title.contains('confirmado') || 
+            title.contains('confirmou') ||
+            message.contains('confirmado') ||
+            message.contains('confirmou') ||
+            bookingStatus.contains('confirmado') ||
+            bookingStatus.contains('confirmed')) {
+          return true;
+        }
+      } else if (normalizedStatus == 'finalizado_cliente') {
+        // Notificações de concluídos: quando serviço é finalizado
+        if (title.contains('finalizado') || 
+            title.contains('concluído') ||
+            title.contains('concluido') ||
+            message.contains('finalizado') ||
+            message.contains('concluído') ||
+            message.contains('concluido') ||
+            bookingStatus.contains('finalizado') ||
+            bookingStatus.contains('completed')) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   Future<void> _acceptTimeSuggestion(Map<String, dynamic> booking) async {
@@ -960,11 +1351,16 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       if (!mounted) return;
 
       if (result['success'] == true) {
+        // IMPORTANTE: Invalidar cache de bookings para forçar reload
+        _apiService.invalidateBookingsCache();
+        _apiService.invalidateBookingCache(bookingId);
+        
         AppAlerts.showSuccess(
           context,
           message: 'Horário aceito com sucesso! O agendamento está confirmado.',
         );
-        await _loadBookings();
+        // IMPORTANTE: Forçar reload sem usar cache
+        await _loadBookings(forceRefresh: true);
       } else {
         AppAlerts.showError(
           context,
@@ -1023,7 +1419,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           message: 'Sugestão recusada. O agendamento foi cancelado e a oficina foi notificada.',
         );
         // Recarregar lista para remover o agendamento cancelado
-        await _loadBookings();
+        await _loadBookings(forceRefresh: true);
       } else {
         AppAlerts.showError(
           context,
@@ -1089,15 +1485,3 @@ class _SimpleTabBarDelegate extends SliverPersistentHeaderDelegate {
     return oldDelegate.isDarkMode != isDarkMode;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-

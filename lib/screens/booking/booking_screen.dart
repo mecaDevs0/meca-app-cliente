@@ -1,13 +1,14 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
-import '../../services/photo/photo_service.dart';
 import '../../services/photo/photo_repository.dart';
+import '../../services/photo/photo_service.dart';
 import '../../services/photo/upload_service.dart';
 import '../../widgets/app_alerts.dart';
 import '../../widgets/photo/photo_grid_widget.dart';
@@ -46,6 +47,8 @@ class _BookingScreenState extends State<BookingScreen> {
   Map<String, dynamic>? _selectedVehicle;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
+  TimeOfDay? _selectedTimeEnd; // Para janelas de horário
+  String _scheduleType = 'specific_time'; // 'specific_time', 'time_window', 'day_only'
   final TextEditingController _observationsController = TextEditingController();
   bool _isLoading = false;
   bool _isCreatingBooking = false;
@@ -272,33 +275,71 @@ class _BookingScreenState extends State<BookingScreen> {
       return;
     }
     
-    if (_selectedTime == null) {
-      await _showSnackBar('Selecione um horário', isError: true);
-      return;
+    // Validação baseada no tipo de agendamento
+    if (_scheduleType == 'specific_time') {
+      if (_selectedTime == null) {
+        await _showSnackBar('Selecione um horário', isError: true);
+        return;
+      }
+    } else if (_scheduleType == 'time_window') {
+      if (_selectedTime == null || _selectedTimeEnd == null) {
+        await _showSnackBar('Selecione a janela de horário (início e fim)', isError: true);
+        return;
+      }
     }
 
     setState(() => _isCreatingBooking = true);
 
     try {
-      // Combinar data e hora
-      final DateTime appointmentDateTime = DateTime(
-        _selectedDate!.year,
-        _selectedDate!.month,
-        _selectedDate!.day,
-        _selectedTime!.hour,
-        _selectedTime!.minute,
-      );
-
-      // Criar agendamento
       final Map<String, dynamic> bookingData = {
         'customer_id': userId,
         'vehicle_id': _selectedVehicle!['id'],
         'oficina_id': widget.workshopId,
         'product_id': _selectedService!['id'],
-        'appointment_date': appointmentDateTime.toIso8601String(),
         'customer_notes': _observationsController.text.trim(),
         'status': 'pendente_oficina',
+        'schedule_type': _scheduleType, // 'specific_time', 'time_window', 'day_only'
       };
+
+      // Adicionar data e horário baseado no tipo
+      if (_scheduleType == 'specific_time' && _selectedTime != null) {
+        // Horário fixo: usar appointment_date
+        final DateTime appointmentDateTime = DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          _selectedTime!.hour,
+          _selectedTime!.minute,
+        );
+        bookingData['appointment_date'] = appointmentDateTime.toIso8601String();
+      } else if (_scheduleType == 'time_window' && _selectedTime != null && _selectedTimeEnd != null) {
+        // Janela de serviço: usar appointment_date para início e time_window_end para fim
+        final DateTime startDateTime = DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          _selectedTime!.hour,
+          _selectedTime!.minute,
+        );
+        final DateTime endDateTime = DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          _selectedTimeEnd!.hour,
+          _selectedTimeEnd!.minute,
+        );
+        bookingData['appointment_date'] = startDateTime.toIso8601String();
+        bookingData['time_window_end'] = endDateTime.toIso8601String();
+        bookingData['time_window_start'] = startDateTime.toIso8601String();
+      } else {
+        // Apenas dia: usar appointment_date sem hora específica
+        final DateTime appointmentDate = DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+        );
+        bookingData['appointment_date'] = appointmentDate.toIso8601String();
+      }
 
 
       final result = await _apiService.createBooking(bookingData);
@@ -313,10 +354,38 @@ class _BookingScreenState extends State<BookingScreen> {
         
         // Agendar lembretes de notificação
         try {
+          // Usar a data de início para o lembrete
+          DateTime scheduledDate;
+          if (_scheduleType == 'specific_time' && _selectedTime != null) {
+            scheduledDate = DateTime(
+              _selectedDate!.year,
+              _selectedDate!.month,
+              _selectedDate!.day,
+              _selectedTime!.hour,
+              _selectedTime!.minute,
+            );
+          } else if (_scheduleType == 'time_window' && _selectedTime != null) {
+            scheduledDate = DateTime(
+              _selectedDate!.year,
+              _selectedDate!.month,
+              _selectedDate!.day,
+              _selectedTime!.hour,
+              _selectedTime!.minute,
+            );
+          } else {
+            scheduledDate = DateTime(
+              _selectedDate!.year,
+              _selectedDate!.month,
+              _selectedDate!.day,
+              9, // Horário padrão 9h
+              0,
+            );
+          }
+          
           await _notificationService.scheduleBookingReminders(
             workshopName: widget.workshopName,
             serviceName: widget.serviceName,
-            scheduledDate: appointmentDateTime,
+            scheduledDate: scheduledDate,
           );
         } catch (e) {
           print('Erro ao agendar lembretes: $e');
@@ -850,17 +919,160 @@ class _BookingScreenState extends State<BookingScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildDateButton(isDarkMode),
+          
+          // Seleção do tipo de agendamento
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFF00C977).withOpacity(0.3),
+                width: 1,
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildTimeButton(isDarkMode),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _scheduleType = 'specific_time'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _scheduleType == 'specific_time'
+                            ? const Color(0xFF00C977).withOpacity(0.15)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _scheduleType == 'specific_time'
+                              ? const Color(0xFF00C977)
+                              : Colors.transparent,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 16,
+                            color: _scheduleType == 'specific_time'
+                                ? const Color(0xFF00C977)
+                                : Colors.grey[600],
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Horário Fixo',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: _scheduleType == 'specific_time'
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: _scheduleType == 'specific_time'
+                                  ? const Color(0xFF00C977)
+                                  : Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _scheduleType = 'time_window'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _scheduleType == 'time_window'
+                            ? const Color(0xFF00C977).withOpacity(0.15)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _scheduleType == 'time_window'
+                              ? const Color(0xFF00C977)
+                              : Colors.transparent,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.schedule,
+                            size: 16,
+                            color: _scheduleType == 'time_window'
+                                ? const Color(0xFF00C977)
+                                : Colors.grey[600],
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Janela',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: _scheduleType == 'time_window'
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: _scheduleType == 'time_window'
+                                  ? const Color(0xFF00C977)
+                                  : Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          
+          // Seleção de data - UI melhorada
+          _buildDateButton(isDarkMode),
+          const SizedBox(height: 20),
+          
+          // Seleção de horário baseado no tipo - UI melhorada
+          if (_scheduleType == 'specific_time') ...[
+            _buildTimeButton(isDarkMode),
+            if (_selectedDate != null && _selectedTime != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C977).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF00C977).withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 16,
+                      color: const Color(0xFF00C977),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Horário confirmado: ${DateFormat('dd/MM/yyyy').format(_selectedDate!)} às ${_selectedTime!.format(context)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: const Color(0xFF00C977),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
-          ),
+          ] else if (_scheduleType == 'time_window') ...[
+            _buildTimeWindowButtons(isDarkMode),
+          ],
         ],
       ),
     );
@@ -870,18 +1082,35 @@ class _BookingScreenState extends State<BookingScreen> {
     return GestureDetector(
       onTap: _selectDate,
       child: Container(
-        height: 80, // Altura aumentada para melhor visualização
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
+          color: _selectedDate != null
+              ? const Color(0xFF00C977).withOpacity(0.1)
+              : (isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[100]),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: _selectedDate != null 
                 ? const Color(0xFF00C977) 
-                : Colors.grey[300]!,
-            width: 1,
+                : Colors.grey[400]!,
+            width: _selectedDate != null ? 2 : 1,
           ),
         ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00C977),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.calendar_today,
+                size: 20,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -890,27 +1119,33 @@ class _BookingScreenState extends State<BookingScreen> {
             Text(
               'Data',
               style: TextStyle(
-                fontSize: 12,
+                      fontSize: 11,
                 color: Colors.grey[600],
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 4),
-            Flexible(
-              child: Text(
+                  const SizedBox(height: 2),
+                  Text(
                 _selectedDate != null
                     ? DateFormat('dd/MM/yyyy').format(_selectedDate!)
                     : 'Selecionar data',
                 style: TextStyle(
-                  fontSize: 16,
+                      fontSize: 15,
                   color: _selectedDate != null 
                       ? (isDarkMode ? Colors.white : Colors.black)
                       : Colors.grey[600],
-                  fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: Colors.grey[400],
             ),
           ],
         ),
@@ -922,18 +1157,35 @@ class _BookingScreenState extends State<BookingScreen> {
     return GestureDetector(
       onTap: _selectTime,
       child: Container(
-        height: 80, // Altura aumentada para melhor visualização
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
+          color: _selectedTime != null
+              ? const Color(0xFF00C977).withOpacity(0.1)
+              : (isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[100]),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: _selectedTime != null 
                 ? const Color(0xFF00C977) 
-                : Colors.grey[300]!,
-            width: 1,
+                : Colors.grey[400]!,
+            width: _selectedTime != null ? 2 : 1,
           ),
         ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00C977),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.access_time,
+                size: 20,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -942,32 +1194,331 @@ class _BookingScreenState extends State<BookingScreen> {
             Text(
               'Horário',
               style: TextStyle(
-                fontSize: 12,
+                      fontSize: 11,
                 color: Colors.grey[600],
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 4),
-            Flexible(
-              child: Text(
+                  const SizedBox(height: 2),
+                  Text(
                 _selectedTime != null
                     ? _selectedTime!.format(context)
                     : 'Selecionar horário',
                 style: TextStyle(
-                  fontSize: 16,
+                      fontSize: 15,
                   color: _selectedTime != null 
                       ? (isDarkMode ? Colors.white : Colors.black)
                       : Colors.grey[600],
-                  fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: Colors.grey[400],
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildTimeWindowButtons(bool isDarkMode) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: _selectTimeWindowStart,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _selectedTime != null
+                        ? const Color(0xFF00C977).withOpacity(0.1)
+                        : (isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[100]),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: _selectedTime != null 
+                          ? const Color(0xFF00C977) 
+                          : Colors.grey[400]!,
+                      width: _selectedTime != null ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00C977),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          Icons.schedule,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                              'Inicio',
+                        style: TextStyle(
+                                fontSize: 10,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                            const SizedBox(height: 2),
+                            Text(
+                          _selectedTime != null
+                              ? _selectedTime!.format(context)
+                                  : 'Inicio',
+                          style: TextStyle(
+                                fontSize: 14,
+                            color: _selectedTime != null 
+                                ? (isDarkMode ? Colors.white : Colors.black)
+                                : Colors.grey[600],
+                                fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Icon(
+                Icons.arrow_forward,
+                color: Colors.grey[400],
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: GestureDetector(
+                onTap: _selectTimeWindowEnd,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _selectedTimeEnd != null
+                        ? const Color(0xFF00C977).withOpacity(0.1)
+                        : (isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[100]),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: _selectedTimeEnd != null 
+                          ? const Color(0xFF00C977) 
+                          : Colors.grey[400]!,
+                      width: _selectedTimeEnd != null ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00C977),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          Icons.schedule,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                              'Fim',
+                        style: TextStyle(
+                                fontSize: 10,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                            const SizedBox(height: 2),
+                            Text(
+                          _selectedTimeEnd != null
+                              ? _selectedTimeEnd!.format(context)
+                              : 'Fim',
+                          style: TextStyle(
+                                fontSize: 14,
+                            color: _selectedTimeEnd != null 
+                                ? (isDarkMode ? Colors.white : Colors.black)
+                                : Colors.grey[600],
+                                fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_selectedTime != null && _selectedTimeEnd != null) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF00C977).withOpacity(0.15),
+                  const Color(0xFF00B369).withOpacity(0.1),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFF00C977).withOpacity(0.4),
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                  color: const Color(0xFF00C977),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.check_circle,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Janela de horário confirmada',
+                    style: TextStyle(
+                          fontSize: 13,
+                      color: const Color(0xFF00C977),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${_selectedTime!.format(context)} até ${_selectedTimeEnd!.format(context)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.w500,
+                    ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _selectTimeWindowStart() async {
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? const TimeOfDay(hour: 14, minute: 0),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF00C977),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (selectedTime != null) {
+      setState(() {
+        _selectedTime = selectedTime;
+        // Se o horário de fim já está definido e é menor que o início, limpar
+        if (_selectedTimeEnd != null && 
+            (selectedTime.hour > _selectedTimeEnd!.hour || 
+             (selectedTime.hour == _selectedTimeEnd!.hour && selectedTime.minute >= _selectedTimeEnd!.minute))) {
+          _selectedTimeEnd = null;
+        }
+      });
+    }
+  }
+
+  Future<void> _selectTimeWindowEnd() async {
+    final initialTime = _selectedTimeEnd ?? 
+                       (_selectedTime != null 
+                           ? TimeOfDay(
+                               hour: _selectedTime!.hour + 2,
+                               minute: _selectedTime!.minute,
+                             )
+                           : const TimeOfDay(hour: 18, minute: 0));
+    
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF00C977),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (selectedTime != null) {
+      // Validar que o horário de fim é depois do início
+      if (_selectedTime != null) {
+        final startMinutes = _selectedTime!.hour * 60 + _selectedTime!.minute;
+        final endMinutes = selectedTime.hour * 60 + selectedTime.minute;
+        
+        if (endMinutes <= startMinutes) {
+          await _showSnackBar('O horário de fim deve ser depois do horário de início', isError: true);
+          return;
+        }
+      }
+      
+      setState(() {
+        _selectedTimeEnd = selectedTime;
+      });
+    }
   }
 
   Widget _buildObservationsCard(bool isDarkMode) {

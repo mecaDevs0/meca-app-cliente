@@ -2,7 +2,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class EmailService {
-  static const String _apiUrl = 'http://ec2-3-144-213-137.us-east-2.compute.amazonaws.com:9000';
+  static const String _apiUrl = 'http://18.222.129.59';
   
   // Templates de email com logo MECA
   static const String _emailTemplate = '''

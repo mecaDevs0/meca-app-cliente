@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
 import '../booking/booking_screen.dart';
 
+
 class WorkshopDetailScreen extends StatefulWidget {
   final String workshopId;
 
@@ -159,6 +160,121 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     );
   }
 
+  // Widget do Header Minimalista com Gradiente Vertical
+  Widget _buildDeepTechHeader(String workshopName, double? rating, String? logoUrl) {
+    return Container(
+      // BACKGROUND: Gradiente vertical suave (fusão perfeita)
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFF00B369), // Verde Secundário (Topo)
+            const Color(0xFF121E29), // Mesma cor de fundo do app (Base - fusão invisível)
+          ],
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // LOGO: Hero centralizado
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF1E1E1E), // Escuro, NÃO BRANCO
+                border: Border.all(
+                  color: const Color(0xFF00C977), // Neon
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 20,
+                    spreadRadius: 0,
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: logoUrl != null && 
+                       logoUrl.isNotEmpty && 
+                       logoUrl != '' &&
+                       logoUrl.startsWith('http')
+                  ? Image.network(
+                      logoUrl,
+                      fit: BoxFit.cover,
+                      width: 100,
+                      height: 100,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: const Color(0xFF1E1E1E),
+                          child: const Icon(
+                            Icons.build,
+                            color: Color(0xFF00C977),
+                            size: 50,
+                          ),
+                        );
+                      },
+                    )
+                  : Container(
+                      color: const Color(0xFF1E1E1E),
+                      child: const Icon(
+                        Icons.build,
+                        color: Color(0xFF00C977),
+                        size: 50,
+                      ),
+                    ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // NOME: Texto Branco, Bold, UPPERCASE, Premium
+            Text(
+              workshopName.toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2.0, // Espaçamento entre letras para visual Premium
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            // BADGE: Fundo translúcido escuro, centralizado
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.star, color: Colors.white, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    (rating != null && rating > 0 && rating <= 5)
+                        ? rating.toStringAsFixed(1)
+                        : '-',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildWorkshopDetails() {
     if (_workshop == null) return const SizedBox();
 
@@ -172,121 +288,24 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
     return CustomScrollView(
       slivers: [
-        // Header melhorado com imagem da fachada
+        // Header Minimalista com Gradiente Vertical
         SliverAppBar(
-          expandedHeight: 310,
+          expandedHeight: 280,
           pinned: true,
-          backgroundColor: const Color(0xFF00C977),
+          backgroundColor: const Color(0xFF121E29), // Mesma cor do gradiente final
           flexibleSpace: FlexibleSpaceBar(
-            background: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF00C977),
-                    const Color(0xFF00B369),
-                    const Color(0xFF00A85C),
-                  ],
-                ),
-              ),
-              child: SafeArea(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Logo da oficina melhorado
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
-                            blurRadius: 15,
-                            spreadRadius: 3,
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: logoUrl != null && 
-                               logoUrl.isNotEmpty && 
-                               logoUrl != '' &&
-                               logoUrl.startsWith('http')
-                            ? Image.network(
-                                logoUrl,
-                                fit: BoxFit.cover,
-                                width: 100,
-                                height: 100,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return const Icon(
-                                    Icons.build,
-                                    color: Color(0xFF00C977),
-                                    size: 50,
-                                  );
-                                },
-                              )
-                            : const Icon(
-                                Icons.build,
-                                color: Color(0xFF00C977),
-                                size: 50,
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      workshopName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.star, color: Colors.white, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            (rating != null && rating > 0 && rating <= 5)
-                                ? rating.toStringAsFixed(1)
-                                : '-',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            background: _buildDeepTechHeader(workshopName, rating, logoUrl),
           ),
         ),
         
-        // Conteúdo da oficina melhorado
+        // Conteúdo da oficina (transição natural sem sobreposição)
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Informações básicas melhoradas
+                // Informações básicas (transição natural)
                 _buildInfoCard(),
                 const SizedBox(height: 20),
                 
@@ -300,6 +319,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 
                 // Serviços oferecidos melhorados
                 _buildServicesCard(),
+                const SizedBox(height: 16),
+                
+                // Aviso sobre botão de agendar no final
+                _buildBookingHint(),
                 const SizedBox(height: 20),
                 
                 // Botão de agendamento
@@ -1165,6 +1188,47 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               );
   }
   
+  Widget _buildBookingHint() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00C977).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF00C977).withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: const Color(0xFF00C977),
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'O botão para agendar serviço está no final da tela',
+              style: TextStyle(
+                color: isDarkMode ? Colors.white : Colors.black87,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Icon(
+            Icons.arrow_downward,
+            color: const Color(0xFF00C977),
+            size: 18,
+          ),
+        ],
+                ),
+              );
+  }
+  
   Widget _buildBookingButton() {
     return Container(
       width: double.infinity,
@@ -1287,6 +1351,20 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
   Map<String, dynamic> _normalizeService(Map<String, dynamic> service) {
     final normalized = Map<String, dynamic>.from(service);
+    
+    // Mapear campos da API para campos esperados pelo app
+    // A API retorna service_name e service_description, mas o app espera name e description
+    normalized['name'] = normalized['service_name'] ?? normalized['name'] ?? 'Serviço';
+    normalized['description'] = normalized['service_description'] ?? normalized['description'] ?? 'Descrição do serviço';
+    
+    // Garantir que name e description não sejam vazios
+    if (normalized['name'] == null || normalized['name'].toString().trim().isEmpty) {
+      normalized['name'] = 'Serviço';
+    }
+    if (normalized['description'] == null || normalized['description'].toString().trim().isEmpty) {
+      normalized['description'] = 'Descrição do serviço';
+    }
+    
     normalized['price'] = _parseDouble(normalized['price'] ?? normalized['service_price']);
     final duration = normalized['duration'] ?? normalized['duration_minutes'];
     if (duration is num) {

@@ -96,7 +96,7 @@ class ApiService {
   // Obter oficinas próximas
   Future<Map<String, dynamic>> getNearbyWorkshops(double lat, double lng) async {
     try {
-      final response = await _dio.get('/workshops/nearby', queryParameters: {
+      final response = await _dio.get('/workshop/nearby', queryParameters: {
         'lat': lat,
         'lng': lng,
       });

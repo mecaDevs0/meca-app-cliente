@@ -125,11 +125,9 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
       // Silenciar erro
     } finally {
       if (!mounted) return;
-      if (!_error.isNotEmpty) {
-        setState(() {
-          _loading = false;
-        });
-      }
+      setState(() {
+        _loading = false;
+      });
     }
   }
 

@@ -5,7 +5,7 @@ class AppConfig {
   // ========================================
   
   /// URL base da API (EC2 AWS)
-  static const String apiBaseUrl = 'http://ec2-3-144-213-137.us-east-2.compute.amazonaws.com:9000';
+  static const String apiBaseUrl = 'http://18.222.129.59:9000';
   
   /// Timeout de conexão (segundos) - Otimizado para EC2
   static const int connectionTimeout = 60;

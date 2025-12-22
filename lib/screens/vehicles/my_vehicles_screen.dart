@@ -25,11 +25,16 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
     _loadVehicles();
   }
 
-  Future<void> _loadVehicles() async {
+  Future<void> _loadVehicles({bool forceRefresh = false}) async {
     setState(() {
       _loading = true;
       _vehicles = [];
     });
+    
+    // Invalidar cache se forçar refresh
+    if (forceRefresh) {
+      _apiService.invalidateVehiclesCache();
+    }
     
     // Obter ID do cliente do perfil
     String? customerId;
@@ -83,7 +88,7 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
           message: result['message'] ??
               (isFavorite ? 'Veículo adicionado aos favoritos.' : 'Veículo removido dos favoritos.'),
         );
-        _loadVehicles(); // Recarrega a lista
+        _loadVehicles(forceRefresh: true); // Recarrega a lista forçando refresh
       } else {
         AppAlerts.showError(
           context,
@@ -135,7 +140,7 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
           context,
           message: result['message'] ?? 'Veículo removido com sucesso.',
         );
-        _loadVehicles(); // Recarrega a lista
+        _loadVehicles(forceRefresh: true); // Recarrega a lista forçando refresh
       } else {
         AppAlerts.showError(
           context,
@@ -178,7 +183,7 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
               IconButton(
                 icon: const Icon(Icons.add_circle, color: Color(0xFF00C977), size: 28),
                 onPressed: () {
-                  Navigator.pushNamed(context, '/add-vehicle').then((_) => _loadVehicles());
+                  Navigator.pushNamed(context, '/add-vehicle').then((_) => _loadVehicles(forceRefresh: true));
                 },
               ),
             ],
@@ -226,7 +231,7 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                                 const SizedBox(height: 20),
                                 ElevatedButton.icon(
                                   onPressed: () {
-                                    Navigator.pushNamed(context, '/add-vehicle').then((_) => _loadVehicles());
+                                    Navigator.pushNamed(context, '/add-vehicle').then((_) => _loadVehicles(forceRefresh: true));
                                   },
                                   icon: const Icon(Icons.add),
                                   label: const Text('Adicionar Veículo'),
@@ -293,7 +298,7 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                   context,
                   '/edit-vehicle',
                   arguments: vehicle,
-                ).then((_) => _loadVehicles());
+                ).then((_) => _loadVehicles(forceRefresh: true));
               },
               borderRadius: BorderRadius.circular(20),
               child: Padding(
@@ -304,32 +309,67 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                     // Header com ícone e ações
                     Row(
                       children: [
-                        // Car Icon com gradiente moderno usando cor do veículo
+                        // Car Icon moderno com cor do veículo - Design iOS style
                         Container(
-                          width: 60,
-                          height: 60,
+                          width: 70,
+                          height: 70,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               colors: [
                                 vehicleColor,
-                                vehicleColor.withOpacity(0.7),
+                                vehicleColor.withOpacity(0.8),
+                                vehicleColor.withOpacity(0.6),
                               ],
+                              stops: const [0.0, 0.5, 1.0],
                             ),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: vehicleColor.withOpacity(0.3),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
+                                color: vehicleColor.withOpacity(0.4),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                                spreadRadius: 0,
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withOpacity(isDark ? 0.2 : 0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
-                          child: const Icon(
-                            Icons.directions_car_rounded,
-                            color: Colors.white,
-                            size: 32,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Efeito de brilho sutil
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.white.withOpacity(0.2),
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // Ícone do carro
+                              Icon(
+                                Icons.electric_car_rounded,
+                                color: Colors.white,
+                                size: 36,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -455,7 +495,7 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                                 context,
                                 '/edit-vehicle',
                                 arguments: vehicle,
-                              ).then((_) => _loadVehicles());
+                              ).then((_) => _loadVehicles(forceRefresh: true));
                             },
                           ),
                         ),

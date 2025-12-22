@@ -26,8 +26,33 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Provider.of<NotificationProvider>(context, listen: false).markProfileBadgeSeen();
+      // Marcar todas as notificações como lidas automaticamente ao entrar na tela
+      _markAllAsReadSilently();
     });
     _loadNotifications();
+  }
+
+  // Marcar todas como lidas silenciosamente (sem mostrar mensagem)
+  Future<void> _markAllAsReadSilently() async {
+    try {
+      final result = await _apiService.markAllNotificationsRead();
+      if (mounted && result['success'] == true) {
+        final provider = Provider.of<NotificationProvider>(context, listen: false);
+        // Marcar todas as notificações no provider como lidas
+        final updatedNotifications = _notifications.map((n) {
+          return Map<String, dynamic>.from(n)
+            ..['is_read'] = true
+            ..['read'] = true;
+        }).toList();
+        provider.setNotifications(updatedNotifications);
+        provider.setUnreadNotifications(0, resetBadge: true);
+        // Recarregar notificações para garantir sincronização
+        _loadNotifications();
+      }
+    } catch (e) {
+      // Silenciar erros - não mostrar mensagem ao usuário
+      print('Erro ao marcar notificações como lidas: $e');
+    }
   }
 
   Future<void> _loadNotifications() async {
@@ -387,11 +412,11 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
       }
     }
 
-    AppAlerts.showInfo(
-      context,
-      message: 'Esta notificação não tem uma ação direta. Verifique os detalhes manualmente.',
-      title: 'Nada para abrir',
-      duration: const Duration(seconds: 3),
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Esta notificação não tem uma ação direta. Verifique os detalhes manualmente.'),
+        duration: Duration(seconds: 3),
+      ),
     );
   }
 }

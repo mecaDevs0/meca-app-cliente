@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -83,7 +82,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
       }
 
       // Converter filtro de distância para km (padrão 10km)
-      double radiusKm = 10.0; // Padrão
+      double? radiusKm; // null = buscar todas
       if (_selectedDistance != 'Todos') {
         switch (_selectedDistance) {
           case 'Até 1km':
@@ -107,7 +106,11 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
           case 'Até 200km':
             radiusKm = 200.0;
             break;
+          default:
+            radiusKm = null; // Todos = buscar todas
         }
+      } else {
+        radiusKm = null; // Todos = buscar todas
       }
       await _fetchWorkshops(targetLat, targetLng, radiusKm: radiusKm);
     } catch (e) {
@@ -126,10 +129,12 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     }
   }
 
-  Future<void> _fetchWorkshops(double userLat, double userLng, {double radiusKm = 10.0}) async {
+  Future<void> _fetchWorkshops(double userLat, double userLng, {double? radiusKm}) async {
     // Se tiver busca por nome, passar o texto de busca (busca independente de distância)
     final searchQuery = _searchController.text.trim().isNotEmpty ? _searchController.text.trim() : null;
-    final result = await _apiService.getNearbyWorkshops(userLat, userLng, radiusKm, searchQuery);
+    // Se radiusKm for null (Todos), passar um valor muito alto para buscar todas
+    final finalRadiusKm = radiusKm ?? 999999.0; // Valor muito alto para buscar todas
+    final result = await _apiService.getNearbyWorkshops(userLat, userLng, finalRadiusKm, searchQuery);
       
       if (!mounted) return;
              if (result['success']) {
@@ -504,10 +509,58 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   Widget _buildWorkshopsList() {
     Widget listBody;
     if (_filteredWorkshops.isEmpty) {
-      listBody = const Center(
-        child: Text(
-          'Nenhuma oficina encontrada com os filtros aplicados',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
+      listBody = Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.build_circle_outlined,
+                size: 100,
+                color: Theme.of(context).brightness == Brightness.dark 
+                    ? Colors.grey.shade600 
+                    : Colors.grey.shade400,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Nenhuma oficina encontrada',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).brightness == Brightness.dark 
+                      ? Colors.white 
+                      : Colors.grey.shade900,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _searchController.text.trim().isNotEmpty
+                    ? 'Não encontramos oficinas com o termo "${_searchController.text.trim()}"'
+                    : 'Não há oficinas disponíveis próximas a você no momento.\n\nTente ajustar os filtros de distância ou verifique sua localização.',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (_searchController.text.trim().isEmpty) ...[
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: _loadNearbyWorkshops,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Atualizar'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C977),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       );
     } else {
@@ -761,18 +814,34 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                 workshop['logo_url'],
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) {
-                                  return const Icon(
-                                    Icons.build,
-                                    color: Colors.white,
-                                    size: 35,
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[200],
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Icon(
+                                      Icons.store_outlined,
+                                      color: isDarkMode ? Colors.grey[500] : Colors.grey[400],
+                                      size: 28,
+                                    ),
                                   );
                                 },
                               ),
                             )
-                          : const Icon(
-                              Icons.build,
-                              color: Colors.white,
-                              size: 35,
+                          : Container(
+                              decoration: BoxDecoration(
+                                color: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.store_outlined,
+                                color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
+                                size: 28,
+                              ),
                             ),
                     ),
                     const SizedBox(width: 16),
@@ -867,7 +936,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                     Text(
                                       distance != null && distance > 0
                                           ? _formatDistance(distance)
-                                          : 'Distância não disponível',
+                                          : 'Distância Indisponível',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
@@ -1228,23 +1297,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                               ),
                               const SizedBox(height: 16),
                               
-                              // Serviço
-                              _buildFilterSection(
-                                'Serviço',
-                                _selectedService,
-                                ['Todos', 'Revisão para venda/compra de veículo', 'Revisões Preventivas', 'Serviços de direção hidráulica/elétrica', 'Serviços de escapamento', 'Serviços de motor e câmbio', 'Serviços para carros antigos (restauração)', 'Sistema de arrefecimento (radiador e bomba d\'água)', 'Sistema de Embreagem', 'Troca de correia dentada e correias auxiliares', 'Troca de óleo e filtros'],
-                                isDarkMode,
-                                (value) {
-                                  setModalState(() {
-                                    _selectedService = value;
-                                  });
-                                  setState(() {
-                                    _selectedService = value;
-                                  });
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              // Distância
+                              // Distância - MOVIDA PARA CIMA (primeira opção)
                               _buildFilterSection(
                                 'Distância',
                                 _selectedDistance,
@@ -1260,6 +1313,23 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                   // Recarregar oficinas com novo filtro de distância
                                   Navigator.pop(context);
                                   _loadNearbyWorkshops();
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              
+                              // Serviço
+                              _buildFilterSection(
+                                'Serviço',
+                                _selectedService,
+                                ['Todos', 'Revisão para venda/compra de veículo', 'Revisões Preventivas', 'Serviços de direção hidráulica/elétrica', 'Serviços de escapamento', 'Serviços de motor e câmbio', 'Serviços para carros antigos (restauração)', 'Sistema de arrefecimento (radiador e bomba d\'água)', 'Sistema de Embreagem', 'Troca de correia dentada e correias auxiliares', 'Troca de óleo e filtros'],
+                                isDarkMode,
+                                (value) {
+                                  setModalState(() {
+                                    _selectedService = value;
+                                  });
+                                  setState(() {
+                                    _selectedService = value;
+                                  });
                                 },
                               ),
                               const SizedBox(height: 16),

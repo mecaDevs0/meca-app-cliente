@@ -551,6 +551,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _editProfile() async {
     final result = await Navigator.pushNamed(context, '/edit-profile');
     if (result == true) {
+      // Invalidar cache antes de recarregar para garantir dados atualizados
+      _apiService.invalidateProfileCache();
       // Recarregar dados do perfil se houve atualização
       await _loadCustomerData();
     }
@@ -619,69 +621,187 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showHelp() {
+    final themeService = Provider.of<ThemeService>(context, listen: false);
+    final isDark = themeService.isDarkMode;
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
           children: [
+              // Header com gradiente
             Container(
-              width: 40,
-              height: 40,
+                padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: const Color(0xFF00C977),
-                borderRadius: BorderRadius.circular(8),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF00C977),
+                      Color(0xFF00A866),
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(
-                Icons.build,
+                        Icons.support_agent,
                 color: Colors.white,
-                size: 24,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'MECA - Suporte',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Estamos aqui para ajudar',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            const Text('MECA - Suporte'),
-          ],
-        ),
-        content: SingleChildScrollView(
+              
+              // Conteúdo
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Precisa de ajuda? Entre em contato conosco:',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              _buildContactInfo(
-                Icons.email,
+                      // Contato
+                      _buildModernContactSection(
+                        isDark,
+                        Icons.email_outlined,
                 'Email',
                 'contato@mecabr.com',
-              ),
-              const SizedBox(height: 12),
-              _buildContactInfo(
-                Icons.access_time,
-                'Horário de Atendimento',
-                'Horário de 24hrs',
-              ),
-              const SizedBox(height: 12),
+                        Colors.blue,
+                        () async {
+                          final emailUri = Uri(
+                            scheme: 'mailto',
+                            path: 'contato@mecabr.com',
+                            query: 'subject=Suporte MECA - Solicitação de Ajuda',
+                          );
+                          if (await canLaunchUrl(emailUri)) {
+                            await launchUrl(emailUri);
+                          } else {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Não foi possível abrir o aplicativo de email.'),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
               const SizedBox(height: 16),
-              const Text(
-                'FAQ Rápido:',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text('• Como agendar um serviço?'),
-              const Text('• Como cancelar um agendamento?'),
-              const Text('• Como alterar meus dados?'),
-              const Text('• Como funciona o pagamento?'),
+                      _buildModernContactSection(
+                        isDark,
+                        Icons.access_time_rounded,
+                        'Horário de Atendimento',
+                        'Disponível 24 horas',
+                        const Color(0xFF00C977),
+                        null,
+                      ),
+                      
+                      const SizedBox(height: 32),
+                      
+                      // FAQ
+                      Text(
+                        'Perguntas Frequentes',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : const Color(0xFF252940),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildFAQItem(isDark, 'Como agendar um serviço?'),
+                      const SizedBox(height: 12),
+                      _buildFAQItem(isDark, 'Como cancelar um agendamento?'),
+                      const SizedBox(height: 12),
+                      _buildFAQItem(isDark, 'Como alterar meus dados?'),
+                      const SizedBox(height: 12),
+                      _buildFAQItem(isDark, 'Como funciona o pagamento?'),
             ],
           ),
         ),
-        actions: [
-          TextButton(
+              ),
+              
+              // Botões
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[50],
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(24),
+                    bottomRight: Radius.circular(24),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Fechar'),
-          ),
-          ElevatedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: BorderSide(
+                            color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Fechar',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF252940),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
               final emailUri = Uri(
@@ -704,8 +824,139 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00C977),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.email, color: Colors.white, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'Entrar em Contato',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernContactSection(
+    bool isDark,
+    IconData icon,
+    String label,
+    String value,
+    Color iconColor,
+    VoidCallback? onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[50],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                color: iconColor,
+                size: 24,
+              ),
             ),
-            child: const Text('Entrar em Contato'),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.grey[300] : Colors.grey[700],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white : const Color(0xFF252940),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onTap != null)
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFAQItem(bool isDark, String question) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: const Color(0xFF00C977),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              question,
+              style: TextStyle(
+                fontSize: 15,
+                color: isDark ? Colors.white : const Color(0xFF252940),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),

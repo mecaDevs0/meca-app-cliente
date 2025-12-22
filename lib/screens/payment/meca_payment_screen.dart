@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/app_alerts.dart';
+import '../review/review_screen.dart';
 import 'saved_cards_screen.dart';
 
 class MecaPaymentScreen extends StatefulWidget {
@@ -38,6 +39,31 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   bool _loadingCards = true;
   bool _isSubmitting = false;
   bool _showResult = false;
+
+  Future<void> _navigateToReviewScreen() async {
+    final bookingId = widget.bookingData['id']?.toString() ?? widget.bookingData['booking_id']?.toString();
+    final workshopId = widget.bookingData['workshop_id']?.toString() ?? widget.bookingData['oficina_id']?.toString();
+    
+    if (bookingId != null && workshopId != null && mounted) {
+      Navigator.pop(context, true);
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ReviewScreen(
+              bookingId: bookingId,
+              workshopId: workshopId,
+            ),
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
+    }
+  }
 
   String _selectedMethod = 'pix';
   String? _selectedCardId;
@@ -185,7 +211,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           context,
           message: 'Pagamento aprovado com sucesso! Obrigado por usar o MECA.',
         );
-        Navigator.pop(context, true);
+        // Redirecionar para tela de avaliação após pagamento aprovado
+        await _navigateToReviewScreen();
         return;
       }
 
@@ -254,7 +281,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           );
         }
         if (mounted) {
-          Navigator.pop(context, true);
+          // Redirecionar para tela de avaliação após pagamento confirmado
+          await _navigateToReviewScreen();
         }
       } else if (!silent && status == 'cancelled') {
         AppAlerts.showWarning(

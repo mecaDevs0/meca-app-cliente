@@ -5,22 +5,24 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
+import '../utils/logger.dart';
 
 class ApiService {
   late Dio _dio;
+  final Map<String, _CacheEntry> _cache = {};
 
   ApiService() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiBaseUrl,
-      connectTimeout: Duration(seconds: AppConfig.connectionTimeout),
-      receiveTimeout: Duration(seconds: AppConfig.receiveTimeout),
+      connectTimeout: Duration(seconds: AppConfig.connectionTimeout), // 60 segundos para EC2
+      receiveTimeout: Duration(seconds: AppConfig.receiveTimeout), // 60 segundos para EC2
       headers: {
         'Content-Type': 'application/json',
         'x-publishable-api-key': 'pk_8913f91e8557d24f01440879c36cdb8c81e6ef346ec9a14dc6582ba87d06e9e9',
       },
     ));
 
-    // Adicionar interceptor para incluir token automaticamente
+    // Adicionar interceptor para incluir token automaticamente e cache
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final prefs = await SharedPreferences.getInstance();
@@ -28,13 +30,111 @@ class ApiService {
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
         }
+        
+        // Verificar cache para requisições GET
+        if (options.method == 'GET') {
+          final cacheKey = _getCacheKey(options.uri.toString(), options.queryParameters);
+          final cached = _cache[cacheKey];
+          if (cached != null && !cached.isExpired) {
+            AppLogger.cache('HIT', cacheKey);
+            return handler.resolve(Response(
+              requestOptions: options,
+              data: cached.data,
+              statusCode: 200,
+            ));
+          }
+          AppLogger.cache('MISS', cacheKey);
+        }
+        
+        AppLogger.api(options.method, options.uri.toString());
         return handler.next(options);
       },
+      onResponse: (response, handler) {
+        // Cachear respostas GET bem-sucedidas
+        if (response.requestOptions.method == 'GET' && response.statusCode == 200) {
+          final cacheKey = _getCacheKey(
+            response.requestOptions.uri.toString(),
+            response.requestOptions.queryParameters,
+          );
+          _cache[cacheKey] = _CacheEntry(response.data, DateTime.now());
+          AppLogger.cache('SET', cacheKey);
+        }
+        AppLogger.api(
+          response.requestOptions.method,
+          response.requestOptions.uri.toString(),
+          statusCode: response.statusCode,
+        );
+        return handler.next(response);
+      },
       onError: (error, handler) {
-        print('API Error: ${error.message}');
+        // Logs organizados usando logger
+        final url = error.requestOptions.uri.toString();
+        final method = error.requestOptions.method;
+        
+        if (error.response != null) {
+          final statusCode = error.response?.statusCode;
+          if (statusCode == 401 || statusCode == 403) {
+            // Silenciar erros de autenticação (são esperados)
+          } else {
+            AppLogger.api(method, url, statusCode: statusCode, error: error.response?.statusMessage);
+          }
+        } else if (error.type == DioExceptionType.connectionTimeout || 
+                   error.type == DioExceptionType.receiveTimeout) {
+          AppLogger.warning('Timeout na requisição: $method $url', tag: 'API');
+        } else {
+          AppLogger.error('Erro de rede: ${error.message}', tag: 'API', error: error);
+        }
         return handler.next(error);
       },
     ));
+  }
+
+  String _getCacheKey(String url, Map<String, dynamic>? params) {
+    if (params == null || params.isEmpty) return url;
+    final sortedParams = Map.fromEntries(
+      params.entries.toList()..sort((a, b) => a.key.compareTo(b.key))
+    );
+    return '$url?${Uri(queryParameters: sortedParams.map((k, v) => MapEntry(k.toString(), v.toString()))).query}';
+  }
+
+  void clearCache() {
+    _cache.clear();
+  }
+
+  void clearExpiredCache() {
+    _cache.removeWhere((key, entry) => entry.isExpired);
+  }
+
+  // Invalidar cache específico de bookings
+  void invalidateBookingsCache() {
+    _cache.removeWhere((key, entry) {
+      return key.contains('/bookings') || key.contains('customer_id');
+    });
+  }
+
+  // Invalidar cache de um booking específico
+  void invalidateBookingCache(String bookingId) {
+    _cache.removeWhere((key, entry) {
+      return key.contains('/bookings/$bookingId') || 
+             key.contains('/bookings?') ||
+             (key.contains('/bookings') && key.contains(bookingId));
+    });
+  }
+
+  // Invalidar cache de perfil
+  void invalidateProfileCache() {
+    _cache.removeWhere((key, entry) {
+      return key.contains('/customers/profile') || 
+             key.contains('/profile');
+    });
+  }
+
+  // Invalidar cache de veículos
+  void invalidateVehiclesCache() {
+    _cache.removeWhere((key, entry) {
+      return key.contains('/vehicles') || 
+             key.contains('/vehicle');
+    });
   }
 
   Future<void> _persistAuthSession(Map<String, dynamic>? payload) async {
@@ -63,11 +163,22 @@ class ApiService {
     String fallbackError = 'Erro ao autenticar',
   }) async {
     final data = response.data;
+    
+    AppLogger.info('🔍 [Auth] Processando resposta: success=${data?['success']}', tag: 'Auth');
+    
     if (data != null && data['success'] == true) {
-      await _persistAuthSession(data['data']);
-      return {'success': true, 'data': data['data']};
+      final responseData = data['data'];
+      AppLogger.info('✅ [Auth] Login bem-sucedido, persistindo sessão...', tag: 'Auth');
+      AppLogger.info('📦 [Auth] Token presente: ${responseData?['token'] != null}', tag: 'Auth');
+      AppLogger.info('📦 [Auth] User presente: ${responseData?['user'] != null}', tag: 'Auth');
+      
+      await _persistAuthSession(responseData);
+      return {'success': true, 'data': responseData};
     }
-    return {'success': false, 'error': data?['error'] ?? fallbackError};
+    
+    final errorMessage = data?['error'] ?? fallbackError;
+    AppLogger.warning('⚠️ [Auth] Login falhou: $errorMessage', tag: 'Auth');
+    return {'success': false, 'error': errorMessage};
   }
 
   // Login
@@ -76,14 +187,29 @@ class ApiService {
       final normalizedEmail = email.trim().toLowerCase();
       final normalizedPassword = password.trim();
 
+      AppLogger.info('🔐 [Login] Tentando login para: $normalizedEmail', tag: 'Auth');
+
       final response = await _dio.post('/auth/login', data: {
         'email': normalizedEmail,
         'password': normalizedPassword,
       });
 
+      AppLogger.info('✅ [Login] Resposta recebida: ${response.statusCode}', tag: 'Auth');
+      AppLogger.info('📦 [Login] Dados: ${response.data}', tag: 'Auth');
+
       return await _handleAuthResponse(response, fallbackError: 'Erro no login');
     } catch (e) {
+      AppLogger.error('❌ [Login] Erro: ${e.toString()}', tag: 'Auth', error: e);
+      
       if (e is DioException) {
+        final statusCode = e.response?.statusCode;
+        AppLogger.warning('⚠️ [Login] Status: $statusCode', tag: 'Auth');
+        
+        // Log detalhado da resposta de erro
+        if (e.response?.data != null) {
+          AppLogger.info('📦 [Login] Erro data: ${e.response?.data}', tag: 'Auth');
+        }
+        
         final message = _resolveFriendlyMessage(e, default401: 'Email ou senha incorretos. Confira seus dados e tente novamente.');
         return {'success': false, 'error': message};
       }
@@ -206,62 +332,41 @@ class ApiService {
   // Se searchQuery for fornecido, busca por nome independente de distância
   Future<Map<String, dynamic>> getNearbyWorkshops(double lat, double lng, [double radiusKm = 10.0, String? searchQuery]) async {
     try {
-      // Se /workshop/nearby falhar, usar /workshop como fallback
-      try {
-        final queryParams = <String, dynamic>{
-          'lat': lat.toString(),
-          'lng': lng.toString(),
-          'radius': radiusKm.toString(), // API usa 'radius', não 'radiusKm'
-        };
-        
-        // Se tiver busca por nome, adicionar parâmetro 'q'
-        if (searchQuery != null && searchQuery.trim().isNotEmpty) {
-          queryParams['q'] = searchQuery.trim();
-        }
-        
-        final response = await _dio.get('/workshop/nearby', queryParameters: queryParams);
-        
-        if (response.data != null && response.data['success'] == true) {
-          final data = response.data['data'];
-          List<dynamic> workshops = [];
-          
-          // Adaptar resposta para diferentes formatos
-          if (data is Map) {
-            workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
-          } else if (data is List) {
-            workshops = data;
-          } else if (response.data['workshops'] != null) {
-            workshops = response.data['workshops'];
-          } else if (response.data['workshop'] != null) {
-            workshops = response.data['workshop'];
-          }
-          
-          return {'success': true, 'data': {'workshops': workshops}};
-        }
-      } catch (e) {
-        print('⚠️ Endpoint /workshop/nearby falhou, usando fallback: $e');
+      final queryParams = <String, dynamic>{
+        'lat': lat.toString(),
+        'lng': lng.toString(),
+        'radius': radiusKm.toString(),
+      };
+      
+      // Se tiver busca por nome, adicionar parâmetro 'q'
+      if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+        queryParams['q'] = searchQuery.trim();
       }
       
-      // Fallback: usar /workshop e filtrar client-side
-      final response = await _dio.get('/workshop', queryParameters: {
-        'limit': 100,
-      });
+      // Usar /workshop diretamente (mais confiável)
+      final response = await _dio.get('/workshop', queryParameters: queryParams);
       
       if (response.data != null && response.data['success'] == true) {
         final data = response.data['data'];
         List<dynamic> workshops = [];
         
+        // Adaptar resposta para diferentes formatos
         if (data is Map) {
-          workshops = data['workshop'] ?? data['workshops'] ?? data['data'] ?? [];
+          workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
         } else if (data is List) {
           workshops = data;
+        } else if (response.data['workshops'] != null) {
+          workshops = response.data['workshops'];
+        } else if (response.data['workshop'] != null) {
+          workshops = response.data['workshop'];
         }
         
-        return {'success': true, 'data': {'workshops': workshops}};
+        return {'success': true, 'data': workshops};
       } else {
-        return {'success': false, 'error': 'Erro ao buscar oficinas'};
+        return {'success': false, 'error': response.data['error'] ?? 'Erro ao buscar oficinas'};
       }
     } catch (e) {
+      print('❌ Erro ao buscar oficinas próximas: $e');
       return {'success': false, 'error': _getErrorMessage(e)};
     }
   }
@@ -456,6 +561,8 @@ class ApiService {
       final response = await _dio.put('/customers/profile', data: apiData);
       
       if (response.data != null && response.data['success'] == true) {
+        // Invalidar cache de perfil após atualização
+        invalidateProfileCache();
         return {'success': true, 'data': response.data['data']};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao atualizar perfil'};
@@ -472,6 +579,8 @@ class ApiService {
       final response = await _dio.post('/vehicles', data: vehicleData);
       
       if (response.data != null && response.data['success'] == true) {
+        // Invalidar cache de veículos após adicionar
+        invalidateVehiclesCache();
         return {'success': true, 'data': response.data['data']};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao adicionar veículo'};
@@ -488,6 +597,8 @@ class ApiService {
       final response = await _dio.put('/vehicles/$vehicleId', data: vehicleData);
       
       if (response.data != null && response.data['success'] == true) {
+        // Invalidar cache de veículos após atualizar
+        invalidateVehiclesCache();
         return {'success': true, 'data': response.data['data']};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao atualizar veículo'};
@@ -504,6 +615,8 @@ class ApiService {
       final response = await _dio.delete('/vehicles/$vehicleId');
       
       if (response.data != null && response.data['success'] == true) {
+        // Invalidar cache de veículos após deletar
+        invalidateVehiclesCache();
         return {'success': true, 'message': response.data['message'] ?? 'Veículo removido com sucesso'};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao remover veículo'};
@@ -632,6 +745,8 @@ class ApiService {
       final response = await _dio.put('/vehicles/$vehicleId/favorite', data: {'is_favorite': isFavorite});
       
       if (response.data != null && response.data['success'] == true) {
+        // Invalidar cache de veículos após favoritar
+        invalidateVehiclesCache();
         return {'success': true, 'data': response.data['data']};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao favoritar veículo'};
@@ -1114,16 +1229,30 @@ class ApiService {
     final statusCode = error.response?.statusCode;
     final serverMessage = _extractServerMessage(error.response?.data);
 
+    // Priorizar mensagem do servidor se disponível
     if (serverMessage != null && serverMessage.trim().isNotEmpty) {
       return serverMessage.trim();
+    }
+
+    // Tratamento específico por status code
+    if (statusCode == 429) {
+      return 'Muitas tentativas de login. Aguarde alguns minutos e tente novamente.';
     }
 
     if (statusCode == 401 && default401 != null) {
       return default401;
     }
 
+    if (statusCode == 403) {
+      return 'Acesso negado. Verifique suas credenciais.';
+    }
+
     if (statusCode == 400 && default400 != null) {
       return default400;
+    }
+
+    if (statusCode == 500 || statusCode == 502 || statusCode == 503) {
+      return 'Serviço temporariamente indisponível. Tente novamente em instantes.';
     }
 
     return _getErrorMessage(error);
@@ -1547,7 +1676,21 @@ class ApiService {
       }
       
       final bookingData = validationResponse.data['data'] as Map<String, dynamic>? ?? {};
-      final amount = bookingData['amount'] as double?;
+      
+      // Converter amount de forma segura (pode vir como int ou double)
+      double? amount;
+      final rawAmount = bookingData['amount'];
+      if (rawAmount != null) {
+        if (rawAmount is int) {
+          amount = rawAmount.toDouble();
+        } else if (rawAmount is double) {
+          amount = rawAmount;
+        } else if (rawAmount is num) {
+          amount = rawAmount.toDouble();
+        } else if (rawAmount is String) {
+          amount = double.tryParse(rawAmount.replaceAll(',', '.'));
+        }
+      }
       
       if (amount == null || amount <= 0) {
         return {
@@ -1611,6 +1754,26 @@ class ApiService {
     }
   }
 }
+
+class _CacheEntry {
+  final dynamic data;
+  final DateTime timestamp;
+
+  _CacheEntry(this.data, this.timestamp);
+
+  bool get isExpired => DateTime.now().difference(timestamp) > const Duration(minutes: 5);
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 

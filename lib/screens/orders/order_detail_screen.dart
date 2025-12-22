@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
@@ -9,9 +10,9 @@ import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/price_utils.dart';
 import '../../widgets/app_alerts.dart';
-import 'booking_evidence_screen.dart';
-import '../review/review_screen.dart';
 import '../payment/payment_screen.dart';
+import '../review/review_screen.dart';
+import 'booking_evidence_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Map<String, dynamic> booking;
@@ -33,15 +34,45 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (raw == null) return const [];
 
     if (raw is List) {
-      return raw.whereType<Object>().map<Map<String, dynamic>>((item) {
+      return raw.whereType<Object>().map<Map<String, dynamic>?>((item) {
         if (item is Map<String, dynamic>) {
-          return Map<String, dynamic>.from(item);
+          // Extrair URL e key
+          String url = item['url']?.toString() ?? '';
+          final key = item['s3_key']?.toString() ?? item['s3Key']?.toString() ?? item['key']?.toString() ?? '';
+          
+          // VALIDAÇÃO CRÍTICA: URL deve começar com http:// ou https://
+          // Se não for uma URL válida, não podemos usar
+          if (url.isNotEmpty && !url.startsWith('http://') && !url.startsWith('https://')) {
+            debugPrint('⚠️ [OrderDetail] URL inválida em _coerceUploads (não é http/https): $url');
+            debugPrint('⚠️ [OrderDetail] Key disponível: $key');
+            // Se a URL não é válida, retornar null para filtrar
+            // A API deve sempre retornar URLs válidas - se não retornou, há problema na API
+            url = '';
+          }
+          
+          // Se não tiver URL válida, retornar null
+          // NÃO tentar construir URL no app - a API deve fazer isso
+          if (url.isEmpty) {
+            debugPrint('⚠️ [OrderDetail] Imagem sem URL válida - será ignorada');
+            debugPrint('⚠️ [OrderDetail] A API deve retornar URL assinada completa. Key: $key');
+            return null;
+          }
+          
+          // Log para debug
+          debugPrint('✅ [OrderDetail] URL válida encontrada: ${url.substring(0, 60)}...');
+          
+          return {
+            'url': url,
+            'file_name': item['file_name']?.toString() ?? item['fileName']?.toString() ?? 'imagem.jpg',
+            's3_key': key,
+            'uploaded_by': item['uploaded_by']?.toString() ?? item['uploadedBy']?.toString() ?? 'unknown',
+          };
         }
         if (item is Map) {
           return Map<String, dynamic>.from(item);
         }
-        return <String, dynamic>{};
-      }).where((item) => item.isNotEmpty).toList();
+        return null;
+      }).whereType<Map<String, dynamic>>().toList();
     }
 
     if (raw is String && raw.trim().isNotEmpty) {
@@ -66,6 +97,100 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     return _coerceUploads(fallback);
   }
 
+  // Buscar todas as imagens do agendamento (customer_uploads + provas_oficina + booking_images)
+  List<Map<String, dynamic>> _getAllBookingImages() {
+    final allImages = <Map<String, dynamic>>[];
+    
+    // 1. Imagens do cliente (customer_uploads) - PRIMEIRO, pois são as mais importantes
+    final customerUploads = _getCustomerUploads();
+    if (customerUploads.isNotEmpty) {
+      debugPrint('📸 [OrderDetail] Encontradas ${customerUploads.length} imagens em customer_uploads');
+      allImages.addAll(customerUploads);
+    }
+    
+    // 2. Imagens da tabela booking_images (inclui as que foram salvas pelo upload)
+    final bookingImagesRaw = _bookingDetails?['booking_images'] ?? widget.booking['booking_images'];
+    if (bookingImagesRaw != null) {
+      if (bookingImagesRaw is List) {
+        debugPrint('📸 [OrderDetail] Encontradas ${bookingImagesRaw.length} imagens em booking_images');
+        for (final img in bookingImagesRaw) {
+          if (img is Map<String, dynamic>) {
+            String url = img['url']?.toString() ?? '';
+            
+            // Validar que a URL é completa (http/https)
+            if (url.isNotEmpty && !url.startsWith('http://') && !url.startsWith('https://')) {
+              debugPrint('⚠️ [OrderDetail] URL inválida em booking_images (não é http/https): $url');
+              // Tentar usar s3_key se disponível, mas a API deve sempre retornar URL assinada
+              final key = img['s3_key'] ?? img['s3Key'] ?? img['key'] ?? '';
+              if (key.isNotEmpty) {
+                debugPrint('⚠️ [OrderDetail] Tentando usar key como fallback: $key');
+              }
+              url = ''; // Invalidar URL
+            }
+            
+            if (url.isNotEmpty) {
+              allImages.add({
+                'url': url,
+                'file_name': img['file_name'] ?? img['fileName'] ?? 'imagem.jpg',
+                's3_key': img['s3_key'] ?? img['s3Key'] ?? img['key'] ?? '',
+                'uploaded_by': img['uploaded_by'] ?? img['uploadedBy'] ?? 'unknown',
+              });
+            } else {
+              debugPrint('⚠️ [OrderDetail] Imagem em booking_images sem URL válida');
+            }
+          }
+        }
+      } else if (bookingImagesRaw is Map) {
+        // Se for um único objeto, converter para lista
+        String url = bookingImagesRaw['url']?.toString() ?? '';
+        final key = bookingImagesRaw['s3_key']?.toString() ?? bookingImagesRaw['s3Key']?.toString() ?? bookingImagesRaw['key']?.toString() ?? '';
+        
+        // VALIDAÇÃO CRÍTICA: URL deve começar com http:// ou https://
+        if (url.isNotEmpty && !url.startsWith('http://') && !url.startsWith('https://')) {
+          debugPrint('⚠️ [OrderDetail] URL inválida em booking_images (Map único) (não é http/https): $url');
+          debugPrint('⚠️ [OrderDetail] Key disponível: $key');
+          url = ''; // Invalidar URL
+        }
+        
+        if (url.isNotEmpty) {
+          allImages.add({
+            'url': url,
+            'file_name': bookingImagesRaw['file_name']?.toString() ?? bookingImagesRaw['fileName']?.toString() ?? 'imagem.jpg',
+            's3_key': key,
+            'uploaded_by': bookingImagesRaw['uploaded_by']?.toString() ?? bookingImagesRaw['uploadedBy']?.toString() ?? 'unknown',
+          });
+        } else {
+          debugPrint('⚠️ [OrderDetail] Imagem em booking_images (Map único) sem URL válida - será ignorada');
+        }
+      }
+    }
+    
+    // 3. Evidências da oficina (provas_oficina)
+    final workshopEvidenceRaw = _bookingDetails?['provas_oficina'] ?? widget.booking['provas_oficina'];
+    if (workshopEvidenceRaw != null) {
+      final workshopEvidence = _coerceUploads(workshopEvidenceRaw);
+      if (workshopEvidence.isNotEmpty) {
+        debugPrint('📸 [OrderDetail] Encontradas ${workshopEvidence.length} evidências da oficina');
+        allImages.addAll(workshopEvidence);
+      }
+    }
+    
+    // Remover duplicatas baseado na URL
+    final seenUrls = <String>{};
+    final uniqueImages = allImages.where((img) {
+      final url = img['url']?.toString() ?? '';
+      if (url.isEmpty || seenUrls.contains(url)) {
+        return false;
+      }
+      seenUrls.add(url);
+      return true;
+    }).toList();
+    
+    debugPrint('📸 [OrderDetail] Total de ${uniqueImages.length} imagens únicas após remoção de duplicatas');
+    
+    return uniqueImages;
+  }
+
   Map<String, dynamic> _mergeBookingData([Map<String, dynamic>? overrides]) {
     final combined = <String, dynamic>{};
     combined.addAll(widget.booking);
@@ -75,6 +200,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (overrides != null) {
       combined.addAll(overrides);
     }
+    
+    // IMPORTANTE: Se há sugestão de horário pendente, garantir que o status seja 'pendente_cliente'
+    final suggestedBy = combined['suggested_by'] ?? combined['sugerido_por'];
+    final hasSuggestedDate = combined['suggested_date'] != null || combined['data_sugerida'] != null;
+    final isTimeSuggestion = (suggestedBy == 'oficina' || suggestedBy == 'workshop') && hasSuggestedDate;
+    
+    if (isTimeSuggestion) {
+      // Forçar status para 'pendente_cliente' quando há sugestão pendente
+      combined['status'] = 'pendente_cliente';
+    }
+    
     return combined;
   }
 
@@ -192,18 +328,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: InteractiveViewer(
-                      child: Image.network(
-                        url,
+                      child: CachedNetworkImage(
+                        imageUrl: url,
                         fit: BoxFit.contain,
-                        loadingBuilder: (context, child, progress) {
-                          if (progress == null) return child;
-                          return const Center(child: CircularProgressIndicator());
+                        // Cache de alta qualidade para visualização em tela cheia
+                        memCacheWidth: null, // Não limitar para tela cheia
+                        memCacheHeight: null,
+                        httpHeaders: {
+                          'Accept': 'image/*',
                         },
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: Colors.black,
-                          alignment: Alignment.center,
-                          child: const Icon(Icons.broken_image, color: Colors.white, size: 40),
+                        placeholder: (context, url) => const Center(
+                          child: CircularProgressIndicator(),
                         ),
+                        errorWidget: (context, url, error) {
+                          debugPrint('❌ [OrderDetail] Erro ao carregar imagem em tela cheia: $error');
+                          return Container(
+                            color: Colors.black,
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.broken_image, color: Colors.white, size: 40),
+                          );
+                        },
+                        fadeInDuration: const Duration(milliseconds: 200),
                       ),
                     ),
                   ),
@@ -314,12 +459,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
-  Future<void> _loadBookingDetails() async {
+  Future<void> _loadBookingDetails({bool forceRefresh = false}) async {
     try {
       final bookingId = widget.booking['id']?.toString() ?? '';
       if (bookingId.isEmpty) {
         debugPrint('Erro: ID do agendamento não encontrado');
         return;
+      }
+
+      // IMPORTANTE: Invalidar cache se forçar refresh
+      if (forceRefresh) {
+        _apiService.invalidateBookingCache(bookingId);
+        _apiService.invalidateBookingsCache();
       }
 
       final result = await _apiService.getBookingDetails(bookingId);
@@ -499,7 +650,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final normalizedStatus = _normalizeStatusKey(status);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final canCancel = normalizedStatus == 'pending' || normalizedStatus == 'pending_customer' || normalizedStatus == 'confirmed';
-    final customerUploads = _getCustomerUploads();
+    // final customerUploads = _getCustomerUploads(); // Removido: variável não utilizada
     final bookingNotes = (_bookingDetails?['customer_notes'] ??
             _bookingDetails?['notes'] ??
             widget.booking['notes'] ??
@@ -667,19 +818,56 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   _buildSection(
                     'Data e Horário',
                     [
-                      _buildInfoRow(
-                        Icons.calendar_today,
-                        widget.booking['appointment_date'] != null
-                            ? DateFormat('dd/MM/yyyy').format(DateTime.parse(widget.booking['appointment_date']))
-                            : (widget.booking['scheduled_date'] != null
-                                ? DateFormat('dd/MM/yyyy').format(DateTime.parse(widget.booking['scheduled_date']))
-                                : 'Data não definida'),
-                      ),
-                      _buildInfoRow(
-                        Icons.access_time,
-                        widget.booking['appointment_date'] != null
-                            ? DateFormat('HH:mm').format(DateTime.parse(widget.booking['appointment_date']))
-                            : (widget.booking['scheduled_time'] ?? '00:00'),
+                      Builder(
+                        builder: (context) {
+                          final merged = _mergeBookingData();
+                          final scheduleType = merged['schedule_type']?.toString() ?? 'specific_time';
+                          final isTimeWindow = scheduleType == 'time_window';
+                          
+                          if (isTimeWindow && merged['time_window_start'] != null && merged['time_window_end'] != null) {
+                            // Exibir janela de horários
+                            try {
+                              final startTime = DateTime.parse(merged['time_window_start'].toString());
+                              final endTime = DateTime.parse(merged['time_window_end'].toString());
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildInfoRow(
+                                    Icons.calendar_today,
+                                    DateFormat('dd/MM/yyyy').format(startTime),
+                                  ),
+                                  _buildInfoRow(
+                                    Icons.schedule,
+                                    '${DateFormat('HH:mm').format(startTime)} até ${DateFormat('HH:mm').format(endTime)}',
+                                  ),
+                                ],
+                              );
+                            } catch (e) {
+                              // Fallback para exibição padrão
+                            }
+                          }
+                          
+                          // Exibição padrão para horário específico
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildInfoRow(
+                                Icons.calendar_today,
+                                merged['appointment_date'] != null
+                                    ? DateFormat('dd/MM/yyyy').format(DateTime.parse(merged['appointment_date'].toString()))
+                                    : (merged['scheduled_date'] != null
+                                        ? DateFormat('dd/MM/yyyy').format(DateTime.parse(merged['scheduled_date'].toString()))
+                                        : 'Data não definida'),
+                              ),
+                              _buildInfoRow(
+                                Icons.access_time,
+                                merged['appointment_date'] != null
+                                    ? DateFormat('HH:mm').format(DateTime.parse(merged['appointment_date'].toString()))
+                                    : (merged['scheduled_time'] ?? '00:00'),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -815,56 +1003,115 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       ),
                     ),
                   ],
-                  if (customerUploads.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    Text(
-                      'Fotos enviadas por você',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDarkMode ? Colors.white : const Color(0xFF252940),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: customerUploads.map((upload) {
-                        final url = upload['url']?.toString();
-                        if (url == null || url.isEmpty) return const SizedBox.shrink();
-                        return GestureDetector(
-                          onTap: () => _openUploadPreview(upload),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              width: 90,
-                              height: 90,
-                              color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
-                              child: Image.network(
-                                url,
-                                fit: BoxFit.cover,
-                                loadingBuilder: (context, child, progress) {
-                                  if (progress == null) return child;
-                                  return const Center(
-                                    child: SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    ),
-                                  );
-                                },
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  color: Colors.grey.shade300,
-                                  alignment: Alignment.center,
-                                  child: Icon(Icons.broken_image, color: Colors.grey.shade600),
-                                ),
-                              ),
+                  // Exibir todas as imagens do agendamento (em todos os status)
+                  Builder(
+                    builder: (context) {
+                      final allImages = _getAllBookingImages();
+                      if (allImages.isEmpty) return const SizedBox.shrink();
+                      
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 20),
+                          Text(
+                            'Imagens do Agendamento',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isDarkMode ? Colors.white : const Color(0xFF252940),
                             ),
                           ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: allImages.map((img) {
+                              final url = img['url']?.toString();
+                              if (url == null || url.isEmpty) return const SizedBox.shrink();
+                              
+                              // Determinar se é imagem do cliente ou da oficina
+                              final uploadedBy = img['uploaded_by']?.toString() ?? '';
+                              final s3Key = img['s3_key']?.toString() ?? img['key']?.toString() ?? '';
+                              final isFromWorkshop = uploadedBy == 'workshop' || 
+                                                    s3Key.contains('/workshop/') ||
+                                                    s3Key.contains('workshop');
+                              
+                              return GestureDetector(
+                                onTap: () => _openUploadPreview(img),
+                                child: Stack(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Container(
+                                        width: 90,
+                                        height: 90,
+                                        color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
+                                        child: CachedNetworkImage(
+                                          imageUrl: url,
+                                          fit: BoxFit.cover,
+                                          width: 90,
+                                          height: 90,
+                                          // Cache de alta qualidade - 2x para retina
+                                          memCacheWidth: 180,
+                                          memCacheHeight: 180,
+                                          // Headers para garantir que a imagem seja carregada corretamente
+                                          httpHeaders: {
+                                            'Accept': 'image/*',
+                                          },
+                                          // Placeholder enquanto carrega
+                                          placeholder: (context, url) => const Center(
+                                            child: SizedBox(
+                                              width: 24,
+                                              height: 24,
+                                              child: CircularProgressIndicator(strokeWidth: 2),
+                                            ),
+                                          ),
+                                          // Erro ao carregar
+                                          errorWidget: (context, url, error) {
+                                            debugPrint('❌ [OrderDetail] Erro ao carregar imagem: $error');
+                                            debugPrint('❌ [OrderDetail] URL: $url');
+                                            return Container(
+                                              color: Colors.grey.shade300,
+                                              alignment: Alignment.center,
+                                              child: Icon(Icons.broken_image, color: Colors.grey.shade600),
+                                            );
+                                          },
+                                          // Fade in suave quando carregar
+                                          fadeInDuration: const Duration(milliseconds: 200),
+                                          fadeOutDuration: const Duration(milliseconds: 100),
+                                        ),
+                                      ),
+                                    ),
+                                    // Badge indicando origem da imagem
+                                    if (isFromWorkshop)
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF00C977),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Text(
+                                            'Oficina',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -972,15 +1219,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       subtitle = 'A oficina iniciará o serviço com este valor.';
     }
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF00C977), Color(0xFF00B369)],
+    // Verificar se há orçamento pendente de aprovação
+    final isQuotePending = normalizedStatus == 'pending' || 
+                          normalizedStatus == 'pendente_cliente' ||
+                          (merged['quote_status'] ?? widget.booking['quote_status']) == 'pending';
+    
+    return GestureDetector(
+      onTap: hasDetailedQuote && isQuotePending ? () {
+        // Abrir tela de detalhes do orçamento para seleção de peças
+        _showQuoteDetailModal(merged, quoteItems, diagnosticValue, isDarkMode);
+      } : null,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF00C977), Color(0xFF00B369)],
+          ),
+          borderRadius: BorderRadius.circular(15),
         ),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Column(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -1031,13 +1288,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ),
                   const SizedBox(height: 12),
                   // Items do orçamento
-                  ...List<Widget>.from(quoteItems.map<Widget>((item) {
-                    final description = item['description'] ?? '';
+                  ...List<Widget>.from(quoteItems.asMap().entries.map<Widget>((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    final description = item['description'] ?? 'Item sem descrição';
                     final quantity = item['quantity'] ?? 1;
                     final unitPrice = (item['unit_price'] ?? 0) / 100.0;
                     final totalItem = unitPrice * quantity;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
+                    return Container(
+                      margin: EdgeInsets.only(bottom: index < quoteItems.length - 1 ? 12 : 0),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1050,25 +1314,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 13,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                if (quantity > 1)
-                                  Text(
-                                    'Qtd: $quantity × ${PriceUtils.formatCurrency(unitPrice)}',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
-                                      fontSize: 11,
-                                    ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Quantidade: $quantity × ${PriceUtils.formatCurrency(unitPrice)}',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.85),
+                                    fontSize: 12,
                                   ),
+                                ),
                               ],
                             ),
                           ),
+                          const SizedBox(width: 12),
                           Text(
                             PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 13,
+                              fontSize: 14,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1079,27 +1344,48 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   
                   // Valor do diagnóstico (se houver)
                   if (diagnosticValue != null && diagnosticValue > 0) ...[
-                    const Divider(color: Colors.white38, height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Diagnóstico',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Diagnóstico',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Análise do veículo',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.75),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        Text(
-                          PriceUtils.formatCurrency(diagnosticValue / 100) ?? 'R\$ 0,00',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
+                          Text(
+                            PriceUtils.formatCurrency(diagnosticValue / 100) ?? 'R\$ 0,00',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                   
@@ -1130,6 +1416,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
           ],
         ],
+      ),
       ),
     );
   }
@@ -1667,7 +1954,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _buildStatusInfoCard(String status, String normalizedStatus) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final rawStatus = status.toLowerCase();
+    final merged = _mergeBookingData();
+    // IMPORTANTE: Usar status do merged (que já foi corrigido se há sugestão pendente)
+    final finalStatus = merged['status'] ?? status;
+    final finalNormalizedStatus = _normalizeStatusKey(finalStatus);
+    final rawStatus = finalStatus.toLowerCase();
     
     String title = '';
     String description = '';
@@ -1677,7 +1968,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     Color borderColor = Colors.blue.shade200;
     Color iconColor = Colors.blue.shade700;
     
-    if (rawStatus == 'pendente_oficina' || normalizedStatus == 'pending') {
+    if (rawStatus == 'pendente_oficina' || finalNormalizedStatus == 'pending') {
       title = 'Aguardando a oficina';
       description = 'Seu pedido já chegou lá. Eles vão responder em instantes.';
       nextStep = 'Fique atento às notificações para aprovação ou sugestão de horário.';
@@ -1685,7 +1976,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       cardColor = Colors.orange.shade50;
       borderColor = Colors.orange.shade200;
       iconColor = Colors.orange.shade700;
-    } else if (rawStatus == 'confirmado' || normalizedStatus == 'confirmed') {
+    } else if (rawStatus == 'confirmado' || finalNormalizedStatus == 'confirmed') {
       title = 'Agendamento confirmado';
       description = 'Dia e horário reservados pra você.';
       nextStep = 'A oficina vai enviar um orçamento ou iniciar no dia combinado.';
@@ -1693,12 +1984,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       cardColor = Colors.blue.shade50;
       borderColor = Colors.blue.shade200;
       iconColor = Colors.blue.shade700;
-    } else if (rawStatus == 'pendente_cliente' || normalizedStatus == 'pending_customer') {
+    } else if (rawStatus == 'pendente_cliente' || finalNormalizedStatus == 'pending_customer') {
       // Verificar se é sugestão de horário ou orçamento
-      final merged = _mergeBookingData();
       final suggestedBy = merged['suggested_by'] ?? merged['sugerido_por'];
       final hasSuggestedDate = merged['suggested_date'] != null || merged['data_sugerida'] != null;
-      final isTimeSuggestion = suggestedBy == 'oficina' && hasSuggestedDate;
+      final isTimeSuggestion = (suggestedBy == 'oficina' || suggestedBy == 'workshop') && hasSuggestedDate;
       
       if (isTimeSuggestion) {
         // É sugestão de horário da oficina
@@ -1726,7 +2016,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         borderColor = Colors.amber.shade200;
         iconColor = Colors.amber.shade800;
       }
-    } else if (normalizedStatus == 'in_progress') {
+    } else if (finalNormalizedStatus == 'in_progress') {
       title = 'Serviço em andamento';
       description = 'Seu veículo está sendo atendido agora.';
       nextStep = 'Avisaremos quando finalizarem para você aprovar.';
@@ -1734,7 +2024,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       cardColor = Colors.green.shade50;
       borderColor = Colors.green.shade200;
       iconColor = Colors.green.shade700;
-    } else if (normalizedStatus == 'awaiting_payment') {
+    } else if (finalNormalizedStatus == 'awaiting_payment') {
       title = 'Pagamento pendente';
       description = 'Orçamento aprovado e serviço finalizado.';
       nextStep = 'Use o botão abaixo para pagar agora.';
@@ -1742,7 +2032,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       cardColor = Colors.cyan.shade50;
       borderColor = Colors.cyan.shade200;
       iconColor = Colors.cyan.shade700;
-    } else if (normalizedStatus == 'completed') {
+    } else if (finalNormalizedStatus == 'completed') {
       title = 'Serviço concluído';
       description = 'Pagamento confirmado e ordem encerrada.';
       nextStep = 'Avalie a experiência quando puder.';
@@ -1826,22 +2116,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildActionButtons(String status) {
-    final normalizedStatus = _normalizeStatusKey(status);
-    final rawStatus = status.toLowerCase();
     final merged = _mergeBookingData();
+    // IMPORTANTE: Usar status do merged (que já foi corrigido se há sugestão pendente)
+    final finalStatus = merged['status'] ?? status;
+    final normalizedStatus = _normalizeStatusKey(finalStatus);
+    final rawStatus = finalStatus.toLowerCase();
     
     // DEBUG: Log para verificar detecção de sugestão
     debugPrint('🔍 [OrderDetail] _buildActionButtons:');
-    debugPrint('  - status: $status');
+    debugPrint('  - status original: $status');
+    debugPrint('  - finalStatus: $finalStatus');
     debugPrint('  - rawStatus: $rawStatus');
     debugPrint('  - merged[sugerido_por]: ${merged['sugerido_por']}');
     debugPrint('  - merged[suggested_by]: ${merged['suggested_by']}');
     debugPrint('  - merged[data_sugerida]: ${merged['data_sugerida']}');
     debugPrint('  - merged[suggested_date]: ${merged['suggested_date']}');
+    debugPrint('  - merged[status]: ${merged['status']}');
     debugPrint('  - _bookingDetails[sugerido_por]: ${_bookingDetails?['sugerido_por']}');
     debugPrint('  - _bookingDetails[suggested_by]: ${_bookingDetails?['suggested_by']}');
     debugPrint('  - _bookingDetails[data_sugerida]: ${_bookingDetails?['data_sugerida']}');
     debugPrint('  - _bookingDetails[suggested_date]: ${_bookingDetails?['suggested_date']}');
+    debugPrint('  - _bookingDetails[status]: ${_bookingDetails?['status']}');
     
     // Verificar sugestão de horário com múltiplas variações de campos
     final suggestedBy = merged['suggested_by'] ?? 
@@ -1853,7 +2148,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             _bookingDetails?['suggested_date'] ?? 
                             _bookingDetails?['data_sugerida'];
     final hasSuggestedDate = suggestedDateRaw != null && suggestedDateRaw.toString().isNotEmpty && suggestedDateRaw.toString() != 'null';
-    final isTimeSuggestion = (suggestedBy == 'oficina' || suggestedBy == 'workshop') && hasSuggestedDate && (rawStatus == 'pendente_cliente' || rawStatus == 'pending_cliente' || normalizedStatus == 'pending_customer');
+    final isTimeSuggestion = (suggestedBy == 'oficina' || suggestedBy == 'workshop') && hasSuggestedDate;
     
     debugPrint('  - suggestedBy: $suggestedBy');
     debugPrint('  - hasSuggestedDate: $hasSuggestedDate');
@@ -1866,11 +2161,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          // Card para sugestão de horário da oficina
-          if (isTimeSuggestion) ...[
-            _buildTimeSuggestionCard(merged),
-            const SizedBox(height: 20),
-          ],
+          // Card para sugestão de horário da oficina (apenas se não estiver confirmado)
+          // IMPORTANTE: Verificar status antes de exibir
+          Builder(
+            builder: (context) {
+              final currentStatus = (merged['status'] ?? '').toString().toLowerCase().trim();
+              if (isTimeSuggestion && currentStatus != 'confirmado' && currentStatus != 'confirmed') {
+                return Column(
+                  children: [
+                    _buildTimeSuggestionCard(merged),
+                    const SizedBox(height: 20),
+                  ],
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           // Botão para aprovar orçamento quando status for pendente_cliente E não for sugestão de horário
           if (rawStatus == 'pendente_cliente' && !isTimeSuggestion && hasQuote) ...[
             // Card destacado com valor do orçamento
@@ -1972,14 +2278,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 ),
                                 const SizedBox(height: 12),
                                 // Items do orçamento
-                                ...List<Widget>.from(quoteItems.map<Widget>((item) {
-                                  final description = item['description'] ?? '';
+                                ...List<Widget>.from(quoteItems.asMap().entries.map<Widget>((entry) {
+                                  final index = entry.key;
+                                  final item = entry.value;
+                                  final description = item['description'] ?? 'Item sem descrição';
                                   final quantity = item['quantity'] ?? 1;
                                   final unitPrice = (item['unit_price'] ?? 0) / 100.0;
                                   final totalItem = unitPrice * quantity;
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
+                                  return Container(
+                                    margin: EdgeInsets.only(bottom: index < quoteItems.length - 1 ? 12 : 0),
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Expanded(
@@ -1991,25 +2304,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                                 style: const TextStyle(
                                                   color: Colors.white,
                                                   fontSize: 13,
-                                                  fontWeight: FontWeight.w500,
+                                                  fontWeight: FontWeight.w600,
                                                 ),
                                               ),
-                                              if (quantity > 1)
-                                                Text(
-                                                  'Qtd: $quantity × ${PriceUtils.formatCurrency(unitPrice)}',
-                                                  style: TextStyle(
-                                                    color: Colors.white.withOpacity(0.8),
-                                                    fontSize: 11,
-                                                  ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                'Quantidade: $quantity × ${PriceUtils.formatCurrency(unitPrice)}',
+                                                style: TextStyle(
+                                                  color: Colors.white.withOpacity(0.85),
+                                                  fontSize: 12,
                                                 ),
+                                              ),
                                             ],
                                           ),
                                         ),
+                                        const SizedBox(width: 12),
                                         Text(
                                           PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
                                           style: const TextStyle(
                                             color: Colors.white,
-                                            fontSize: 13,
+                                            fontSize: 14,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
@@ -2101,7 +2415,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             ),
                           ),
                           Text(
-                                  PriceUtils.formatCurrency(finalPrice) ?? 'R\$ 0,00',
+                                  finalPrice != null ? 'R\$ ${finalPrice.toStringAsFixed(2).replaceAll('.', ',')}' : 'R\$ 0,00',
                             style: const TextStyle(
                               fontSize: 24,
                               color: Colors.white,
@@ -2155,30 +2469,47 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            // Botão para rejeitar orçamento
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _rejectQuote(),
-                icon: const Icon(Icons.cancel, color: Colors.red),
-                label: const Text(
-                  'REJEITAR ORÇAMENTO',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.red, width: 2),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
+            // Botão para rejeitar orçamento (não mostrar se for orçamento final)
+            Builder(
+              builder: (context) {
+                final merged = _mergeBookingData();
+                final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
+                final isFinalQuote = quoteStatus == 'final';
+                
+                // Não mostrar botão de rejeitar se for orçamento final
+                if (isFinalQuote) {
+                  return const SizedBox.shrink();
+                }
+                
+                return Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _rejectQuote(),
+                        icon: const Icon(Icons.cancel, color: Colors.red),
+                        label: const Text(
+                          'REJEITAR ORÇAMENTO',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.red, width: 2),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 16),
             // Mensagem explicativa
@@ -2314,6 +2645,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
+  void _showQuoteDetailModal(Map<String, dynamic> merged, List quoteItems, dynamic diagnosticValue, bool isDarkMode) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => QuoteDetailModal(
+        booking: merged,
+        quoteItems: quoteItems,
+        diagnosticValue: diagnosticValue,
+        isDarkMode: isDarkMode,
+        onApprove: (selectedItems) => _approveQuoteWithItems(selectedItems),
+        onReject: () => _rejectQuote(),
+      ),
+    );
+  }
+
+  Future<void> _approveQuoteWithItems(List<Map<String, dynamic>>? selectedItems) async {
+    // Por enquanto, aprovar tudo - depois podemos implementar seleção parcial
+    await _approveQuote();
+  }
+
   Future<void> _approveQuote() async {
     final bookingId = widget.booking['id']?.toString() ?? '';
     if (bookingId.isEmpty) {
@@ -2344,7 +2696,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     Icon(Icons.attach_money, color: Colors.green.shade700),
                     const SizedBox(width: 8),
                     Text(
-                      'Valor: R\$ ${((_bookingDetails?['final_price'] ?? widget.booking['final_price'] ?? 0) / 100).toStringAsFixed(2)}',
+                      'Valor: ${PriceUtils.formatCurrency(_bookingDetails?['final_price'] ?? widget.booking['final_price']) ?? 'R\$ 0,00'}',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -2380,8 +2732,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
+        // IMPORTANTE: Invalidar cache de bookings para forçar reload
+        _apiService.invalidateBookingsCache();
+        _apiService.invalidateBookingCache(bookingId);
+        
         // Recarregar detalhes do agendamento
-        await _loadBookingDetails();
+        await _loadBookingDetails(forceRefresh: true);
         
         // Verificar se é orçamento inicial ou final
         final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
@@ -2405,22 +2761,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           }
         });
         
-        // Navegar de volta para a tela de agendamentos no status CONFIRMADOS
-        if (!hasCompletedAt) {
-          // Aguardar um pouco para o usuário ver a mensagem de sucesso
-          await Future.delayed(const Duration(milliseconds: 500));
+        // IMPORTANTE: Retornar true para indicar que houve atualização
+        // Navegar de volta após um delay para permitir que a tela anterior atualize
+        Future.delayed(const Duration(milliseconds: 800), () {
           if (mounted) {
-            // Navegar de volta e depois para a aba de confirmados
-            Navigator.of(context).popUntil((route) {
-              // Voltar até a tela de agendamentos
-              return route.settings.name == '/orders' || route.isFirst;
-            });
-            // Se não encontrou a rota, apenas pop
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
+            Navigator.of(context).pop(true); // Passar true para indicar refresh necessário
           }
-        }
+        });
       } else {
       AppAlerts.showError(
         context,
@@ -2438,8 +2785,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _buildTimeSuggestionCard(Map<String, dynamic> merged) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    // IMPORTANTE: Não exibir card se já está confirmado
+    final status = (merged['status'] ?? '').toString().toLowerCase().trim();
+    if (status == 'confirmado' || status == 'confirmed') {
+      return const SizedBox.shrink();
+    }
+    
     final suggestedDateStr = merged['suggested_date'] ?? merged['data_sugerida'];
     if (suggestedDateStr == null) return const SizedBox.shrink();
+    
+    // IMPORTANTE: Verificar se há sugestão pendente da oficina
+    final suggestedBy = merged['suggested_by'] ?? merged['sugerido_por'];
+    if (suggestedBy != 'oficina' && suggestedBy != 'workshop') {
+      return const SizedBox.shrink();
+    }
     
     DateTime? suggestedDate;
     try {
@@ -2756,21 +3116,31 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
-        await _loadBookingDetails();
+        // IMPORTANTE: Atualizar dados antes de mostrar sucesso (forçar refresh)
+        await _loadBookingDetails(forceRefresh: true);
+        setState(() {
+          widget.booking['status'] = 'confirmado';
+          widget.booking['data_sugerida'] = null;
+          widget.booking['sugerido_por'] = null;
+          widget.booking['suggested_date'] = null;
+          widget.booking['suggested_by'] = null;
+          if (_bookingDetails != null) {
+            _bookingDetails!['status'] = 'confirmado';
+            _bookingDetails!['data_sugerida'] = null;
+            _bookingDetails!['sugerido_por'] = null;
+            _bookingDetails!['suggested_date'] = null;
+            _bookingDetails!['suggested_by'] = null;
+          }
+        });
         AppAlerts.showSuccess(
           context,
           message: 'Horário aceito com sucesso! O agendamento está confirmado.',
         );
-        setState(() {
-          widget.booking['status'] = 'confirmado';
-          if (_bookingDetails != null) {
-            _bookingDetails!['status'] = 'confirmado';
-          }
-        });
-        // Navegar de volta após um delay
-        Future.delayed(const Duration(milliseconds: 500), () {
+        // IMPORTANTE: Retornar true para indicar que houve atualização
+        // Navegar de volta após um delay para permitir que a tela anterior atualize
+        Future.delayed(const Duration(milliseconds: 800), () {
           if (mounted) {
-            Navigator.of(context).pop();
+            Navigator.of(context).pop(true); // Passar true para indicar refresh necessário
           }
         });
       } else {
@@ -2826,6 +3196,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
+        // IMPORTANTE: Invalidar cache de bookings para forçar reload
+        _apiService.invalidateBookingsCache();
+        _apiService.invalidateBookingCache(bookingId);
+        
         AppAlerts.showSuccess(
           context,
           message: 'Sugestão recusada. O agendamento foi cancelado e a oficina foi notificada.',
@@ -2950,7 +3324,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     Icon(Icons.attach_money, color: Colors.red.shade700),
                     const SizedBox(width: 8),
                     Text(
-                      'Valor: R\$ ${((_bookingDetails?['final_price'] ?? widget.booking['final_price'] ?? 0) / 100).toStringAsFixed(2)}',
+                      'Valor: ${PriceUtils.formatCurrency(_bookingDetails?['final_price'] ?? widget.booking['final_price']) ?? 'R\$ 0,00'}',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -3105,8 +3479,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     for (final key in candidateKeys) {
       if (!bookingData.containsKey(key)) continue;
       final candidate = bookingData[key];
+      
+      // DEBUG: Log para verificar valor bruto
+      debugPrint('💰 [OrderDetail] _extractFinalPriceFromMap: key=$key, raw=$candidate, type=${candidate.runtimeType}');
+      
       final parsed = _parseBackendPrice(candidate);
+      
+      // DEBUG: Log para verificar valor convertido
       if (parsed != null && parsed > 0) {
+        debugPrint('💰 [OrderDetail] _extractFinalPriceFromMap: parsed=$parsed (R\$ ${parsed.toStringAsFixed(2)})');
         return parsed;
       }
     }
@@ -3119,9 +3500,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (raw is num) {
       final value = raw.toDouble();
       if (value == 0) return null;
-      if (value.abs() >= 100 && value % 1 == 0) {
-        return value / 100;
+      
+      // IMPORTANTE: A API sempre salva valores em centavos (inteiros)
+      // Se o valor é um inteiro, SEMPRE assumir que está em centavos e converter para reais
+      // A API nunca retorna valores em reais como inteiros, sempre em centavos
+      if (value % 1 == 0) {
+        // DEBUG: Log para verificar conversão
+        final converted = value / 100;
+        debugPrint('💰 [OrderDetail] _parseBackendPrice: integer $value (centavos) -> $converted (reais)');
+        return converted;
       }
+      // Se já tem decimais, assumir que já está em reais (caso raro, mas possível)
+      debugPrint('💰 [OrderDetail] _parseBackendPrice: decimal $value (já em reais)');
       return value;
     }
 
@@ -3130,11 +3520,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (cleaned.isEmpty) return null;
       final parsed = double.tryParse(cleaned.replaceAll(',', '.'));
       if (parsed == null || parsed == 0) return null;
+      
+      // Se a string contém ponto ou vírgula, assumir que já está formatado em reais
       if (cleaned.contains('.') || cleaned.contains(',')) {
+        debugPrint('💰 [OrderDetail] _parseBackendPrice: string "$cleaned" (já em reais) -> $parsed');
         return parsed;
       }
-      if (parsed.abs() >= 100 && parsed % 1 == 0) {
-        return parsed / 100;
+      
+      // Se é um inteiro sem decimais, assumir centavos
+      if (parsed % 1 == 0) {
+        final converted = parsed / 100;
+        debugPrint('💰 [OrderDetail] _parseBackendPrice: string integer "$cleaned" (centavos) -> $converted (reais)');
+        return converted;
       }
       return parsed;
     }
@@ -3458,6 +3855,474 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     } catch (e) {
       return addressMap.toString();
     }
+  }
+}
+
+// Widget Modal para detalhes do orçamento com seleção de peças
+class QuoteDetailModal extends StatefulWidget {
+  final Map<String, dynamic> booking;
+  final List quoteItems;
+  final dynamic diagnosticValue;
+  final bool isDarkMode;
+  final Function(List<Map<String, dynamic>>?) onApprove;
+  final VoidCallback onReject;
+
+  const QuoteDetailModal({
+    Key? key,
+    required this.booking,
+    required this.quoteItems,
+    required this.diagnosticValue,
+    required this.isDarkMode,
+    required this.onApprove,
+    required this.onReject,
+  }) : super(key: key);
+
+  @override
+  State<QuoteDetailModal> createState() => _QuoteDetailModalState();
+}
+
+class _QuoteDetailModalState extends State<QuoteDetailModal> {
+  final Map<String, bool> _selectedItems = {};
+  bool _allSelected = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inicializar todos os itens como selecionados
+    for (var i = 0; i < widget.quoteItems.length; i++) {
+      _selectedItems[i.toString()] = true;
+    }
+  }
+
+  void _toggleItem(int index) {
+    setState(() {
+      _selectedItems[index.toString()] = !(_selectedItems[index.toString()] ?? false);
+      _allSelected = _selectedItems.values.every((selected) => selected);
+    });
+  }
+
+  void _toggleAll() {
+    setState(() {
+      _allSelected = !_allSelected;
+      for (var i = 0; i < widget.quoteItems.length; i++) {
+        _selectedItems[i.toString()] = _allSelected;
+      }
+    });
+  }
+
+  List<Map<String, dynamic>> _getSelectedItems() {
+    final selected = <Map<String, dynamic>>[];
+    for (var entry in _selectedItems.entries) {
+      if (entry.value) {
+        final index = int.parse(entry.key);
+        if (index < widget.quoteItems.length) {
+          selected.add(Map<String, dynamic>.from(widget.quoteItems[index]));
+        }
+      }
+    }
+    return selected;
+  }
+
+  double _calculateSelectedTotal() {
+    double total = 0;
+    for (var entry in _selectedItems.entries) {
+      if (entry.value) {
+        final index = int.parse(entry.key);
+        if (index < widget.quoteItems.length) {
+          final item = widget.quoteItems[index];
+          final quantity = item['quantity'] ?? 1;
+          final unitPrice = (item['unit_price'] ?? 0) / 100.0;
+          total += unitPrice * quantity;
+        }
+      }
+    }
+    if (widget.diagnosticValue != null && widget.diagnosticValue > 0) {
+      total += widget.diagnosticValue / 100.0;
+    }
+    return total;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedTotal = _calculateSelectedTotal();
+    final allSelected = _selectedItems.values.every((selected) => selected);
+    final hasSelection = _selectedItems.values.any((selected) => selected);
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.9,
+      decoration: BoxDecoration(
+        color: widget.isDarkMode ? const Color(0xFF1C1C1E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF00C977), Color(0xFF00B369)],
+              ),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Detalhes do Orçamento',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Selecione os itens que deseja aprovar',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          // Lista de itens
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                // Checkbox para selecionar todos
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: widget.isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: _allSelected,
+                        onChanged: (_) => _toggleAll(),
+                        activeColor: const Color(0xFF00C977),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Selecionar todos',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: widget.isDarkMode ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Lista de itens do orçamento
+                ...widget.quoteItems.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  final isSelected = _selectedItems[index.toString()] ?? false;
+                  final description = item['description'] ?? 'Item sem descrição';
+                  final quantity = item['quantity'] ?? 1;
+                  final unitPrice = (item['unit_price'] ?? 0) / 100.0;
+                  final totalItem = unitPrice * quantity;
+                  final reason = item['reason'] ?? item['motivo'] ?? '';
+                  final importance = item['importance'] ?? item['importancia'] ?? '';
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: widget.isDarkMode ? const Color(0xFF2C2C2E) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected 
+                            ? const Color(0xFF00C977) 
+                            : (widget.isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
+                        width: isSelected ? 2 : 1,
+                      ),
+                      boxShadow: isSelected ? [
+                        BoxShadow(
+                          color: const Color(0xFF00C977).withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ] : null,
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _toggleItem(index),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Checkbox(
+                                value: isSelected,
+                                onChanged: (_) => _toggleItem(index),
+                                activeColor: const Color(0xFF00C977),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      description,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: widget.isDarkMode ? Colors.white : Colors.black87,
+                                      ),
+                                    ),
+                                    if (reason.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.info_outline,
+                                            size: 14,
+                                            color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              'Motivo: $reason',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    if (importance.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: importance.toLowerCase() == 'alta' || importance.toLowerCase() == 'high'
+                                              ? Colors.red.withOpacity(0.1)
+                                              : importance.toLowerCase() == 'média' || importance.toLowerCase() == 'medium'
+                                                  ? Colors.orange.withOpacity(0.1)
+                                                  : Colors.green.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          'Importância: $importance',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: importance.toLowerCase() == 'alta' || importance.toLowerCase() == 'high'
+                                                ? Colors.red[700]
+                                                : importance.toLowerCase() == 'média' || importance.toLowerCase() == 'medium'
+                                                    ? Colors.orange[700]
+                                                    : Colors.green[700],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Quantidade: $quantity × ${PriceUtils.formatCurrency(unitPrice)}',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: widget.isDarkMode ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+                // Valor do diagnóstico
+                if (widget.diagnosticValue != null && widget.diagnosticValue > 0) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: widget.isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Diagnóstico',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: widget.isDarkMode ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Análise do veículo',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          PriceUtils.formatCurrency(widget.diagnosticValue / 100) ?? 'R\$ 0,00',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: widget.isDarkMode ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                // Total selecionado
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF00C977).withOpacity(0.1),
+                        const Color(0xFF00B369).withOpacity(0.1),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFF00C977).withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Total Selecionado:',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: widget.isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      Text(
+                        PriceUtils.formatCurrency(selectedTotal) ?? 'R\$ 0,00',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF00C977),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Botões de ação
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: widget.isDarkMode ? const Color(0xFF1C1C1E) : Colors.white,
+              border: Border(
+                top: BorderSide(
+                  color: widget.isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                ),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: hasSelection ? () {
+                      Navigator.of(context).pop();
+                      final selected = _getSelectedItems();
+                      widget.onApprove(allSelected ? null : selected);
+                    } : null,
+                    icon: const Icon(Icons.check_circle, color: Colors.white),
+                    label: Text(
+                      allSelected ? 'Confirmar Orçamento Completo' : 'Confirmar Itens Selecionados',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C977),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      widget.onReject();
+                    },
+                    icon: const Icon(Icons.cancel, color: Colors.red),
+                    label: const Text(
+                      'Rejeitar Orçamento',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.red, width: 2),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

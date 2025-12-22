@@ -1,6 +1,8 @@
 import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../config/app_config.dart';
 
 /// Resultado do upload
@@ -90,7 +92,7 @@ class UploadService {
       // Preparar FormData
       final fileName = imageFile.path.split('/').last;
       final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(
+        'image': await MultipartFile.fromFile(
           imageFile.path,
           filename: fileName,
         ),
@@ -99,7 +101,7 @@ class UploadService {
       
       // Fazer upload
       final response = await _dio.post(
-        '/api/bookings/$bookingId/images',
+        '/bookings/$bookingId/images',
         data: formData,
         options: Options(
           headers: {
@@ -223,6 +225,8 @@ class UploadService {
     return results;
   }
 }
+
+
 
 
 

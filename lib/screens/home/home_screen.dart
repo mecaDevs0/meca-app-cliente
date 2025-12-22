@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
@@ -38,7 +39,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadData();
+    _loadData(forceRefresh: false);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // IMPORTANTE: Recarregar dados quando a tela volta ao foco (após aprovar orçamento, etc)
+    // Mas apenas se não foi chamado recentemente (evitar loop infinito)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadData(forceRefresh: false);
+      }
+    });
   }
 
   @override
@@ -47,13 +60,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadData({bool forceRefresh = false}) async {
     setState(() {
       _isLoading = true;
       _upcomingBookings = [];
       _inProgressBookings = [];
       _nearbyWorkshops = [];
     });
+    
+    // IMPORTANTE: Invalidar cache se forçar refresh
+    if (forceRefresh) {
+      _apiService.invalidateBookingsCache();
+    }
     
     try {
       // Carregar agendamentos do usuário real
@@ -73,15 +91,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         final now = DateTime.now();
         final upcoming = bookings.where((b) {
           final status = b['status'] ?? '';
-          final isPendingOrConfirmed = status == 'pendente_oficina' || 
-                                      status == 'confirmed' || 
-                                      status == 'confirmado';
+          final statusLower = status.toString().toLowerCase();
           
           // Excluir serviços em andamento
-          final statusLower = status.toString().toLowerCase();
           if (statusLower == 'em_andamento' || statusLower == 'in_progress') {
             return false;
           }
+          
+          // Incluir pendentes, confirmados E pendente_cliente (sugestão de horário pendente)
+          final isPendingOrConfirmed = status == 'pendente_oficina' || 
+                                      status == 'confirmed' || 
+                                      status == 'confirmado' ||
+                                      status == 'pendente_cliente' ||
+                                      statusLower == 'pending_cliente' ||
+                                      statusLower == 'pending_customer';
           
           if (!isPendingOrConfirmed) return false;
           
@@ -238,26 +261,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         Row(
           children: [
             Expanded(
-              child: _buildActionCard(
-                icon: Icons.build,
-                title: 'Oficinas',
-                subtitle: 'Encontrar oficinas próximas',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const WorkshopsScreen()),
-                ),
+              child: Builder(
+                builder: (context) {
+                  final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+                  return _buildActionCard(
+                    icon: Icons.build,
+                    title: 'Oficinas',
+                    subtitle: 'Encontrar oficinas próximas',
+                    backgroundColor: isDarkMode 
+                        ? const Color(0xFF14241E) // Verde Profundo (tema escuro)
+                        : const Color(0xFFE8F5E9), // Verde Claro (tema claro)
+                    iconColor: const Color(0xFF00C977),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const WorkshopsScreen()),
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: _buildActionCard(
-                icon: Icons.schedule,
-                title: 'Agendar',
-                subtitle: 'Novo agendamento',
-                onTap: () => Navigator.push(
-                  context,
+              child: Builder(
+                builder: (context) {
+                  final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+                  return _buildActionCard(
+                    icon: Icons.schedule,
+                    title: 'Agendar',
+                    subtitle: 'Novo agendamento',
+                    backgroundColor: isDarkMode 
+                        ? const Color(0xFF121E29) // Azul Profundo (tema escuro)
+                        : const Color(0xFFE3EDFA), // Azul Claro (tema claro)
+                    iconColor: const Color(0xFF00C977),
+                    onTap: () => Navigator.push(
+                      context,
                       MaterialPageRoute(builder: (context) => const ServicesScreen()),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
                                         ],
@@ -266,20 +307,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         Row(
           children: [
             Expanded(
-              child: _buildActionCard(
-                icon: Icons.directions_car,
-                title: 'Meus Veículos',
-                subtitle: 'Gerenciar veículos',
-                onTap: () => Navigator.pushNamed(context, '/my-vehicles'),
+              child: Builder(
+                builder: (context) {
+                  final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+                  return _buildActionCard(
+                    icon: Icons.directions_car,
+                    title: 'Meus Veículos',
+                    subtitle: 'Gerenciar veículos',
+                    backgroundColor: isDarkMode 
+                        ? const Color(0xFF102124) // Teal/Petróleo (tema escuro)
+                        : const Color(0xFFE0F2F1), // Teal Claro (tema claro)
+                    iconColor: const Color(0xFF00C977),
+                    onTap: () => Navigator.pushNamed(context, '/my-vehicles'),
+                  );
+                },
               ),
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: _buildActionCard(
-                icon: Icons.history,
-                title: 'Histórico',
-                subtitle: 'Ver agendamentos',
-                onTap: () => Navigator.pushNamed(context, '/orders'),
+              child: Builder(
+                builder: (context) {
+                  final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+                  return _buildActionCard(
+                    icon: Icons.history,
+                    title: 'Histórico',
+                    subtitle: 'Ver agendamentos',
+                    backgroundColor: isDarkMode 
+                        ? const Color(0xFF1E1E1E) // Carbono/Neutro (tema escuro)
+                        : const Color(0xFFF5F5F5), // Cinza Claro (tema claro)
+                    iconColor: const Color(0xFF00C977),
+                    onTap: () => Navigator.pushNamed(context, '/orders'),
+                  );
+                },
               ),
             ),
           ],
@@ -293,17 +352,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    Color? backgroundColor,
+    Color? iconColor,
   }) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    // Cores reativas ao tema: no tema claro, usar cores mais claras; no tema escuro, manter as escuras
+    final bgColor = backgroundColor ?? (isDarkMode ? const Color(0xFF1E1E1E) : const Color(0xFFE8F5E9));
+    final icColor = iconColor ?? const Color(0xFF00C977);
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
         height: 128, // Altura fixa levemente maior para evitar overflow em textos mais longos
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF00C977).withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
+          color: bgColor,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: const Color(0xFF00C977).withOpacity(0.2),
+            color: isDarkMode 
+                ? Colors.white.withOpacity(0.08)
+                : Colors.black.withOpacity(0.05),
+            width: 0.5,
           ),
         ),
         child: Column(
@@ -311,15 +381,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           children: [
             Icon(
               icon,
-              color: const Color(0xFF00C977),
+              color: icColor,
               size: 28,
             ),
             const SizedBox(height: 6),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
+                color: isDarkMode ? Colors.white : Colors.black87,
               ),
               textAlign: TextAlign.center,
               maxLines: 1,
@@ -328,8 +399,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             const SizedBox(height: 2),
             Text(
               subtitle,
-              style: const TextStyle(
-                color: Colors.grey,
+              style: TextStyle(
+                color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
                 fontSize: 11,
               ),
               textAlign: TextAlign.center,
@@ -439,12 +510,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return GestureDetector(
-          onTap: () {
-            Navigator.pushNamed(
+          onTap: () async {
+            // IMPORTANTE: Aguardar resultado para atualizar se necessário
+            final result = await Navigator.pushNamed(
               context,
               '/order-detail',
               arguments: booking,
             );
+            // Se retornou true, significa que houve atualização e precisa recarregar
+            if (result == true && mounted) {
+              // IMPORTANTE: Forçar refresh sem usar cache
+              await _loadData(forceRefresh: true);
+            }
           },
           child: Container(
             width: double.infinity,
@@ -674,21 +751,55 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         const SizedBox(height: 16),
         SizedBox(
-          height: 240,
+          height: 260, // Ajustado para o novo tamanho do card (120 imagem + ~140 conteúdo)
           child: _nearbyWorkshops.isEmpty
-              ? const Center(
-                  child: Text(
-                    'Nenhuma oficina encontrada próxima a você',
-                    style: TextStyle(color: Colors.grey),
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.location_off_outlined,
+                          size: 64,
+                          color: Theme.of(context).brightness == Brightness.dark 
+                              ? Colors.grey.shade600 
+                              : Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Nenhuma oficina próxima',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).brightness == Brightness.dark 
+                                ? Colors.white 
+                                : Colors.grey.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Não encontramos oficinas próximas a você.\nTente aumentar o raio de busca.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
                   ),
                 )
               : ListView.builder(
                   scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(right: 16), // Padding direito para o último card
                   itemCount: _nearbyWorkshops.length,
                   itemBuilder: (context, index) {
                     return Container(
-                      width: 280,
-                      margin: const EdgeInsets.only(right: 16),
+                      margin: EdgeInsets.only(
+                        right: index < _nearbyWorkshops.length - 1 ? 16 : 0,
+                      ),
                       child: _buildWorkshopCard(_nearbyWorkshops[index]),
                     );
                   },
@@ -765,10 +876,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildWorkshopCard(Map<String, dynamic> workshop) {
-    final displayAddress = workshop['address_text'] ?? _formatAddress(workshop['address']);
     final distanceLabel = _formatDistanceLabel(workshop['distance']);
     final double? ratingValue =
         _parseDouble(workshop['rating']) ?? _parseDouble(workshop['average_rating']);
+    final hasLogo = workshop['logo_url'] != null && 
+                    workshop['logo_url'].toString().trim().isNotEmpty &&
+                    workshop['logo_url'].toString().startsWith('http');
 
     return GestureDetector(
       onTap: () {
@@ -779,117 +892,266 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         );
       },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF00C977).withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: const Color(0xFF00C977).withOpacity(0.2),
-          ),
-        ),
-        child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00C977).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+      child: Consumer<ThemeService>(
+        builder: (context, themeService, child) {
+          final isDark = themeService.isDarkMode;
+          
+          // OPÇÃO 1: Card estilo Apple Maps Premium (Elevated Card com imagem)
+          return Container(
+            width: 300,
+            constraints: const BoxConstraints(
+              minHeight: 0,
+              maxHeight: double.infinity,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                  spreadRadius: 0,
                 ),
-                child: (workshop['logo_url'] != null && 
-                        workshop['logo_url'].toString().trim().isNotEmpty &&
-                        workshop['logo_url'].toString().startsWith('http'))
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          workshop['logo_url'].toString(),
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => const Icon(
-                            Icons.build,
-                            color: Color(0xFF00C977),
-                          ),
-                        ),
-                      )
-                    : const Icon(
-                        Icons.build,
-                        color: Color(0xFF00C977),
-                      ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              clipBehavior: Clip.hardEdge,
+              borderRadius: BorderRadius.circular(20),
+              child: IntrinsicHeight(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      workshop['name'] ?? 'Oficina',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    // Imagem/Logo da oficina (área visual grande)
+                    Container(
+                      height: 120, // Reduzido de 140 para 120
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: hasLogo 
+                            ? null
+                            : LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: isDark 
+                                    ? [
+                                        const Color(0xFF00C977).withOpacity(0.15),
+                                        const Color(0xFF00B369).withOpacity(0.1),
+                                      ]
+                                    : [
+                                        const Color(0xFF00C977).withOpacity(0.1),
+                                        const Color(0xFF00B369).withOpacity(0.05),
+                                      ],
+                              ),
+                        color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[50],
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      child: hasLogo
+                          ? Stack(
+                              clipBehavior: Clip.hardEdge,
+                              children: [
+                                Image.network(
+                                  workshop['logo_url'].toString(),
+                                  width: double.infinity,
+                                  height: 120,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => _buildPlaceholderImage(isDark),
+                                ),
+                                // Overlay sutil para melhorar legibilidade
+                                Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black.withOpacity(0.1),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : _buildPlaceholderImage(isDark),
                     ),
-                    Text(
-                      distanceLabel,
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
+                    
+                    // Conteúdo do card com padding ajustado
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16), // Padding inferior aumentado
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Nome da oficina (destaque)
+                          Text(
+                            workshop['name'] ?? 'Oficina',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 17, // Reduzido de 18 para 17
+                              letterSpacing: -0.5,
+                              color: isDark ? Colors.white : Colors.black87,
+                              height: 1.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          
+                          // Rating e Distância (linha horizontal)
+                          Row(
+                            children: [
+                              // Rating com estrela refinada
+                              if (ratingValue != null && ratingValue > 0 && ratingValue <= 5) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: isDark 
+                                        ? Colors.amber.withOpacity(0.15)
+                                        : Colors.amber.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.star_rounded,
+                                        color: Colors.amber[700],
+                                        size: 13, // Reduzido de 14 para 13
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        ratingValue.toStringAsFixed(1),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12, // Reduzido de 13 para 12
+                                          color: isDark ? Colors.amber[200] : Colors.amber[900],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              
+                              // Distância
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.location_on_rounded,
+                                      size: 13, // Reduzido de 14 para 13
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        distanceLabel,
+                                        style: TextStyle(
+                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                          fontSize: 12, // Reduzido de 13 para 12
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10), // Reduzido de 12 para 10
+                          
+                          // Botão de ação discreto
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 9), // Reduzido de 10 para 9
+                            decoration: BoxDecoration(
+                              color: isDark 
+                                  ? const Color(0xFF00C977).withOpacity(0.15)
+                                  : const Color(0xFF00C977).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFF00C977).withOpacity(0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Ver detalhes',
+                                  style: TextStyle(
+                                    color: const Color(0xFF00C977),
+                                    fontSize: 13, // Reduzido de 14 para 13
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 15, // Reduzido de 16 para 15
+                                  color: const Color(0xFF00C977),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(
-                Icons.star,
-                color: Colors.amber,
-                size: 16,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                (ratingValue != null && ratingValue > 0 && ratingValue <= 5)
-                    ? ratingValue.toStringAsFixed(1)
-                    : '-',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            displayAddress,
-            style: const TextStyle(
-              color: Colors.grey,
-              fontSize: 14,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderImage(bool isDark) {
+    return Container(
+      width: double.infinity,
+      height: 120, // Ajustado para corresponder à altura da imagem
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark 
+              ? [
+                  const Color(0xFF00C977).withOpacity(0.15),
+                  const Color(0xFF00B369).withOpacity(0.1),
+                ]
+              : [
+                  const Color(0xFF00C977).withOpacity(0.1),
+                  const Color(0xFF00B369).withOpacity(0.05),
+                ],
+        ),
+      ),
+      child: Center(
+        child: Container(
+          width: 56, // Reduzido de 64 para 56
+          height: 56, // Reduzido de 64 para 56
+          decoration: BoxDecoration(
+            color: isDark 
+                ? const Color(0xFF00C977).withOpacity(0.2)
+                : const Color(0xFF00C977).withOpacity(0.1),
+            shape: BoxShape.circle,
           ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00C977).withOpacity(0.08),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Text(
-              'Ver detalhes da oficina',
-              style: TextStyle(
-                color: Color(0xFF00C977),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+          child: Icon(
+            Icons.store_rounded,
+            color: isDark 
+                ? const Color(0xFF00C977).withOpacity(0.6)
+                : const Color(0xFF00C977).withOpacity(0.5),
+            size: 28, // Reduzido de 32 para 28
           ),
-        ],
         ),
       ),
     );

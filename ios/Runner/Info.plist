@@ -35,24 +35,28 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>O Meca precisa acessar sua câmera para tirar fotos dos serviços do seu veículo.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Usamos o Face ID para agilizar o login com Apple.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Este app precisa acessar sua localização para encontrar oficinas próximas a você.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>O Meca precisa acessar sua câmera para tirar fotos dos serviços do seu veículo.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>O Meca precisa acessar sua galeria para selecionar fotos dos serviços do seu veículo.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>O Meca precisa salvar fotos na sua galeria.</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>O Meca precisa acessar sua galeria para selecionar fotos dos serviços do seu veículo.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
