@@ -364,11 +364,13 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
   }
 
   void _showAddCardDialog() {
-    final tokenController = TextEditingController();
-    final lastDigitsController = TextEditingController();
-    final brandController = TextEditingController(text: 'Cartão');
+    final cardNumberController = TextEditingController();
     final holderNameController = TextEditingController();
+    final expiryMonthController = TextEditingController();
+    final expiryYearController = TextEditingController();
+    final cvvController = TextEditingController();
     bool isLoading = false;
+    String? selectedCardType;
 
     showDialog(
       context: context,
@@ -376,52 +378,113 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Adicionar Cartão Tokenizado'),
+              title: const Text('Adicionar Cartão'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Use o token gerado pelo PagBank e informe apenas dados não sensíveis.',
-                      style: Theme.of(context).textTheme.bodySmall,
+                    const Text(
+                      'Informe os dados do seu cartão de crédito. Os dados são criptografados e seguros.',
+                      style: TextStyle(fontSize: 12),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     TextField(
-                      controller: tokenController,
-                      decoration: const InputDecoration(
-                        labelText: 'Token do cartão',
-                        hintText: 'card_tk_12345',
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: lastDigitsController,
-                      decoration: const InputDecoration(
-                        labelText: 'Últimos dígitos',
-                        hintText: '1234',
+                      controller: cardNumberController,
+                      decoration: InputDecoration(
+                        labelText: 'Número do cartão',
+                        hintText: '1234 5678 9012 3456',
+                        prefixIcon: const Icon(Icons.credit_card),
+                        suffixIcon: selectedCardType != null
+                            ? Icon(
+                                selectedCardType == 'VISA' ? Icons.credit_card : Icons.credit_card,
+                                color: selectedCardType == 'VISA' ? Colors.blue : Colors.orange,
+                              )
+                            : null,
                       ),
                       keyboardType: TextInputType.number,
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(4),
+                        LengthLimitingTextInputFormatter(19),
                       ],
+                      onChanged: (value) {
+                        // Detectar bandeira
+                        final digits = value.replaceAll(' ', '');
+                        if (digits.isNotEmpty) {
+                          if (digits.startsWith('4')) {
+                            setDialogState(() => selectedCardType = 'VISA');
+                          } else if (digits.startsWith('5') || digits.startsWith('2')) {
+                            setDialogState(() => selectedCardType = 'MASTERCARD');
+                          } else if (digits.startsWith('3')) {
+                            setDialogState(() => selectedCardType = 'AMEX');
+                          } else {
+                            setDialogState(() => selectedCardType = null);
+                          }
+                        }
+                      },
                     ),
                     const SizedBox(height: 16),
                     TextField(
-                      controller: brandController,
+                      controller: holderNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome impresso no cartão',
+                        hintText: 'NOME COMPLETO',
+                        prefixIcon: Icon(Icons.person),
+                      ),
+                      textCapitalization: TextCapitalization.characters,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: expiryMonthController,
                             decoration: const InputDecoration(
-                        labelText: 'Bandeira',
-                        hintText: 'Visa / Mastercard / Elo',
+                              labelText: 'Mês',
+                              hintText: 'MM',
+                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(2),
+                            ],
                           ),
                         ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: holderNameController,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: expiryYearController,
                             decoration: const InputDecoration(
-                        labelText: 'Nome do titular (opcional)',
-                        hintText: 'Como aparece no cartão',
+                              labelText: 'Ano',
+                              hintText: 'AAAA',
+                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(4),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: cvvController,
+                            decoration: const InputDecoration(
+                              labelText: 'CVV',
+                              hintText: '123',
+                            ),
+                            keyboardType: TextInputType.number,
+                            obscureText: true,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(4),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -435,31 +498,64 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                   onPressed: isLoading
                       ? null
                       : () async {
-                          if (tokenController.text.trim().isEmpty || lastDigitsController.text.trim().isEmpty) {
-                      AppAlerts.showWarning(
-                        dialogContext,
-                              message: 'Informe o token e os últimos dígitos do cartão.',
-                        title: 'Campos obrigatórios',
-                      );
-                      return;
-                    }
+                          final cardNumber = cardNumberController.text.replaceAll(' ', '');
+                          final holderName = holderNameController.text.trim();
+                          final expiryMonth = expiryMonthController.text.trim();
+                          final expiryYear = expiryYearController.text.trim();
+                          final cvv = cvvController.text.trim();
+
+                          if (cardNumber.isEmpty || cardNumber.length < 13) {
+                            AppAlerts.showWarning(
+                              dialogContext,
+                              message: 'Informe um número de cartão válido.',
+                              title: 'Campo obrigatório',
+                            );
+                            return;
+                          }
+
+                          if (holderName.isEmpty) {
+                            AppAlerts.showWarning(
+                              dialogContext,
+                              message: 'Informe o nome impresso no cartão.',
+                              title: 'Campo obrigatório',
+                            );
+                            return;
+                          }
+
+                          if (expiryMonth.isEmpty || expiryYear.isEmpty) {
+                            AppAlerts.showWarning(
+                              dialogContext,
+                              message: 'Informe o mês e ano de validade.',
+                              title: 'Campo obrigatório',
+                            );
+                            return;
+                          }
+
+                          if (cvv.isEmpty || cvv.length < 3) {
+                            AppAlerts.showWarning(
+                              dialogContext,
+                              message: 'Informe o CVV do cartão.',
+                              title: 'Campo obrigatório',
+                            );
+                            return;
+                          }
 
                           setDialogState(() => isLoading = true);
 
-                    try {
-                            final saveResult = await _apiService.saveCard(
-                              cardToken: tokenController.text.trim(),
-                              lastDigits: lastDigitsController.text.trim(),
-                              brand: brandController.text.trim().isEmpty ? 'Cartão' : brandController.text.trim(),
-                              holderName: holderNameController.text.trim().isEmpty
-                                  ? null
-                                  : holderNameController.text.trim(),
-                        isDefault: false,
-                      );
+                          try {
+                            // Obter customerId do token (será pego automaticamente pelo backend)
+                            final saveResult = await _apiService.saveCardDirect(
+                              customerId: '', // Backend pega do token JWT
+                              cardNumber: cardNumber,
+                              expiryMonth: expiryMonth,
+                              expiryYear: expiryYear,
+                              cvv: cvv,
+                              holderName: holderName,
+                            );
 
-                      if (saveResult['success']) {
-                        Navigator.of(dialogContext).pop();
-                        await _loadSavedCards();
+                            if (saveResult['success']) {
+                              Navigator.of(dialogContext).pop();
+                              await _loadSavedCards();
                               if (mounted) {
                                 setState(() {
                                   _hasChanges = true;

@@ -1200,7 +1200,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     // Buscar items do orçamento
     final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
     final quoteItems = quoteItemsRaw is List ? quoteItemsRaw : null;
-    final diagnosticValue = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+    final diagnosticValueRaw = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+    final diagnosticValue = _parseDiagnosticValue(diagnosticValueRaw);
     final hasDetailedQuote = quoteItems != null && quoteItems.isNotEmpty;
 
     String title;
@@ -1292,19 +1293,42 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     final index = entry.key;
                     final item = entry.value;
                     final description = item['description'] ?? 'Item sem descrição';
-                    final quantity = item['quantity'] ?? 1;
-                    final unitPrice = (item['unit_price'] ?? 0) / 100.0;
+                    final quantityRaw = item['quantity'] ?? 1;
+                    final quantity = quantityRaw is int ? quantityRaw : (quantityRaw is String ? int.tryParse(quantityRaw) ?? 1 : 1);
+                    final unitPriceRaw = item['unit_price'] ?? 0;
+                    final unitPriceCents = unitPriceRaw is int ? unitPriceRaw : (unitPriceRaw is String ? int.tryParse(unitPriceRaw) ?? 0 : (unitPriceRaw is double ? unitPriceRaw.toInt() : 0));
+                    final unitPrice = unitPriceCents / 100.0;
                     final totalItem = unitPrice * quantity;
                     return Container(
                       margin: EdgeInsets.only(bottom: index < quoteItems.length - 1 ? 12 : 0),
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${index + 1}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1313,29 +1337,59 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   description,
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Quantidade: $quantity × ${PriceUtils.formatCurrency(unitPrice)}',
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Icon(Icons.shopping_cart_outlined, size: 12, color: Colors.white.withOpacity(0.8)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Quantidade: $quantity',
                                   style: TextStyle(
-                                    color: Colors.white.withOpacity(0.85),
+                                        color: Colors.white.withOpacity(0.9),
                                     fontSize: 12,
-                                  ),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Icon(Icons.attach_money, size: 12, color: Colors.white.withOpacity(0.8)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Unitário: ${PriceUtils.formatCurrency(unitPrice)}',
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.9),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
                           Text(
                             PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 14,
+                                  fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
+                              ),
+                              Text(
+                                'Subtotal',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -1344,43 +1398,52 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   
                   // Valor do diagnóstico (se houver)
                   if (diagnosticValue != null && diagnosticValue > 0) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
+                        color: Colors.white.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Column(
+                          Expanded(
+                            child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.search, color: Colors.white.withOpacity(0.9), size: 16),
+                                    const SizedBox(width: 6),
                               const Text(
                                 'Diagnóstico',
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
                               Text(
-                                'Análise do veículo',
+                                  'Análise inicial do veículo para identificar problemas',
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.75),
+                                    color: Colors.white.withOpacity(0.85),
                                   fontSize: 11,
                                 ),
                               ),
                             ],
                           ),
+                          ),
+                          const SizedBox(width: 12),
                           Text(
-                            PriceUtils.formatCurrency(diagnosticValue / 100) ?? 'R\$ 0,00',
+                            PriceUtils.formatCurrency(diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue) ?? 'R\$ 0,00',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 14,
+                              fontSize: 15,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -2179,391 +2242,597 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
           // Botão para aprovar orçamento quando status for pendente_cliente E não for sugestão de horário
           if (rawStatus == 'pendente_cliente' && !isTimeSuggestion && hasQuote) ...[
-            // Card destacado com valor do orçamento
-            Container(
-              padding: const EdgeInsets.all(20),
-              margin: const EdgeInsets.only(bottom: 20),
+            // Card principal de orçamento - DESIGN MODERNO E ELEGANTE
+            Builder(
+              builder: (context) {
+                final merged = _mergeBookingData();
+                final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
+                
+                // Processar quoteItems de forma robusta
+                List<dynamic>? quoteItems;
+                if (quoteItemsRaw != null) {
+                  if (quoteItemsRaw is List) {
+                    quoteItems = quoteItemsRaw;
+                  } else if (quoteItemsRaw is String) {
+                    try {
+                      final parsed = jsonDecode(quoteItemsRaw);
+                      if (parsed is List) {
+                        quoteItems = parsed;
+                      }
+                    } catch (e) {
+                      debugPrint('⚠️ [OrderDetail] Erro ao fazer parse de quote_items (String): $e');
+                    }
+                  }
+                }
+                
+                final diagnosticValueRaw = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+                final diagnosticValue = _parseDiagnosticValue(diagnosticValueRaw);
+                final hasDetailedQuote = quoteItems != null && quoteItems.isNotEmpty;
+                final hasDiagnostic = diagnosticValue != null && diagnosticValue > 0;
+                final finalPriceRaw = _bookingDetails?['final_price'] ?? widget.booking['final_price'];
+                final finalPrice = finalPriceRaw != null ? (finalPriceRaw is int ? finalPriceRaw / 100.0 : finalPriceRaw is double ? finalPriceRaw : (finalPriceRaw is String ? double.tryParse(finalPriceRaw) ?? 0.0 : 0.0)) : 0.0;
+                final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
+                
+                // Debug: Log para verificar items
+                debugPrint('🔍 [OrderDetail] Quote Items Debug:');
+                debugPrint('  - quoteItemsRaw type: ${quoteItemsRaw.runtimeType}');
+                debugPrint('  - quoteItemsRaw: $quoteItemsRaw');
+                debugPrint('  - quoteItems: $quoteItems');
+                debugPrint('  - hasDetailedQuote: $hasDetailedQuote');
+                debugPrint('  - quoteItems length: ${quoteItems?.length ?? 0}');
+                if (quoteItems != null && quoteItems.isNotEmpty) {
+                  debugPrint('  - First item: ${quoteItems[0]}');
+                  debugPrint('  - First item type: ${quoteItems[0].runtimeType}');
+                  debugPrint('  - First item keys: ${quoteItems[0] is Map ? (quoteItems[0] as Map).keys.toList() : 'N/A'}');
+                } else {
+                  debugPrint('  ⚠️ Nenhum item encontrado!');
+                }
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 24),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.amber.shade400, Colors.orange.shade600],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
+                    color: Theme.of(context).brightness == Brightness.dark 
+                        ? const Color(0xFF1C1C1E)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.orange.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
                   ),
                 ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                      // Header elegante
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFF00C977).withOpacity(0.1),
+                              const Color(0xFF00C977).withOpacity(0.05),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(24),
+                            topRight: Radius.circular(24),
+                          ),
+                        ),
+                        child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(10),
+                              width: 56,
+                              height: 56,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.receipt_long, color: Colors.white, size: 28),
-                      ),
-                      const SizedBox(width: 12),
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF00C977), Color(0xFF00B369)],
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF00C977).withOpacity(0.3),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.receipt_long_rounded, color: Colors.white, size: 28),
+                            ),
+                            const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
+                                  Text(
                               'Orçamento Disponível',
                               style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w700,
+                                      color: Theme.of(context).brightness == Brightness.dark 
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      letterSpacing: -0.5,
                               ),
                             ),
                             const SizedBox(height: 4),
-                            Builder(
-                              builder: (context) {
-                                final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
-                                final message = hasCompletedAt
+                                  Text(
+                                    hasCompletedAt
                                     ? 'Orçamento final - Aprove para pagar'
-                                    : 'Orçamento inicial - Aprove para iniciar';
-                                return Text(
-                                  message,
+                                        : 'Orçamento inicial - Aprove para iniciar',
                                   style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.white.withOpacity(0.9),
-                                  ),
-                                );
-                              },
+                                      fontSize: 14,
+                                      color: Theme.of(context).brightness == Brightness.dark 
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
+                                    ),
                             ),
                           ],
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 16),
-                  if (_bookingDetails?['final_price'] != null || widget.booking['final_price'] != null) ...[
-                    // Buscar items do orçamento
-                    Builder(
-                      builder: (context) {
-                        final merged = _mergeBookingData();
-                        final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
-                        final quoteItems = quoteItemsRaw is List ? quoteItemsRaw : null;
-                        final diagnosticValue = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
-                        final hasDetailedQuote = quoteItems != null && quoteItems.isNotEmpty;
-                        final finalPrice = (_bookingDetails?['final_price'] ?? widget.booking['final_price'] ?? 0) / 100.0;
-                        
-                        if (hasDetailedQuote) {
-                          // Mostrar breakdown detalhado
-                          return Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Detalhamento do Orçamento',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                      
+                      // Valor total destacado
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark 
+                              ? const Color(0xFF2C2C2E)
+                              : Colors.grey[50],
+                          border: Border(
+                            top: BorderSide(
+                              color: Theme.of(context).brightness == Brightness.dark 
+                                  ? Colors.grey[800]!
+                                  : Colors.grey[200]!,
+                              width: 1,
+                            ),
+                            bottom: BorderSide(
+                              color: Theme.of(context).brightness == Brightness.dark 
+                                  ? Colors.grey[800]!
+                                  : Colors.grey[200]!,
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Valor Total',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).brightness == Brightness.dark 
+                                    ? Colors.grey[300]
+                                    : Colors.grey[700],
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                            Text(
+                              PriceUtils.formatCurrency(finalPrice) ?? 'R\$ 0,00',
+                              style: TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF00C977),
+                                letterSpacing: -1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      // Breakdown detalhado - DESIGN MODERNO
+                      if (hasDetailedQuote || hasDiagnostic) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              top: BorderSide(
+                                color: Theme.of(context).brightness == Brightness.dark 
+                                    ? Colors.grey[800]!
+                                    : Colors.grey[200]!,
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Detalhamento',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).brightness == Brightness.dark 
+                                      ? Colors.grey[300]
+                                      : Colors.grey[700],
+                                  letterSpacing: -0.3,
                                 ),
-                                const SizedBox(height: 12),
-                                // Items do orçamento
-                                ...List<Widget>.from(quoteItems.asMap().entries.map<Widget>((entry) {
+                              ),
+                              const SizedBox(height: 20),
+                              
+                              // Items do orçamento
+                              if (hasDetailedQuote && quoteItems != null) ...[
+                                ...List<Widget>.from(quoteItems!.asMap().entries.map<Widget>((entry) {
                                   final index = entry.key;
                                   final item = entry.value;
                                   final description = item['description'] ?? 'Item sem descrição';
-                                  final quantity = item['quantity'] ?? 1;
-                                  final unitPrice = (item['unit_price'] ?? 0) / 100.0;
+                                  final quantityRaw = item['quantity'] ?? 1;
+                                  final quantity = quantityRaw is int ? quantityRaw : (quantityRaw is String ? int.tryParse(quantityRaw) ?? 1 : 1);
+                                  final unitPriceRaw = item['unit_price'] ?? 0;
+                                  final unitPriceCents = unitPriceRaw is int ? unitPriceRaw : (unitPriceRaw is String ? int.tryParse(unitPriceRaw) ?? 0 : (unitPriceRaw is double ? unitPriceRaw.toInt() : 0));
+                                  final unitPrice = unitPriceCents / 100.0;
                                   final totalItem = unitPrice * quantity;
+                                  
                                   return Container(
-                                    margin: EdgeInsets.only(bottom: index < quoteItems.length - 1 ? 12 : 0),
-                                    padding: const EdgeInsets.all(10),
+                                    margin: EdgeInsets.only(bottom: index < (quoteItems?.length ?? 0) - 1 ? 12 : 0),
+                                    padding: const EdgeInsets.all(16),
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
+                                      color: Theme.of(context).brightness == Brightness.dark 
+                                          ? const Color(0xFF2C2C2E)
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Theme.of(context).brightness == Brightness.dark 
+                                            ? Colors.grey[700]!
+                                            : Colors.grey[200]!,
+                                        width: 1,
+                                      ),
                                     ),
                                     child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.center,
                                       children: [
+                                        // Conteúdo principal - título e detalhes
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
                                             children: [
+                                              // Título do item - destaque principal
                                               Text(
                                                 description,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                'Quantidade: $quantity × ${PriceUtils.formatCurrency(unitPrice)}',
                                                 style: TextStyle(
-                                                  color: Colors.white.withOpacity(0.85),
-                                                  fontSize: 12,
+                                                  color: Theme.of(context).brightness == Brightness.dark 
+                                                      ? Colors.white
+                                                      : Colors.black87,
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w700,
+                                                  letterSpacing: -0.4,
+                                                  height: 1.3,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const SizedBox(height: 6),
+                                              // Linha simples e limpa: "1x R$ 10,00"
+                                              Text(
+                                                '$quantity${quantity > 1 ? 'x' : 'x'} ${PriceUtils.formatCurrency(unitPrice)}',
+                                                style: TextStyle(
+                                                  color: Theme.of(context).brightness == Brightness.dark 
+                                                      ? Colors.grey[400]
+                                                      : Colors.grey[600],
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                  letterSpacing: -0.2,
                                                 ),
                                               ),
                                             ],
                                           ),
                                         ),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                        const SizedBox(width: 16),
+                                        // Valor total - destaque verde à direita
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
+                                              style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w800,
+                                                color: const Color(0xFF00C977),
+                                                letterSpacing: -0.6,
+                                                height: 1.2,
+                                              ),
+                                              textAlign: TextAlign.end,
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
                                   );
                                 })),
-                                
-                                // Valor do diagnóstico (se houver)
-                                if (diagnosticValue != null && diagnosticValue > 0) ...[
-                                  const Divider(color: Colors.white38, height: 20),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                if (hasDiagnostic) const SizedBox(height: 12),
+                              ],
+                              
+                              // Valor do diagnóstico (se houver)
+                              if (hasDiagnostic) ...[
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).brightness == Brightness.dark 
+                                        ? const Color(0xFF2C2C2E)
+                                        : Colors.blue[50],
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: Theme.of(context).brightness == Brightness.dark 
+                                          ? Colors.blue[800]!
+                                          : Colors.blue[200]!,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: Row(
                                     children: [
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'Diagnóstico',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w500,
-                                            ),
+                                      Container(
+                                        width: 44,
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Colors.blue[400]!,
+                                              Colors.blue[600]!,
+                                            ],
                                           ),
-                                          Text(
-                                            'Análise do veículo',
-                                            style: TextStyle(
-                                              color: Colors.white.withOpacity(0.7),
-                                              fontSize: 11,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: const Icon(Icons.search_rounded, color: Colors.white, size: 22),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Diagnóstico',
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w600,
+                                                letterSpacing: -0.3,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              'Análise inicial do veículo',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w400,
+                                                color: Theme.of(context).brightness == Brightness.dark 
+                                                    ? Colors.grey[400]
+                                                    : Colors.grey[600],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                       Text(
-                                        PriceUtils.formatCurrency(diagnosticValue / 100) ?? 'R\$ 0,00',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
+                                        PriceUtils.formatCurrency(diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue) ?? 'R\$ 0,00',
+                                        style: TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.blue[700],
+                                          letterSpacing: -0.5,
                                         ),
                                       ),
                                     ],
                                   ),
-                                ],
-                                
-                                const Divider(color: Colors.white38, height: 20),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text(
-                                      'Valor Total:',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Text(
-                                      PriceUtils.formatCurrency(finalPrice) ?? 'R\$ 0,00',
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
                                 ),
                               ],
-                            ),
-                          );
-                        } else {
-                          // Mostrar apenas valor total (formato antigo)
-                          return Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Valor do Orçamento:',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            ],
                           ),
-                          Text(
-                                  finalPrice != null ? 'R\$ ${finalPrice.toStringAsFixed(2).replaceAll('.', ',')}' : 'R\$ 0,00',
-                            style: const TextStyle(
-                              fontSize: 24,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                          );
-                        }
-                      },
-                    ),
-                  ],
-                ],
-              ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
             ),
-            // Botão grande e destacado para aprovar
+            const SizedBox(height: 24),
+            
+            // Botões de ação - DESIGN MODERNO E ELEGANTE
+            // Botão de aprovar
             Container(
+              margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF00C977), Color(0xFF00B369)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFF00C977).withOpacity(0.4),
-                    blurRadius: 15,
+                    blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
                 ],
               ),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _approveQuote,
-                  icon: const Icon(Icons.check_circle, color: Colors.white, size: 28),
-                  label: const Text(
-                    'APROVAR ORÇAMENTO',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 1.2,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _approveQuote,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Aprovar Orçamento',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C977),
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
                   ),
                 ),
               ),
             ),
-            // Botão para rejeitar orçamento (não mostrar se for orçamento final)
+            
+            // Botão de rejeitar
             Builder(
               builder: (context) {
                 final merged = _mergeBookingData();
                 final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
                 final isFinalQuote = quoteStatus == 'final';
                 
-                // Não mostrar botão de rejeitar se for orçamento final
                 if (isFinalQuote) {
                   return const SizedBox.shrink();
                 }
                 
-                return Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _rejectQuote(),
-                        icon: const Icon(Icons.cancel, color: Colors.red),
-                        label: const Text(
-                          'REJEITAR ORÇAMENTO',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.red, width: 2),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Theme.of(context).brightness == Brightness.dark 
+                          ? Colors.grey[700]!
+                          : Colors.grey[300]!,
+                      width: 2,
+                    ),
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _rejectQuote(),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.close_rounded,
+                              color: Colors.red[600],
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Rejeitar Orçamento',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.red[600],
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 );
               },
             ),
-            const SizedBox(height: 16),
-            // Mensagem explicativa
+            
+            // Mensagem informativa - DESIGN MODERNO
             Builder(
               builder: (context) {
                 final merged = _mergeBookingData();
                 final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
                 final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
                 final isFinalQuote = quoteStatus == 'final';
-                final diagnosticValue = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+                final diagnosticValueRaw = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+                final diagnosticValue = _parseDiagnosticValue(diagnosticValueRaw);
                 final hasDiagnostic = diagnosticValue != null && diagnosticValue > 0;
                 
                 String message;
-                Color containerColor;
-                Color borderColor;
-                Color iconColor;
+                Color bgColor;
+                Color textColor;
+                Color iconBgColor;
                 
                 if (isFinalQuote) {
                   message = 'Este é o orçamento final após o serviço. Aprove para realizar o pagamento.';
-                  containerColor = Colors.green.shade50;
-                  borderColor = Colors.green.shade200;
-                  iconColor = Colors.green.shade700;
+                  bgColor = Theme.of(context).brightness == Brightness.dark 
+                      ? Colors.green[900]!.withOpacity(0.2)
+                      : Colors.green[50]!;
+                  textColor = Theme.of(context).brightness == Brightness.dark 
+                      ? Colors.green[300]!
+                      : Colors.green[900]!;
+                  iconBgColor = Colors.green[600]!;
                 } else if (hasCompletedAt) {
                   message = 'Após aprovar, você poderá realizar o pagamento do serviço.';
-                  containerColor = Colors.blue.shade50;
-                  borderColor = Colors.blue.shade200;
-                  iconColor = Colors.blue.shade700;
+                  bgColor = Theme.of(context).brightness == Brightness.dark 
+                      ? Colors.blue[900]!.withOpacity(0.2)
+                      : Colors.blue[50]!;
+                  textColor = Theme.of(context).brightness == Brightness.dark 
+                      ? Colors.blue[300]!
+                      : Colors.blue[900]!;
+                  iconBgColor = Colors.blue[600]!;
                 } else {
+                  final diagnosticInReais = diagnosticValue != null 
+                      ? (diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue)
+                      : 0.0;
                   message = hasDiagnostic
-                      ? 'Ao aprovar, a oficina iniciará o serviço. Se rejeitar, você pagará apenas o diagnóstico (${PriceUtils.formatCurrency(diagnosticValue / 100)}).'
+                      ? 'Ao aprovar, a oficina iniciará o serviço. Se rejeitar, você pagará apenas o diagnóstico (${PriceUtils.formatCurrency(diagnosticInReais)}).'
                       : 'Após aprovar, a oficina poderá iniciar o serviço.';
-                  containerColor = Colors.blue.shade50;
-                  borderColor = Colors.blue.shade200;
-                  iconColor = Colors.blue.shade700;
+                  bgColor = Theme.of(context).brightness == Brightness.dark 
+                      ? Colors.blue[900]!.withOpacity(0.2)
+                      : Colors.blue[50]!;
+                  textColor = Theme.of(context).brightness == Brightness.dark 
+                      ? Colors.blue[300]!
+                      : Colors.blue[900]!;
+                  iconBgColor = Colors.blue[600]!;
                 }
                 
                 return Container(
                   padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    color: containerColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: borderColor),
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Theme.of(context).brightness == Brightness.dark 
+                          ? Colors.grey[800]!
+                          : Colors.grey[200]!,
+                      width: 1,
+                    ),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.info_outline, color: iconColor, size: 20),
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: iconBgColor.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.info_outline_rounded,
+                          color: iconBgColor,
+                          size: 18,
+                        ),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           message,
                           style: TextStyle(
-                            fontSize: 14,
-                            color: iconColor == Colors.green.shade700 ? Colors.green.shade900 : (iconColor == Colors.blue.shade700 ? Colors.blue.shade900 : Colors.grey.shade900),
+                            fontSize: 13,
+                            color: textColor,
                             fontWeight: FontWeight.w500,
+                            height: 1.4,
                           ),
                         ),
                       ),
@@ -2572,7 +2841,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 );
               },
             ),
-            const SizedBox(height: 12),
           ],
           if (normalizedStatus == 'in_progress' || normalizedStatus == 'awaiting_payment' || normalizedStatus == 'completed') ...[
             SizedBox(
@@ -3231,7 +3499,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
     final isFinalQuote = quoteStatus == 'final';
     final hasCompletedAt = merged['completed_at'] != null || widget.booking['completed_at'] != null;
-    final diagnosticValue = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+    final diagnosticValueRaw = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+    final diagnosticValue = _parseDiagnosticValue(diagnosticValueRaw);
     final hasDiagnostic = diagnosticValue != null && diagnosticValue > 0;
     
     // Não pode rejeitar orçamento final
@@ -3490,6 +3759,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         debugPrint('💰 [OrderDetail] _extractFinalPriceFromMap: parsed=$parsed (R\$ ${parsed.toStringAsFixed(2)})');
         return parsed;
       }
+    }
+    return null;
+  }
+
+  /// Converte diagnostic_value para número (pode vir como String, int ou double)
+  double? _parseDiagnosticValue(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is String) {
+      return double.tryParse(raw);
+    } else if (raw is int) {
+      return raw.toDouble();
+    } else if (raw is double) {
+      return raw;
     }
     return null;
   }
@@ -3923,6 +4205,18 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
     return selected;
   }
 
+  double? _parseDiagnosticValue(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is String) {
+      return double.tryParse(raw);
+    } else if (raw is int) {
+      return raw.toDouble();
+    } else if (raw is double) {
+      return raw;
+    }
+    return null;
+  }
+
   double _calculateSelectedTotal() {
     double total = 0;
     for (var entry in _selectedItems.entries) {
@@ -3930,14 +4224,19 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
         final index = int.parse(entry.key);
         if (index < widget.quoteItems.length) {
           final item = widget.quoteItems[index];
-          final quantity = item['quantity'] ?? 1;
-          final unitPrice = (item['unit_price'] ?? 0) / 100.0;
+          final quantityRaw = item['quantity'] ?? 1;
+          final quantity = quantityRaw is int ? quantityRaw : (quantityRaw is String ? int.tryParse(quantityRaw) ?? 1 : 1);
+          final unitPriceRaw = item['unit_price'] ?? 0;
+          final unitPriceCents = unitPriceRaw is int ? unitPriceRaw : (unitPriceRaw is String ? int.tryParse(unitPriceRaw) ?? 0 : (unitPriceRaw is double ? unitPriceRaw.toInt() : 0));
+          final unitPrice = unitPriceCents / 100.0;
           total += unitPrice * quantity;
         }
       }
     }
-    if (widget.diagnosticValue != null && widget.diagnosticValue > 0) {
-      total += widget.diagnosticValue / 100.0;
+    final diagnosticValue = _parseDiagnosticValue(widget.diagnosticValue);
+    if (diagnosticValue != null && diagnosticValue > 0) {
+      // Se > 1000, provavelmente está em centavos, converter para reais
+      total += diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue;
     }
     return total;
   }
@@ -4037,8 +4336,11 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
                   final item = entry.value;
                   final isSelected = _selectedItems[index.toString()] ?? false;
                   final description = item['description'] ?? 'Item sem descrição';
-                  final quantity = item['quantity'] ?? 1;
-                  final unitPrice = (item['unit_price'] ?? 0) / 100.0;
+                  final quantityRaw = item['quantity'] ?? 1;
+                  final quantity = quantityRaw is int ? quantityRaw : (quantityRaw is String ? int.tryParse(quantityRaw) ?? 1 : 1);
+                  final unitPriceRaw = item['unit_price'] ?? 0;
+                  final unitPriceCents = unitPriceRaw is int ? unitPriceRaw : (unitPriceRaw is String ? int.tryParse(unitPriceRaw) ?? 0 : (unitPriceRaw is double ? unitPriceRaw.toInt() : 0));
+                  final unitPrice = unitPriceCents / 100.0;
                   final totalItem = unitPrice * quantity;
                   final reason = item['reason'] ?? item['motivo'] ?? '';
                   final importance = item['importance'] ?? item['importancia'] ?? '';
@@ -4166,31 +4468,50 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
                   );
                 }),
                 // Valor do diagnóstico
-                if (widget.diagnosticValue != null && widget.diagnosticValue > 0) ...[
+                Builder(
+                  builder: (context) {
+                    final diagnosticValue = _parseDiagnosticValue(widget.diagnosticValue);
+                    if (diagnosticValue == null || diagnosticValue <= 0) {
+                      return const SizedBox.shrink();
+                    }
+                    final diagnosticInReais = diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue;
+                    return Column(
+                      children: [
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: widget.isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                              color: widget.isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+                              width: 1,
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Diagnóstico',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: widget.isDarkMode ? Colors.white : Colors.black87,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                      Row(
+                                        children: [
+                                        Icon(Icons.search, size: 16, color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                                        const SizedBox(width: 6),
+                                    Text(
+                                          'Diagnóstico',
+                                      style: TextStyle(
+                                            fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: widget.isDarkMode ? Colors.white : Colors.black87,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 2),
+                            ],
+                          ),
+                                    const SizedBox(height: 4),
                             Text(
-                              'Análise do veículo',
+                                      'Análise inicial do veículo para identificar problemas',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600],
@@ -4198,10 +4519,12 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
                             ),
                           ],
                         ),
+                              ),
+                              const SizedBox(width: 12),
                         Text(
-                          PriceUtils.formatCurrency(widget.diagnosticValue / 100) ?? 'R\$ 0,00',
+                                PriceUtils.formatCurrency(diagnosticInReais) ?? 'R\$ 0,00',
                           style: TextStyle(
-                            fontSize: 16,
+                                  fontSize: 17,
                             fontWeight: FontWeight.bold,
                             color: widget.isDarkMode ? Colors.white : Colors.black87,
                           ),
@@ -4210,6 +4533,9 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
                     ),
                   ),
                 ],
+                    );
+                  },
+                ),
                 const SizedBox(height: 20),
                 // Total selecionado
                 Container(

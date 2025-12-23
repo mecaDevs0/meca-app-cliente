@@ -68,6 +68,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   String _selectedMethod = 'pix';
   String? _selectedCardId;
   int _selectedInstallments = 1;
+  final TextEditingController _cvvController = TextEditingController();
 
   List<Map<String, dynamic>> _savedCards = [];
 
@@ -88,6 +89,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   @override
   void dispose() {
     _statusTimer?.cancel();
+    _cvvController.dispose();
     super.dispose();
   }
 
@@ -171,9 +173,26 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         throw Exception('Identificador do agendamento não encontrado.');
       }
 
-      final String? cardToken = _selectedMethod == 'credit_card' ? _extractCardToken(_selectedCardId) : null;
-      if (_selectedMethod == 'credit_card' && (cardToken == null || cardToken.isEmpty)) {
-        throw Exception('Cartão selecionado não possui token válido.');
+      String? cardToken;
+      String? cvv;
+      
+      if (_selectedMethod == 'credit_card') {
+        cardToken = _extractCardToken(_selectedCardId);
+        if (cardToken == null || cardToken.isEmpty) {
+          throw Exception('Cartão selecionado não possui token válido.');
+        }
+        
+        // PASSO 11: Solicitar CVV na hora do pagamento
+        if (_cvvController.text.trim().isEmpty) {
+          AppAlerts.showWarning(
+            context,
+            title: 'CVV obrigatório',
+            message: 'Digite o CVV do cartão para continuar o pagamento.',
+          );
+          setState(() => _isSubmitting = false);
+          return;
+        }
+        cvv = _cvvController.text.trim();
       }
 
       // Usar createBookingPayment que valida o status do booking antes de criar pagamento
@@ -181,6 +200,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         bookingId,
         paymentMethod: _selectedMethod == 'credit_card' ? 'CREDIT_CARD' : 'PIX',
         cardToken: cardToken,
+        cvv: cvv,
         installments: _selectedMethod == 'credit_card' ? _selectedInstallments : null,
         pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
       );
@@ -342,6 +362,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               const SizedBox(height: 20),
               if (_selectedMethod == 'credit_card')
                 _loadingCards ? const Center(child: CircularProgressIndicator()) : _buildSavedCardsSection(theme),
+              if (_selectedMethod == 'credit_card' && _selectedCardId != null) ...[
+                const SizedBox(height: 20),
+                _buildCvvSection(theme),
+              ],
               if (_selectedMethod == 'credit_card' && widget.workshopAcceptsInstallment) ...[
                 const SizedBox(height: 20),
                 _buildInstallmentsSection(theme),
@@ -412,9 +436,26 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           const SizedBox(height: 12),
           _buildSummaryRow(
             theme,
-            'Orçamento aprovado',
+            'Valor do orçamento final',
             _currencyFormatter.format(widget.serviceAmount),
           ),
+          // PASSO 9: Mostrar split de pagamento (7% MECA / 93% Oficina)
+          if (widget.mecaFee > 0) ...[
+            const SizedBox(height: 8),
+            _buildSummaryRow(
+              theme,
+              'Taxa MECA (7%)',
+              _currencyFormatter.format(widget.mecaFee),
+              secondary: true,
+            ),
+            const SizedBox(height: 8),
+            _buildSummaryRow(
+              theme,
+              'Valor que a oficina receberá',
+              _currencyFormatter.format(widget.serviceAmount - widget.mecaFee),
+              secondary: true,
+            ),
+          ],
           const Divider(height: 24),
           _buildSummaryRow(
             theme,
@@ -585,6 +626,61 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             ),
             if (card != _savedCards.last) const SizedBox(height: 12),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCvvSection(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.lock, color: theme.colorScheme.primary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Código de segurança',
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _cvvController,
+            decoration: InputDecoration(
+              labelText: 'CVV',
+              hintText: '3 ou 4 dígitos',
+              prefixIcon: const Icon(Icons.lock_outline),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+              ),
+            ),
+            keyboardType: TextInputType.number,
+            obscureText: true,
+            maxLength: 4,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Os 3 ou 4 dígitos no verso do seu cartão',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
+            ),
+          ),
         ],
       ),
     );

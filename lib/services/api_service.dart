@@ -1659,6 +1659,7 @@ class ApiService {
     String bookingId, {
     required String paymentMethod,
     String? cardToken,
+    String? cvv,
     int? installments,
     int? pixExpirationInSeconds,
   }) async {
@@ -1708,6 +1709,10 @@ class ApiService {
 
       if (cardToken != null && cardToken.isNotEmpty) {
         payload['cardToken'] = cardToken;
+      }
+
+      if (cvv != null && cvv.isNotEmpty) {
+        payload['cvv'] = cvv;
       }
 
       if (installments != null && installments > 0) {
