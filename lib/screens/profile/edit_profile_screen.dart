@@ -227,12 +227,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         const SizedBox(height: 16),
                         _buildTextField(
                           controller: _lastNameController,
-                          label: 'Sobrenome',
+                          label: 'Sobrenome (opcional)',
                           icon: Icons.person_outline,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) return 'Por favor, insira seu sobrenome';
-                            return null;
-                          },
+                          // Campo opcional - não há validação obrigatória
                         ),
                         const SizedBox(height: 16),
                         _buildTextField(

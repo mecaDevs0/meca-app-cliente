@@ -309,6 +309,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 _buildInfoCard(),
                 const SizedBox(height: 20),
                 
+                // Aviso sobre botão de agendar no final (movido para o topo)
+                _buildBookingHint(),
+                const SizedBox(height: 20),
+                
                 // Mapa e ações rápidas
                 _buildLocationMapCard(),
                 const SizedBox(height: 20),
@@ -319,10 +323,6 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 
                 // Serviços oferecidos melhorados
                 _buildServicesCard(),
-                const SizedBox(height: 16),
-                
-                // Aviso sobre botão de agendar no final
-                _buildBookingHint(),
                 const SizedBox(height: 20),
                 
                 // Botão de agendamento

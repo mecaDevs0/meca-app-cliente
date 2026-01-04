@@ -1220,10 +1220,33 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       subtitle = 'A oficina iniciará o serviço com este valor.';
     }
 
+    // Verificar se é orçamento editado durante serviço
+    final statusHistoryRaw = merged['status_history'] ?? widget.booking['status_history'];
+    bool isEditedQuote = false;
+    try {
+      if (statusHistoryRaw != null) {
+        final statusHistory = statusHistoryRaw is String 
+            ? jsonDecode(statusHistoryRaw) 
+            : statusHistoryRaw;
+        isEditedQuote = statusHistory is Map && statusHistory['previous_quote'] != null;
+      }
+    } catch (e) {
+      // Ignorar erro de parsing
+    }
+
     // Verificar se há orçamento pendente de aprovação
     final isQuotePending = normalizedStatus == 'pending' || 
                           normalizedStatus == 'pendente_cliente' ||
                           (merged['quote_status'] ?? widget.booking['quote_status']) == 'pending';
+
+    // Ajustar título e subtítulo se for orçamento editado
+    if (isQuotePending && isEditedQuote && title == 'Orçamento aprovado') {
+      title = '⚠️ Orçamento Atualizado Durante o Serviço';
+      subtitle = 'A oficina alterou o orçamento durante o serviço. Revise o novo valor e aprove ou rejeite.';
+    } else if (isEditedQuote && normalizedStatus == 'em_andamento' && title == 'Orçamento aprovado') {
+      title = 'Orçamento atualizado e aprovado';
+      subtitle = 'Você aprovou o novo orçamento. O serviço continua com o valor atualizado.';
+    }
     
     return GestureDetector(
       onTap: hasDetailedQuote && isQuotePending ? () {
@@ -1254,7 +1277,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             _formatPriceLabel() ?? '—',
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 32,
+              fontSize: 28,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -1342,28 +1365,43 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 6),
-                                Row(
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 6,
                                   children: [
-                                    Icon(Icons.shopping_cart_outlined, size: 12, color: Colors.white.withOpacity(0.8)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Quantidade: $quantity',
-                                  style: TextStyle(
-                                        color: Colors.white.withOpacity(0.9),
-                                    fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.shopping_cart_outlined, size: 12, color: Colors.white.withOpacity(0.8)),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            'Quantidade: $quantity',
+                                            style: TextStyle(
+                                              color: Colors.white.withOpacity(0.9),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 12),
-                                    Icon(Icons.attach_money, size: 12, color: Colors.white.withOpacity(0.8)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Unitário: ${PriceUtils.formatCurrency(unitPrice)}',
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.9),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.attach_money, size: 12, color: Colors.white.withOpacity(0.8)),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            'Unitário: ${PriceUtils.formatCurrency(unitPrice)}',
+                                            style: TextStyle(
+                                              color: Colors.white.withOpacity(0.9),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -2376,13 +2414,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         ),
                       ),
                     ],
-                        ),
+                  ),
                       ),
                       
                       // Valor total destacado
                       Container(
                         padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
+                      decoration: BoxDecoration(
                           color: Theme.of(context).brightness == Brightness.dark 
                               ? const Color(0xFF2C2C2E)
                               : Colors.grey[50],
@@ -2404,24 +2442,33 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Valor Total',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(context).brightness == Brightness.dark 
-                                    ? Colors.grey[300]
-                                    : Colors.grey[700],
-                                letterSpacing: -0.3,
+                            Flexible(
+                              child: Text(
+                                'Valor Total',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).brightness == Brightness.dark 
+                                      ? Colors.grey[300]
+                                      : Colors.grey[700],
+                                  letterSpacing: -0.3,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            Text(
-                              PriceUtils.formatCurrency(finalPrice) ?? 'R\$ 0,00',
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF00C977),
-                                letterSpacing: -1,
+                            Flexible(
+                              child: Text(
+                                PriceUtils.formatCurrency(finalPrice) ?? 'R\$ 0,00',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF00C977),
+                                  letterSpacing: -1,
+                                ),
+                                textAlign: TextAlign.end,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
@@ -2441,14 +2488,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 width: 1,
                               ),
                             ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                      ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                               Text(
                                 'Detalhamento',
-                                style: TextStyle(
-                                  fontSize: 16,
+                                  style: TextStyle(
+                                    fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: Theme.of(context).brightness == Brightness.dark 
                                       ? Colors.grey[300]
@@ -2458,7 +2505,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               ),
                               const SizedBox(height: 20),
                               
-                              // Items do orçamento
+                                // Items do orçamento
                               if (hasDetailedQuote && quoteItems != null) ...[
                                 ...List<Widget>.from(quoteItems!.asMap().entries.map<Widget>((entry) {
                                   final index = entry.key;
@@ -2522,28 +2569,34 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                                   fontWeight: FontWeight.w500,
                                                   letterSpacing: -0.2,
                                                 ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ],
                                           ),
                                         ),
                                         const SizedBox(width: 16),
                                         // Valor total - destaque verde à direita
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.end,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
-                                              style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.w800,
-                                                color: const Color(0xFF00C977),
-                                                letterSpacing: -0.6,
-                                                height: 1.2,
+                                        Flexible(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                        Text(
+                                          PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
+                                                style: TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: const Color(0xFF00C977),
+                                                  letterSpacing: -0.6,
+                                                  height: 1.2,
+                                                ),
+                                                textAlign: TextAlign.end,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                              textAlign: TextAlign.end,
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -2551,8 +2604,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 })),
                                 if (hasDiagnostic) const SizedBox(height: 12),
                               ],
-                              
-                              // Valor do diagnóstico (se houver)
+                                
+                                // Valor do diagnóstico (se houver)
                               if (hasDiagnostic) ...[
                                 Container(
                                   padding: const EdgeInsets.all(16),
@@ -2587,47 +2640,130 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                       const SizedBox(width: 16),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            const Text(
-                                              'Diagnóstico',
-                                              style: TextStyle(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Diagnóstico',
+                                            style: TextStyle(
                                                 fontSize: 15,
                                                 fontWeight: FontWeight.w600,
                                                 letterSpacing: -0.3,
                                               ),
                                             ),
                                             const SizedBox(height: 2),
-                                            Text(
+                                          Text(
                                               'Análise inicial do veículo',
-                                              style: TextStyle(
+                                            style: TextStyle(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w400,
                                                 color: Theme.of(context).brightness == Brightness.dark 
                                                     ? Colors.grey[400]
                                                     : Colors.grey[600],
-                                              ),
                                             ),
-                                          ],
-                                        ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
                                       ),
-                                      Text(
-                                        PriceUtils.formatCurrency(diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue) ?? 'R\$ 0,00',
-                                        style: TextStyle(
-                                          fontSize: 17,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.blue[700],
-                                          letterSpacing: -0.5,
-                                        ),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                                      Flexible(
+                                        child: Text(
+                                          PriceUtils.formatCurrency(diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue) ?? 'R\$ 0,00',
+                                      style: TextStyle(
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.blue[700],
+                                            letterSpacing: -0.5,
+                                          ),
+                                          textAlign: TextAlign.end,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                      ),
+                                    ),
+                                  ],
                             ],
                           ),
                         ),
                       ],
+                        ],
+                      ),
+                          );
+              },
+            ),
+            // Exibir motivo do orçamento (se houver)
+            Builder(
+              builder: (context) {
+                final merged = _mergeBookingData();
+                final quoteReason = merged['quote_reason'] ?? widget.booking['quote_reason'];
+                
+                if (quoteReason == null || (quoteReason is String && quoteReason.trim().isEmpty)) {
+                  return const SizedBox.shrink();
+                }
+                
+                return Container(
+                  margin: const EdgeInsets.only(top: 24, bottom: 24),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).brightness == Brightness.dark 
+                        ? const Color(0xFF2C2C2E)
+                        : Colors.purple[50],
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Theme.of(context).brightness == Brightness.dark 
+                          ? Colors.purple[800]!
+                          : Colors.purple[200]!,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.purple[400]!,
+                                  Colors.purple[600]!,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.note_alt_rounded, color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              'Motivo do Orçamento',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Theme.of(context).brightness == Brightness.dark 
+                                    ? Colors.white
+                                    : Colors.purple[900],
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        quoteReason.toString(),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w400,
+                          color: Theme.of(context).brightness == Brightness.dark 
+                              ? Colors.grey[300]
+                              : Colors.grey[800],
+                          height: 1.6,
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -2675,10 +2811,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         const SizedBox(width: 12),
                         const Text(
                           'Aprovar Orçamento',
-                          style: TextStyle(
+                    style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                      color: Colors.white,
                             letterSpacing: -0.5,
                           ),
                         ),
@@ -2720,7 +2856,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 18),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
+                  children: [
                             Icon(
                               Icons.close_rounded,
                               color: Colors.red[600],
@@ -2729,7 +2865,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             const SizedBox(width: 12),
                             Text(
                               'Rejeitar Orçamento',
-                              style: TextStyle(
+                          style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.red[600],
@@ -2737,10 +2873,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               ),
                             ),
                           ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
                 );
               },
             ),
@@ -2941,17 +3077,84 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       return;
     }
 
+    // Verificar se é orçamento editado
+    final merged = _mergeBookingData();
+    final statusHistoryRaw = merged['status_history'] ?? widget.booking['status_history'];
+    bool isEditedQuote = false;
+    Map<String, dynamic>? previousQuote = null;
+    try {
+      if (statusHistoryRaw != null) {
+        final statusHistory = statusHistoryRaw is String 
+            ? jsonDecode(statusHistoryRaw) 
+            : statusHistoryRaw;
+        if (statusHistory is Map && statusHistory['previous_quote'] != null) {
+          isEditedQuote = true;
+          previousQuote = statusHistory['previous_quote'] is Map 
+              ? Map<String, dynamic>.from(statusHistory['previous_quote'])
+              : null;
+        }
+      }
+    } catch (e) {
+      // Ignorar erro de parsing
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Aprovar Orçamento'),
+        title: Text(isEditedQuote ? '⚠️ Aprovar Orçamento Atualizado' : 'Aprovar Orçamento'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Você confirma a aprovação deste orçamento?'),
-            const SizedBox(height: 16),
-            if (_bookingDetails?['final_price'] != null || widget.booking['final_price'] != null)
+            Text(isEditedQuote 
+                ? 'A oficina alterou o orçamento durante o serviço. Você confirma a aprovação do novo valor?'
+                : 'Você confirma a aprovação deste orçamento?'),
+            if (isEditedQuote && previousQuote != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Valor anterior: ${PriceUtils.formatCurrency(previousQuote['final_price']) ?? 'R\$ 0,00'}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.orange.shade700,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.attach_money, color: Colors.green.shade700),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Novo valor: ${PriceUtils.formatCurrency(_bookingDetails?['final_price'] ?? widget.booking['final_price']) ?? 'R\$ 0,00'}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (_bookingDetails?['final_price'] != null || widget.booking['final_price'] != null) ...[
+              const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -2974,6 +3177,33 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ],
                 ),
               ),
+            ],
+            if (isEditedQuote) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue.shade700, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Ao aprovar, o serviço continuará com o novo valor. Se rejeitar, o orçamento anterior será restaurado.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
         actions: [
@@ -3012,9 +3242,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         final newStatus = result['data']?['status']?.toString().toLowerCase() ?? 
                          (hasCompletedAt ? 'finalizado_aguardando_pagamento' : 'confirmado');
         
-        final message = hasCompletedAt
-            ? 'Orçamento aprovado com sucesso! Agora você pode realizar o pagamento.'
-            : 'Orçamento aprovado com sucesso! A oficina pode iniciar o serviço agora.';
+        String message;
+        if (isEditedQuote) {
+          message = 'Orçamento atualizado aprovado com sucesso! O serviço continuará com o novo valor.';
+        } else {
+          message = hasCompletedAt
+              ? 'Orçamento aprovado com sucesso! Agora você pode realizar o pagamento.'
+              : 'Orçamento aprovado com sucesso! A oficina pode iniciar o serviço agora.';
+        }
         
         AppAlerts.showSuccess(
           context,
@@ -3503,6 +3738,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final diagnosticValue = _parseDiagnosticValue(diagnosticValueRaw);
     final hasDiagnostic = diagnosticValue != null && diagnosticValue > 0;
     
+    // Verificar se é orçamento editado
+    final statusHistoryRaw = merged['status_history'] ?? widget.booking['status_history'];
+    bool isEditedQuote = false;
+    Map<String, dynamic>? previousQuote = null;
+    try {
+      if (statusHistoryRaw != null) {
+        final statusHistory = statusHistoryRaw is String 
+            ? jsonDecode(statusHistoryRaw) 
+            : statusHistoryRaw;
+        if (statusHistory is Map && statusHistory['previous_quote'] != null) {
+          isEditedQuote = true;
+          previousQuote = statusHistory['previous_quote'] is Map 
+              ? Map<String, dynamic>.from(statusHistory['previous_quote'])
+              : null;
+        }
+      }
+    } catch (e) {
+      // Ignorar erro de parsing
+    }
+    
     // Não pode rejeitar orçamento final
     if (isFinalQuote) {
       AppAlerts.showError(
@@ -3516,13 +3771,60 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Rejeitar Orçamento'),
+        title: Text(isEditedQuote ? '⚠️ Rejeitar Orçamento Atualizado' : 'Rejeitar Orçamento'),
         content: SingleChildScrollView(
           child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Você confirma a rejeição deste orçamento?'),
+            Text(isEditedQuote 
+                ? 'Você confirma a rejeição do orçamento atualizado? O orçamento anterior será restaurado automaticamente e o serviço continuará com o valor original.'
+                : 'Você confirma a rejeição deste orçamento?'),
+            if (isEditedQuote && previousQuote != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Orçamento anterior será restaurado:',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.attach_money, color: Colors.green.shade700),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Valor original: ${PriceUtils.formatCurrency(previousQuote['final_price']) ?? 'R\$ 0,00'}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
               
               // Aviso sobre pagamento do diagnóstico
@@ -3648,7 +3950,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         
         AppAlerts.showSuccess(
           context,
-          message: 'Orçamento rejeitado com sucesso. A oficina foi notificada e poderá enviar um novo orçamento.',
+          message: isEditedQuote 
+              ? 'Orçamento atualizado rejeitado. O orçamento anterior foi restaurado e o serviço continuará com o valor original. A oficina foi notificada.'
+              : 'Orçamento rejeitado com sucesso. A oficina foi notificada e poderá enviar um novo orçamento.',
         );
         
         // Atualizar o status local
