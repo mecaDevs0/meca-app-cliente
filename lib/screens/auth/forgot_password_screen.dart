@@ -37,8 +37,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() => _emailSent = true);
       AppAlerts.showSuccess(
         context,
-        message: 'Enviamos o link de recuperação para o seu email. Verifique também a caixa de spam.',
-        title: 'Email enviado',
+        message: 'Enviamos um código de acesso temporário para o seu email. Use-o como senha para fazer login. Verifique também a caixa de spam.',
+        title: 'Código enviado',
       );
     } else {
       AppAlerts.showError(

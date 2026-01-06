@@ -44,7 +44,7 @@ class HelpCenterScreen extends StatelessWidget {
           _buildContactItem(
             icon: Icons.email,
             title: 'Email',
-            subtitle: 'contato@meca.com.br',
+            subtitle: 'contato@mecabr.com',
             onTap: () {},
           ),
           _buildContactItem(

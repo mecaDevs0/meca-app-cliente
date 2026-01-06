@@ -238,7 +238,7 @@ class EmailService {
     required String customerName,
     required String resetToken,
   }) async {
-    final resetUrl = 'https://meca.com/reset-password?token=$resetToken';
+    final resetUrl = 'https://mecabr.com/reset-password?token=$resetToken';
     
     final content = '''
     <h2>Recuperação de Senha 🔐</h2>
