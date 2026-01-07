@@ -161,7 +161,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }).toList();
 
     // Dividir serviços em Gerais e Especializados
-    final generalServicesNames = ['Mecânica Geral', 'Mecanica Geral', 'Estética Automotiva', 'Estetica Automotiva', 'Funilaria e Pintura', 'Funilaria e Pintura'];
+    final generalServicesNames = ['Mecânica Geral', 'Mecanica Geral', 'Borracharia', 'Estética Automotiva', 'Estetica Automotiva', 'Funilaria e Pintura', 'Funilaria e Pintura'];
     final generalServices = filteredServices.where((service) {
       final name = (service['name'] ?? '').toString();
       return generalServicesNames.any((generalName) => 
@@ -170,15 +170,23 @@ class _ServicesScreenState extends State<ServicesScreen> {
       );
     }).toList();
     
-    // Ordenar para colocar Mecânica Geral primeiro
+    // Ordenar: Mecânica Geral primeiro, depois Borracharia, depois os demais
     generalServices.sort((a, b) {
       final nameA = (a['name'] ?? '').toString().toLowerCase();
       final nameB = (b['name'] ?? '').toString().toLowerCase();
       final isMecanicaA = nameA.contains('mecânica geral') || nameA.contains('mecanica geral');
       final isMecanicaB = nameB.contains('mecânica geral') || nameB.contains('mecanica geral');
+      final isBorrachariaA = nameA.contains('borracharia');
+      final isBorrachariaB = nameB.contains('borracharia');
       
+      // Mecânica Geral sempre primeiro
       if (isMecanicaA && !isMecanicaB) return -1;
       if (!isMecanicaA && isMecanicaB) return 1;
+      
+      // Borracharia segundo (após Mecânica Geral)
+      if (isBorrachariaA && !isBorrachariaB && !isMecanicaB) return -1;
+      if (!isBorrachariaA && isBorrachariaB && !isMecanicaA) return 1;
+      
       return nameA.compareTo(nameB);
     });
     
