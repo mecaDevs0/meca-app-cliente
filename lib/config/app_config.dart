@@ -21,10 +21,10 @@ class AppConfig {
   static const String appName = 'MECA Cliente';
   
   /// Versão do app
-  static const String appVersion = '1.7.7';
+  static const String appVersion = '1.8.1';
   
   /// Build number
-  static const String buildNumber = '161';
+  static const String buildNumber = '164';
   
   // ========================================
   // PAGSEGURO / PAGBANK

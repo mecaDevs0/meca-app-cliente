@@ -5,6 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
+import '../../utils/formatters.dart';
 import '../booking/booking_screen.dart';
 
 
@@ -380,8 +381,8 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            _buildInfoRow(Icons.location_on, 'Endereço', _workshop!['address'] ?? 'Não informado'),
-            _buildInfoRow(Icons.phone, 'Telefone', _workshop!['phone'] ?? 'Não informado'),
+            _buildInfoRow(Icons.location_on, 'Endereço', _workshop!['address']?.toString() ?? 'Não informado'),
+            _buildInfoRow(Icons.phone, 'Telefone', Formatters.formatPhone(_workshop!['phone']?.toString())),
             _buildInfoRow(
               Icons.star,
               'Avaliação',
@@ -1313,6 +1314,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     normalized['address'] = _formatAddress(addressDetails ?? normalized['address']);
     normalized['address_text'] = normalized['address'];
     normalized['rating'] = _parseDouble(normalized['rating']);
+    
+    // Garantir que phone seja preservado (pode vir como string, number ou null)
+    if (normalized['phone'] != null) {
+      normalized['phone'] = normalized['phone'].toString();
+    }
     
     // Garantir que logo_url seja preservado corretamente (mesma lógica da tela de lista)
     normalized['logo_url'] = normalized['logo_url'] ?? normalized['logo'];

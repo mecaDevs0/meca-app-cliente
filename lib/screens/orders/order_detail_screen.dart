@@ -1273,12 +1273,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            _formatPriceLabel() ?? '—',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _formatPriceLabel() ?? '—',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 1,
             ),
           ),
           const SizedBox(height: 6),
@@ -1502,12 +1507,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Text(
-                        _formatPriceLabel() ?? '—',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          _formatPriceLabel() ?? '—',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
                         ),
                       ),
                     ],
@@ -2458,19 +2468,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               ),
                             ),
                             Flexible(
-                              child: Text(
-                                PriceUtils.formatCurrency(finalPrice) ?? 'R\$ 0,00',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF00C977),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  PriceUtils.formatCurrency(finalPrice) ?? 'R\$ 0,00',
+                                  style: TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF00C977),
                                   letterSpacing: -1,
                                 ),
                                 textAlign: TextAlign.end,
                                 maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                          ),
                           ],
                         ),
                       ),
