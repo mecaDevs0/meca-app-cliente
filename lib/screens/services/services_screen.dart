@@ -172,21 +172,36 @@ class _ServicesScreenState extends State<ServicesScreen> {
     
     // Ordenar: Mecânica Geral primeiro, depois Borracharia, depois os demais
     generalServices.sort((a, b) {
-      final nameA = (a['name'] ?? '').toString().toLowerCase();
-      final nameB = (b['name'] ?? '').toString().toLowerCase();
-      final isMecanicaA = nameA.contains('mecânica geral') || nameA.contains('mecanica geral');
-      final isMecanicaB = nameB.contains('mecânica geral') || nameB.contains('mecanica geral');
-      final isBorrachariaA = nameA.contains('borracharia');
-      final isBorrachariaB = nameB.contains('borracharia');
+      final nameA = (a['name'] ?? '').toString().toLowerCase().trim();
+      final nameB = (b['name'] ?? '').toString().toLowerCase().trim();
       
-      // Mecânica Geral sempre primeiro
+      // Verificar Mecânica Geral (com variações)
+      final isMecanicaA = nameA.contains('mecânica geral') || 
+                         nameA.contains('mecanica geral') ||
+                         nameA == 'mecânica geral' ||
+                         nameA == 'mecanica geral';
+      final isMecanicaB = nameB.contains('mecânica geral') || 
+                         nameB.contains('mecanica geral') ||
+                         nameB == 'mecânica geral' ||
+                         nameB == 'mecanica geral';
+      
+      // Verificar Borracharia (com variações)
+      final isBorrachariaA = nameA.contains('borracharia') || 
+                            nameA == 'borracharia' ||
+                            nameA.startsWith('borracharia');
+      final isBorrachariaB = nameB.contains('borracharia') || 
+                            nameB == 'borracharia' ||
+                            nameB.startsWith('borracharia');
+      
+      // Prioridade 1: Mecânica Geral sempre primeiro
       if (isMecanicaA && !isMecanicaB) return -1;
       if (!isMecanicaA && isMecanicaB) return 1;
       
-      // Borracharia segundo (após Mecânica Geral)
+      // Prioridade 2: Borracharia segundo (após Mecânica Geral)
       if (isBorrachariaA && !isBorrachariaB && !isMecanicaB) return -1;
       if (!isBorrachariaA && isBorrachariaB && !isMecanicaA) return 1;
       
+      // Prioridade 3: Demais em ordem alfabética
       return nameA.compareTo(nameB);
     });
     
