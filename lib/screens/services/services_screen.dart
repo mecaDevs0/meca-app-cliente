@@ -161,13 +161,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }).toList();
 
     // Dividir serviços em Gerais e Especializados
-    final generalServicesNames = ['Mecânica Geral', 'Mecanica Geral', 'Borracharia', 'Estética Automotiva', 'Estetica Automotiva', 'Funilaria e Pintura', 'Funilaria e Pintura'];
+    final generalServicesNames = [
+      'Mecânica Geral', 'Mecanica Geral', 'Mecânica geral', 'Mecanica geral',
+      'Borracharia', 'borracharia', 'BORRACHARIA',
+      'Estética Automotiva', 'Estetica Automotiva', 'Estética automotiva', 'Estetica automotiva',
+      'Funilaria e Pintura', 'Funilaria e Pintura', 'Funilaria e pintura'
+    ];
     final generalServices = filteredServices.where((service) {
-      final name = (service['name'] ?? '').toString();
-      return generalServicesNames.any((generalName) => 
-        name.toLowerCase().contains(generalName.toLowerCase()) ||
-        generalName.toLowerCase().contains(name.toLowerCase())
-      );
+      final name = (service['name'] ?? '').toString().toLowerCase().trim();
+      return generalServicesNames.any((generalName) {
+        final generalNameLower = generalName.toLowerCase().trim();
+        return name.contains(generalNameLower) || generalNameLower.contains(name);
+      });
     }).toList();
     
     // Ordenar: Mecânica Geral primeiro, depois Borracharia, depois os demais
