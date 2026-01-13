@@ -2096,12 +2096,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       borderColor = Colors.blue.shade200;
       iconColor = Colors.blue.shade700;
     } else if (rawStatus == 'pendente_cliente' || finalNormalizedStatus == 'pending_customer') {
-      // Verificar se é sugestão de horário ou orçamento
+      // Verificar se é sugestão de horário, orçamento ou serviço iniciado pendente
       final suggestedBy = merged['suggested_by'] ?? merged['sugerido_por'];
       final hasSuggestedDate = merged['suggested_date'] != null || merged['data_sugerida'] != null;
       final isTimeSuggestion = (suggestedBy == 'oficina' || suggestedBy == 'workshop') && hasSuggestedDate;
+      final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
       
-      if (isTimeSuggestion) {
+      if (serviceStartPending) {
+        // É serviço iniciado pela oficina aguardando confirmação do cliente
+        title = 'Serviço Iniciado - Aguardando sua confirmação';
+        description = 'A oficina iniciou o atendimento do seu veículo. Por favor, confirme para prosseguir.';
+        nextStep = 'Confirme o início do serviço usando o botão abaixo. Após confirmar, o serviço será iniciado oficialmente.';
+        icon = Icons.play_circle_outline;
+        cardColor = Colors.blue.shade50;
+        borderColor = Colors.blue.shade200;
+        iconColor = Colors.blue.shade700;
+      } else if (isTimeSuggestion) {
         // É sugestão de horário da oficina
         title = 'Nova sugestão de horário';
         description = 'A oficina sugeriu um novo horário para o agendamento.';
@@ -2288,12 +2298,175 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               return const SizedBox.shrink();
             },
           ),
-          // Botão para aprovar orçamento quando status for pendente_cliente E não for sugestão de horário
-          if (rawStatus == 'pendente_cliente' && !isTimeSuggestion && hasQuote) ...[
-            // Card principal de orçamento - DESIGN MODERNO E ELEGANTE
-            Builder(
-              builder: (context) {
-                final merged = _mergeBookingData();
+          // Botão para confirmar início do serviço quando serviço foi iniciado pela oficina
+          Builder(
+            builder: (context) {
+              final merged = _mergeBookingData();
+              final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
+              final status = merged['status']?.toString() ?? widget.booking['status']?.toString() ?? 'pending';
+              final normalizedStatus = _normalizeStatusKey(status);
+              final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+              
+              if (serviceStartPending && (rawStatus == 'pendente_cliente' || normalizedStatus == 'pending_customer')) {
+                return Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: isDarkMode 
+                            ? Colors.blue[900]!.withOpacity(0.2) 
+                            : Colors.blue[50]!,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.blue[300]!,
+                          width: 2,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.play_circle_outline,
+                                  color: Colors.blue,
+                                  size: 28,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Serviço Iniciado pela Oficina',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDarkMode ? Colors.white : Colors.blue[900]!,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'A oficina iniciou o atendimento',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: isDarkMode ? Colors.grey[300] : Colors.blue[700]!,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'A oficina iniciou o atendimento do seu veículo. Por favor, confirme para prosseguir oficialmente.',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: isDarkMode ? Colors.grey[300] : Colors.blue[800]!,
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _confirmServiceStart(),
+                              icon: const Icon(Icons.check_circle, color: Colors.white, size: 22),
+                              label: const Text(
+                                'Confirmar Início do Serviço',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue[600]!,
+                                padding: const EdgeInsets.symmetric(vertical: 18),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                elevation: 4,
+                                shadowColor: Colors.blue.withOpacity(0.4),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+          // Botão para aprovar orçamento quando status for pendente_cliente E não for sugestão de horário E não for serviço iniciado
+          Builder(
+            builder: (context) {
+              final merged = _mergeBookingData();
+              final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
+              final status = merged['status']?.toString() ?? widget.booking['status']?.toString() ?? 'pending';
+              final normalizedStatus = _normalizeStatusKey(status);
+              final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+              final rawStatus = status.toLowerCase().trim();
+              final isTimeSuggestion = merged['suggested_time'] != null || widget.booking['suggested_time'] != null;
+              
+              // IMPORTANTE: Verificar se há orçamento válido (final_price > 0 ou quote_items não vazio)
+              final finalPriceRaw = merged['final_price'] ?? merged['finalPrice'] ?? widget.booking['final_price'] ?? widget.booking['finalPrice'];
+              final finalPrice = finalPriceRaw != null 
+                  ? (finalPriceRaw is int ? finalPriceRaw : (finalPriceRaw is double ? finalPriceRaw : (finalPriceRaw is String ? double.tryParse(finalPriceRaw) ?? 0 : 0)))
+                  : 0;
+              
+              final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
+              final hasQuoteItems = quoteItemsRaw != null && 
+                  ((quoteItemsRaw is List && quoteItemsRaw.isNotEmpty) ||
+                   (quoteItemsRaw is String && quoteItemsRaw.trim().isNotEmpty && quoteItemsRaw != '[]'));
+              
+              // Só considerar que há orçamento se final_price > 0 OU se há quote_items válidos
+              final hasQuote = (finalPrice > 0) || hasQuoteItems;
+              
+              // Log para debug
+              debugPrint('🔍 [OrderDetail] Verificando exibição de orçamento:');
+              debugPrint('  - rawStatus: $rawStatus');
+              debugPrint('  - finalPriceRaw: $finalPriceRaw');
+              debugPrint('  - finalPrice: $finalPrice');
+              debugPrint('  - quoteItemsRaw: $quoteItemsRaw');
+              debugPrint('  - hasQuoteItems: $hasQuoteItems');
+              debugPrint('  - hasQuote: $hasQuote');
+              debugPrint('  - isTimeSuggestion: $isTimeSuggestion');
+              debugPrint('  - serviceStartPending: $serviceStartPending');
+              
+              // CRITICAL: Só exibir orçamento se:
+              // 1. Status for "pendente_cliente" (oficina enviou orçamento e está aguardando aprovação)
+              // 2. NÃO for sugestão de horário
+              // 3. HÁ orçamento válido (final_price > 0 OU quote_items não vazio)
+              // 4. Serviço não foi iniciado (não está aguardando confirmação de início)
+              final shouldShowQuote = rawStatus == 'pendente_cliente' && 
+                                      !isTimeSuggestion && 
+                                      hasQuote && 
+                                      !serviceStartPending;
+              
+              debugPrint('  - shouldShowQuote: $shouldShowQuote');
+              
+              if (!shouldShowQuote) {
+                return const SizedBox.shrink();
+              }
+              
+              // Se chegou aqui, significa que deve exibir o card de orçamento
+              if (shouldShowQuote) {
+                // Card principal de orçamento - DESIGN MODERNO E ELEGANTE
+                return Builder(
+                  builder: (context) {
+                    final merged = _mergeBookingData();
                 final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
                 
                 // Processar quoteItems de forma robusta
@@ -2704,10 +2877,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         ],
                       ),
                           );
-              },
-            ),
-            // Exibir motivo do orçamento (se houver)
-            Builder(
+                  },
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+          // Exibir motivo do orçamento (se houver)
+          Builder(
               builder: (context) {
                 final merged = _mergeBookingData();
                 final quoteReason = merged['quote_reason'] ?? widget.booking['quote_reason'];
@@ -2782,11 +2959,49 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 );
               },
             ),
-            const SizedBox(height: 24),
-            
-            // Botões de ação - DESIGN MODERNO E ELEGANTE
-            // Botão de aprovar
-            Container(
+          // Botões de ação - DESIGN MODERNO E ELEGANTE
+          // IMPORTANTE: Só exibir se houver orçamento válido e status correto
+          Builder(
+            builder: (context) {
+              final merged = _mergeBookingData();
+              final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
+              final status = merged['status']?.toString() ?? widget.booking['status']?.toString() ?? 'pending';
+              final rawStatus = status.toLowerCase().trim();
+              final isTimeSuggestion = merged['suggested_time'] != null || widget.booking['suggested_time'] != null;
+              
+              // Verificar se há orçamento válido
+              final finalPriceRaw = merged['final_price'] ?? merged['finalPrice'] ?? widget.booking['final_price'] ?? widget.booking['finalPrice'];
+              final finalPrice = finalPriceRaw != null 
+                  ? (finalPriceRaw is int ? finalPriceRaw : (finalPriceRaw is double ? finalPriceRaw : (finalPriceRaw is String ? double.tryParse(finalPriceRaw) ?? 0 : 0)))
+                  : 0;
+              
+              final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
+              final hasQuoteItems = quoteItemsRaw != null && 
+                  ((quoteItemsRaw is List && quoteItemsRaw.isNotEmpty) ||
+                   (quoteItemsRaw is String && quoteItemsRaw.trim().isNotEmpty && quoteItemsRaw != '[]'));
+              
+              final hasQuote = (finalPrice > 0) || hasQuoteItems;
+              final shouldShowQuote = rawStatus == 'pendente_cliente' && 
+                                      !isTimeSuggestion && 
+                                      hasQuote && 
+                                      !serviceStartPending;
+              
+              debugPrint('🔍 [OrderDetail] Verificando exibição de BOTÕES de orçamento:');
+              debugPrint('  - rawStatus: $rawStatus');
+              debugPrint('  - finalPrice: $finalPrice');
+              debugPrint('  - hasQuoteItems: $hasQuoteItems');
+              debugPrint('  - hasQuote: $hasQuote');
+              debugPrint('  - shouldShowQuote: $shouldShowQuote');
+              
+              if (!shouldShowQuote) {
+                return const SizedBox.shrink();
+              }
+              
+              return Column(
+                children: [
+                  const SizedBox(height: 24),
+                  // Botão de aprovar
+                  Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
@@ -2990,8 +3205,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 );
               },
             ),
-          ],
-          if (normalizedStatus == 'in_progress' || normalizedStatus == 'awaiting_payment' || normalizedStatus == 'completed') ...[
+                ],
+              );
+            },
+          ),
+          Builder(
+            builder: (context) {
+              final merged = _mergeBookingData();
+              final finalStatus = merged['status'] ?? widget.booking['status'] ?? 'pending';
+              final normalizedStatus = _normalizeStatusKey(finalStatus);
+              if (normalizedStatus == 'in_progress' || normalizedStatus == 'awaiting_payment' || normalizedStatus == 'completed') {
+                return Column(
+                  children: [
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -3008,8 +3233,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ),
             const SizedBox(height: 12),
-          ],
-          if (normalizedStatus == 'awaiting_payment') ...[
+                  ],
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+          Builder(
+            builder: (context) {
+              final merged = _mergeBookingData();
+              final finalStatus = merged['status'] ?? widget.booking['status'] ?? 'pending';
+              final normalizedStatus = _normalizeStatusKey(finalStatus);
+              if (normalizedStatus == 'awaiting_payment') {
+                return Column(
+                  children: [
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -3032,8 +3269,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ),
             const SizedBox(height: 12),
-          ],
-          if (normalizedStatus == 'completed') ...[
+                  ],
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+          Builder(
+            builder: (context) {
+              final merged = _mergeBookingData();
+              final finalStatus = merged['status'] ?? widget.booking['status'] ?? 'pending';
+              final normalizedStatus = _normalizeStatusKey(finalStatus);
+              if (normalizedStatus == 'completed') {
+                return Column(
+                  children: [
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -3056,7 +3305,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ),
             const SizedBox(height: 12),
-          ],
+                  ],
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
         ],
       ),
     );
@@ -3081,6 +3335,127 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Future<void> _approveQuoteWithItems(List<Map<String, dynamic>>? selectedItems) async {
     // Por enquanto, aprovar tudo - depois podemos implementar seleção parcial
     await _approveQuote();
+  }
+
+  /// Confirmar início do serviço quando a oficina iniciou
+  Future<void> _confirmServiceStart() async {
+    final bookingId = widget.booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) {
+      AppAlerts.showError(context, message: 'Erro: ID do agendamento não encontrado.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1A1A1A) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.play_circle_outline, color: Colors.blue, size: 28),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Confirmar Início do Serviço',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Deseja confirmar o início do serviço?',
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.grey[300] : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Após confirmar, o serviço será iniciado oficialmente e você poderá acompanhar o progresso.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.grey[400] : Colors.grey[600],
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.grey[400]! : Colors.grey[700]!,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue[600]!,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text(
+              'Confirmar',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final result = await _apiService.confirmServiceStart(bookingId);
+      
+      if (!mounted) return;
+      
+      if (result['success'] == true) {
+        _apiService.invalidateBookingsCache();
+        _apiService.invalidateBookingCache(bookingId);
+        
+        await _loadBookingDetails(forceRefresh: true);
+        
+        AppAlerts.showSuccess(
+          context,
+          message: 'Serviço confirmado com sucesso! O atendimento do seu veículo foi iniciado oficialmente.',
+        );
+        
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (mounted) {
+            Navigator.of(context).pop(true);
+          }
+        });
+      } else {
+        AppAlerts.showError(
+          context,
+          message: result['error']?.toString() ?? 'Erro ao confirmar início do serviço.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppAlerts.showError(
+        context,
+        message: 'Erro: ${e.toString()}',
+      );
+    }
   }
 
   Future<void> _approveQuote() async {

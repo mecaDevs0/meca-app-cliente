@@ -758,6 +758,27 @@ class ApiService {
 
   // Cancelar agendamento
   // Aprovar orçamento proposto pela oficina
+  Future<Map<String, dynamic>> confirmServiceStart(String bookingId) async {
+    try {
+      await loadToken();
+      final response = await _dio.put('/bookings/$bookingId/confirm-service-start');
+      
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'data': response.data['data']};
+      } else {
+        return {'success': false, 'error': response.data['error'] ?? 'Erro ao confirmar início do serviço'};
+      }
+    } catch (e) {
+      if (e is DioException) {
+        final errorMessage = e.response?.data?['error']?.toString() ?? 
+                            e.message ?? 
+                            'Erro ao confirmar início do serviço';
+        return {'success': false, 'error': errorMessage};
+      }
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   Future<Map<String, dynamic>> approveQuote(String bookingId) async {
     try {
       await loadToken();

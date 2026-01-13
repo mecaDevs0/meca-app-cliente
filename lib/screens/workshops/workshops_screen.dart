@@ -37,7 +37,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _cepController = TextEditingController();
   String _selectedService = 'Todos';
-  String _selectedDistance = 'Até 10km'; // Padrão: 10km conforme especificação
+  String _selectedDistance = 'Até 50km'; // Padrão: 50km conforme especificação
   String _selectedRating = 'Todos';
   String _selectedInstallment = 'Todos';
   String _sortBy = 'distancia';
@@ -81,27 +81,12 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         });
       }
 
-      // Converter filtro de distância para km (padrão 10km)
+      // Converter filtro de distância para km (padrão 50km)
       double? radiusKm; // null = buscar todas
       if (_selectedDistance != 'Todos') {
         switch (_selectedDistance) {
-          case 'Até 1km':
-            radiusKm = 1.0;
-            break;
-          case 'Até 5km':
-            radiusKm = 5.0;
-            break;
-          case 'Até 10km':
-            radiusKm = 10.0;
-            break;
-          case 'Até 20km':
-            radiusKm = 20.0;
-            break;
           case 'Até 50km':
             radiusKm = 50.0;
-            break;
-          case 'Até 100km':
-            radiusKm = 100.0;
             break;
           case 'Até 200km':
             radiusKm = 200.0;
@@ -1058,23 +1043,8 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
             distanceValue = double.tryParse(distance.replaceAll(' km', '').trim()) ?? 0.0;
           }
           switch (_selectedDistance) {
-            case 'Até 1km':
-              if (distanceValue > 1.0) return false;
-              break;
-            case 'Até 5km':
-              if (distanceValue > 5.0) return false;
-              break;
-            case 'Até 10km':
-              if (distanceValue > 10.0) return false;
-              break;
-            case 'Até 20km':
-              if (distanceValue > 20.0) return false;
-              break;
             case 'Até 50km':
               if (distanceValue > 50.0) return false;
-              break;
-            case 'Até 100km':
-              if (distanceValue > 100.0) return false;
               break;
             case 'Até 200km':
               if (distanceValue > 200.0) return false;
@@ -1301,7 +1271,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                               _buildFilterSection(
                                 'Distância',
                                 _selectedDistance,
-                                ['Todos', 'Até 1km', 'Até 5km', 'Até 10km', 'Até 20km', 'Até 50km', 'Até 100km', 'Até 200km'],
+                                ['Até 50km', 'Até 200km', 'Todos'],
                                 isDarkMode,
                                 (value) {
                                   setModalState(() {

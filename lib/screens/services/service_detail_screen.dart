@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart' show Position;
+import 'package:geolocator/geolocator.dart' show Position, Geolocator;
 
 import '../../services/api_service.dart';
 import '../../services/location_service.dart';
@@ -94,11 +94,13 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
       }
 
       // Carregar oficinas que oferecem este serviço (mesmo sem localização)
+      // IMPORTANTE: Não passar coordenadas para buscar TODAS as oficinas, não apenas as próximas
+      // O usuário pode filtrar por distância depois se quiser
       final workshopsResult = await _apiService.getWorkshopsByService(
         widget.serviceId,
-        lat: _currentPosition?.latitude,
-        lng: _currentPosition?.longitude,
-        radiusKm: _currentPosition != null ? 50.0 : null,
+        lat: null, // Não passar coordenadas para buscar todas as oficinas
+        lng: null,
+        radiusKm: null, // Não limitar por raio para mostrar todas as oficinas
       );
 
       if (!mounted) return;
@@ -109,8 +111,45 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
             final workshop = Map<String, dynamic>.from(e as Map);
             // Normalizar rating para garantir que seja double (não String)
             workshop['rating'] = _parseRating(workshop['rating']);
+            
+            // Calcular distância se não vier do endpoint e tivermos localização do usuário
+            if (_currentPosition != null && (workshop['distance'] == null || workshop['distance'] == 0)) {
+              final lat = workshop['latitude'];
+              final lng = workshop['longitude'];
+              
+              if (lat != null && lng != null) {
+                try {
+                  final latDouble = lat is num ? lat.toDouble() : double.tryParse(lat.toString());
+                  final lngDouble = lng is num ? lng.toDouble() : double.tryParse(lng.toString());
+                  
+                  if (latDouble != null && lngDouble != null) {
+                    final distanceInMeters = Geolocator.distanceBetween(
+                      _currentPosition!.latitude,
+                      _currentPosition!.longitude,
+                      latDouble,
+                      lngDouble,
+                    );
+                    // Converter metros para km
+                    workshop['distance'] = distanceInMeters / 1000.0;
+                  }
+                } catch (e) {
+                  // Se falhar ao calcular, deixar null (será mostrado como "0.0 km")
+                  workshop['distance'] = null;
+                }
+              }
+            }
+            
             return workshop;
           }).toList();
+          
+          // Ordenar por distância se tivermos localização (oficinas mais próximas primeiro)
+          if (_currentPosition != null) {
+            _workshops.sort((a, b) {
+              final distA = a['distance'] as double? ?? double.infinity;
+              final distB = b['distance'] as double? ?? double.infinity;
+              return distA.compareTo(distB);
+            });
+          }
         });
       } else {
         // Não definir erro se falhar ao carregar oficinas, apenas mostrar lista vazia
@@ -518,12 +557,25 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                             color: Colors.grey[600],
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            '${workshop['distance']?.toStringAsFixed(1) ?? '0.0'} km',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
+                          Builder(
+                            builder: (context) {
+                              final distance = workshop['distance'];
+                              String distanceText;
+                              if (distance != null && distance is num && distance > 0) {
+                                distanceText = '${distance.toStringAsFixed(1)} km';
+                              } else if (_currentPosition == null) {
+                                distanceText = 'Distância não disponível';
+                              } else {
+                                distanceText = 'Calculando...';
+                              }
+                              return Text(
+                                distanceText,
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
+                              );
+                            },
                           ),
                           const SizedBox(width: 16),
                           Icon(
@@ -559,13 +611,26 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                     color: const Color(0xFF00C977).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
-                    '${workshop['distance']?.toStringAsFixed(1) ?? '0.0'} km',
-                    style: const TextStyle(
-                      color: Color(0xFF00C977),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: Builder(
+                    builder: (context) {
+                      final distance = workshop['distance'];
+                      String distanceText;
+                      if (distance != null && distance is num && distance > 0) {
+                        distanceText = '${distance.toStringAsFixed(1)} km';
+                      } else if (_currentPosition == null) {
+                        distanceText = 'N/A';
+                      } else {
+                        distanceText = '...';
+                      }
+                      return Text(
+                        distanceText,
+                        style: const TextStyle(
+                          color: Color(0xFF00C977),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
