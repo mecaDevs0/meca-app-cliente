@@ -1,8 +1,9 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../config/app_config.dart';
 
 class EmailService {
-  static const String _apiUrl = 'http://18.222.129.59';
+  static String get _apiUrl => AppConfig.apiBaseUrl;
   
   // Templates de email com logo MECA
   static const String _emailTemplate = '''

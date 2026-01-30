@@ -142,6 +142,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
+        // Invalidar cache ANTES de retornar para garantir dados atualizados
+        _apiService.invalidateProfileCache();
+        // Aguardar um pouco para garantir que o cache foi invalidado
+        await Future.delayed(const Duration(milliseconds: 100));
         // Usar Future.microtask para evitar crash ao navegar
         Future.microtask(() {
           if (mounted) {

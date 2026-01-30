@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
@@ -34,6 +36,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _locationPermissionDenied = false;
   bool _locationPermissionDeniedForever = false;
   bool _locationServicesDisabled = false;
+  bool _isInSaoPaulo = false;
+  bool _checkingLocation = false;
 
   @override
   void initState() {
@@ -103,6 +107,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                       status == 'confirmed' || 
                                       status == 'confirmado' ||
                                       status == 'pendente_cliente' ||
+                                      status == 'aguardando_autorizacao_inicio' ||
+                                      statusLower == 'awaiting_service_start' ||
                                       statusLower == 'pending_cliente' ||
                                       statusLower == 'pending_customer';
           
@@ -140,6 +146,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           }
         });
         
+        if (!mounted) return;
         setState(() {
           _upcomingBookings = upcoming.take(3).toList(); // Pegar apenas os 3 mais próximos
           _inProgressBookings = inProgress;
@@ -152,24 +159,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           final position = await _locationService.getCurrentPosition();
           if (position != null) {
             _currentPosition = position;
+            print('📍 [Home] Localização obtida: lat=${position.latitude}, lng=${position.longitude}');
             await _updateNearbyWorkshops(position.latitude, position.longitude);
+            print('📍 [Home] Chamando _checkIfInSaoPaulo...');
+            await _checkIfInSaoPaulo(position.latitude, position.longitude);
+            print('📍 [Home] _checkIfInSaoPaulo concluído');
           } else {
             await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude);
+            await _checkIfInSaoPaulo(_fallbackLatitude, _fallbackLongitude);
           }
         } catch (e) {
           print('Erro ao obter localização: $e');
           await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude);
+          await _checkIfInSaoPaulo(_fallbackLatitude, _fallbackLongitude);
         }
       } else {
+        if (!mounted) return;
         setState(() {
           _nearbyWorkshops = [];
+          _isInSaoPaulo = false;
         });
       }
       
     } catch (e) {
       print('Erro ao carregar dados: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -198,6 +215,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: _buildHeader(),
           ),
           const SizedBox(height: 24),
+          // Card SOS Guincho (apenas para São Paulo Capital)
+          Builder(
+            builder: (context) {
+              print('🔍 [SOS Guincho] Build: _isInSaoPaulo = $_isInSaoPaulo, _checkingLocation = $_checkingLocation');
+              if (_isInSaoPaulo) {
+                print('✅ [SOS Guincho] Exibindo card SOS!');
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _buildSosGuinchoCard(),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                );
+              } else {
+                print('⚠️ [SOS Guincho] Card NÃO será exibido (_isInSaoPaulo = false)');
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _buildQuickActions(),
@@ -344,6 +382,189 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildSosGuinchoCard() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    return GestureDetector(
+      onTap: () async {
+        const phoneNumber = '+551130644243';
+        const message = 'Olá! Preciso de um guincho urgente. Estou na rua e preciso de ajuda imediata.';
+        final encodedMessage = Uri.encodeComponent(message);
+        final whatsappUrl = 'https://wa.me/$phoneNumber?text=$encodedMessage';
+        
+        try {
+          final uri = Uri.parse(whatsappUrl);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Não foi possível abrir o WhatsApp. Verifique se o app está instalado.'),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Erro ao abrir WhatsApp: $e'),
+              ),
+            );
+          }
+        }
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDarkMode
+                ? [
+                    const Color(0xFF1A1A2E),
+                    const Color(0xFF16213E),
+                    const Color(0xFF0F3460),
+                  ]
+                : [
+                    const Color(0xFFE8F4FD),
+                    const Color(0xFFD1E7F5),
+                    const Color(0xFFB8DAED),
+                  ],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF00C977).withOpacity(0.15),
+              blurRadius: 12,
+              offset: const Offset(0, 0),
+              spreadRadius: 2,
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 0),
+              spreadRadius: 1,
+            ),
+          ],
+          border: Border.all(
+            color: const Color(0xFF00C977).withOpacity(0.3),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Ícone SOS com animação visual
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFFF3B30),
+                    Color(0xFFFF2D55),
+                  ],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF3B30).withOpacity(0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Text(
+                  '⚠️',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 44,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Conteúdo do card
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF3B30).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'SOS',
+                          style: TextStyle(
+                            color: Color(0xFFFF3B30),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'GUINCHO',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 2.5,
+                          color: Color(0xFF00C977),
+                          height: 1.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Precisa de guincho?',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDarkMode ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Toque para chamar no WhatsApp',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Ícone de seta
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00C977).withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.arrow_forward_ios,
+                color: Color(0xFF00C977),
+                size: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -824,6 +1045,102 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
 
     return status;
+  }
+
+  Future<void> _checkIfInSaoPaulo(double latitude, double longitude) async {
+    if (_checkingLocation) {
+      print('⚠️ [SOS Guincho] Já está verificando localização, ignorando...');
+      return;
+    }
+    
+    print('🔍 [SOS Guincho] ========== INICIANDO VERIFICAÇÃO ==========');
+    print('🔍 [SOS Guincho] Coordenadas recebidas: lat=$latitude, lng=$longitude');
+    
+    if (!mounted) return;
+    setState(() {
+      _checkingLocation = true;
+    });
+    
+    try {
+      // Coordenadas aproximadas de São Paulo Capital
+      // Latitude: -23.5505, Longitude: -46.6333
+      // Raio aproximado: ~50km do centro (aumentado para cobrir toda a capital)
+      const double saoPauloLat = -23.5505;
+      const double saoPauloLng = -46.6333;
+      const double radiusKm = 50.0; // Aumentado para 50km para cobrir toda a capital
+      
+      // Calcular distância do centro de São Paulo
+      final distance = Geolocator.distanceBetween(
+        saoPauloLat,
+        saoPauloLng,
+        latitude,
+        longitude,
+      ) / 1000; // Converter para km
+      
+      print('🔍 [SOS Guincho] Distância do centro SP: ${distance.toStringAsFixed(2)}km');
+      
+      // Verificar se está dentro do raio
+      final isInRadius = distance <= radiusKm;
+      print('🔍 [SOS Guincho] Está no raio? $isInRadius');
+      
+      // Verificação adicional: usar geocoding para confirmar cidade
+      // IMPORTANTE: Se estiver no raio de 50km, considerar como SP mesmo se geocoding falhar
+      bool isSaoPauloCity = false;
+      if (isInRadius) {
+        try {
+          print('🔍 [SOS Guincho] Fazendo geocoding para confirmar cidade...');
+          final placemarks = await placemarkFromCoordinates(latitude, longitude);
+          if (placemarks.isNotEmpty) {
+            final place = placemarks.first;
+            final city = place.locality?.toLowerCase() ?? '';
+            final adminArea = place.administrativeArea?.toLowerCase() ?? '';
+            
+            print('🔍 [SOS Guincho] Cidade: $city, Estado: $adminArea');
+            
+            // Verificar se é São Paulo, SP
+            isSaoPauloCity = (city.contains('são paulo') || city.contains('sao paulo')) &&
+                            (adminArea.contains('sp') || adminArea.contains('são paulo'));
+            
+            print('🔍 [SOS Guincho] Geocoding confirmou São Paulo? $isSaoPauloCity');
+            
+            // Se geocoding não confirmar mas está no raio de 50km, usar distância como fallback
+            if (!isSaoPauloCity) {
+              print('⚠️ [SOS Guincho] Geocoding não confirmou, mas está no raio - usando distância');
+              isSaoPauloCity = true; // Se está dentro de 50km do centro, considerar SP
+            }
+          } else {
+            print('⚠️ [SOS Guincho] Nenhum placemark encontrado, usando verificação de distância');
+            // Se não conseguir geocoding mas está no raio, considerar como SP
+            isSaoPauloCity = true;
+          }
+        } catch (e) {
+          print('❌ [SOS Guincho] Erro ao fazer geocoding: $e');
+          // Se geocoding falhar, usar apenas a verificação de distância
+          // Se está dentro de 50km, considerar como SP
+          isSaoPauloCity = true;
+          print('🔍 [SOS Guincho] Usando verificação de distância apenas: $isSaoPauloCity');
+        }
+      } else {
+        print('⚠️ [SOS Guincho] Fora do raio de ${radiusKm}km - não exibindo card');
+      }
+      
+      print('✅ [SOS Guincho] Resultado final: _isInSaoPaulo = $isSaoPauloCity');
+      
+      if (!mounted) return;
+      print('✅ [SOS Guincho] Atualizando estado: _isInSaoPaulo = $isSaoPauloCity');
+      setState(() {
+        _isInSaoPaulo = isSaoPauloCity;
+        _checkingLocation = false;
+      });
+      print('✅ [SOS Guincho] Estado atualizado via setState! Card deve ${isSaoPauloCity ? "aparecer" : "NÃO aparecer"}');
+    } catch (e) {
+      print('❌ [SOS Guincho] Erro ao verificar localização São Paulo: $e');
+      if (!mounted) return;
+      setState(() {
+        _isInSaoPaulo = false;
+        _checkingLocation = false;
+      });
+    }
   }
 
   Future<void> _updateNearbyWorkshops(double latitude, double longitude) async {

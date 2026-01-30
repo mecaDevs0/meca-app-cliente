@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/app_alerts.dart';
+// Observação: no PagBank, o token do cartão (ex: "CARD_...") só é retornado após um pagamento aprovado com `store/save=true`.
 
 class SavedCardsScreen extends StatefulWidget {
   const SavedCardsScreen({Key? key}) : super(key: key);
@@ -24,11 +25,13 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
   }
 
   Future<void> _loadSavedCards() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     
     try {
       final result = await _apiService.getSavedCards();
       
+      if (!mounted) return;
       if (result['success']) {
         setState(() {
           _savedCards = List<Map<String, dynamic>>.from(result['data'] ?? []);
@@ -41,6 +44,7 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _savedCards = [];
         _loading = false;
@@ -200,7 +204,7 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (card['isDefault'])
+            if (card['isDefault'] == true || card['is_default'] == true)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -364,242 +368,10 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
   }
 
   void _showAddCardDialog() {
-    final cardNumberController = TextEditingController();
-    final holderNameController = TextEditingController();
-    final expiryMonthController = TextEditingController();
-    final expiryYearController = TextEditingController();
-    final cvvController = TextEditingController();
-    bool isLoading = false;
-    String? selectedCardType;
-
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Adicionar Cartão'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Informe os dados do seu cartão de crédito. Os dados são criptografados e seguros.',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: cardNumberController,
-                      decoration: InputDecoration(
-                        labelText: 'Número do cartão',
-                        hintText: '1234 5678 9012 3456',
-                        prefixIcon: const Icon(Icons.credit_card),
-                        suffixIcon: selectedCardType != null
-                            ? Icon(
-                                selectedCardType == 'VISA' ? Icons.credit_card : Icons.credit_card,
-                                color: selectedCardType == 'VISA' ? Colors.blue : Colors.orange,
-                              )
-                            : null,
-                      ),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(19),
-                      ],
-                      onChanged: (value) {
-                        // Detectar bandeira
-                        final digits = value.replaceAll(' ', '');
-                        if (digits.isNotEmpty) {
-                          if (digits.startsWith('4')) {
-                            setDialogState(() => selectedCardType = 'VISA');
-                          } else if (digits.startsWith('5') || digits.startsWith('2')) {
-                            setDialogState(() => selectedCardType = 'MASTERCARD');
-                          } else if (digits.startsWith('3')) {
-                            setDialogState(() => selectedCardType = 'AMEX');
-                          } else {
-                            setDialogState(() => selectedCardType = null);
-                          }
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: holderNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Nome impresso no cartão',
-                        hintText: 'NOME COMPLETO',
-                        prefixIcon: Icon(Icons.person),
-                      ),
-                      textCapitalization: TextCapitalization.characters,
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: expiryMonthController,
-                            decoration: const InputDecoration(
-                              labelText: 'Mês',
-                              hintText: 'MM',
-                            ),
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(2),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: expiryYearController,
-                            decoration: const InputDecoration(
-                              labelText: 'Ano',
-                              hintText: 'AAAA',
-                            ),
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(4),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: cvvController,
-                            decoration: const InputDecoration(
-                              labelText: 'CVV',
-                              hintText: '123',
-                            ),
-                            keyboardType: TextInputType.number,
-                            obscureText: true,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(4),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isLoading ? null : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: isLoading
-                      ? null
-                      : () async {
-                          final cardNumber = cardNumberController.text.replaceAll(' ', '');
-                          final holderName = holderNameController.text.trim();
-                          final expiryMonth = expiryMonthController.text.trim();
-                          final expiryYear = expiryYearController.text.trim();
-                          final cvv = cvvController.text.trim();
-
-                          if (cardNumber.isEmpty || cardNumber.length < 13) {
-                            AppAlerts.showWarning(
-                              dialogContext,
-                              message: 'Informe um número de cartão válido.',
-                              title: 'Campo obrigatório',
-                            );
-                            return;
-                          }
-
-                          if (holderName.isEmpty) {
-                            AppAlerts.showWarning(
-                              dialogContext,
-                              message: 'Informe o nome impresso no cartão.',
-                              title: 'Campo obrigatório',
-                            );
-                            return;
-                          }
-
-                          if (expiryMonth.isEmpty || expiryYear.isEmpty) {
-                            AppAlerts.showWarning(
-                              dialogContext,
-                              message: 'Informe o mês e ano de validade.',
-                              title: 'Campo obrigatório',
-                            );
-                            return;
-                          }
-
-                          if (cvv.isEmpty || cvv.length < 3) {
-                            AppAlerts.showWarning(
-                              dialogContext,
-                              message: 'Informe o CVV do cartão.',
-                              title: 'Campo obrigatório',
-                            );
-                            return;
-                          }
-
-                          setDialogState(() => isLoading = true);
-
-                          try {
-                            // Obter customerId do token (será pego automaticamente pelo backend)
-                            final saveResult = await _apiService.saveCardDirect(
-                              customerId: '', // Backend pega do token JWT
-                              cardNumber: cardNumber,
-                              expiryMonth: expiryMonth,
-                              expiryYear: expiryYear,
-                              cvv: cvv,
-                              holderName: holderName,
-                            );
-
-                            if (saveResult['success']) {
-                              Navigator.of(dialogContext).pop();
-                              await _loadSavedCards();
-                              if (mounted) {
-                                setState(() {
-                                  _hasChanges = true;
-                                });
-                              }
-                        AppAlerts.showSuccess(
-                          context,
-                                message: 'Cartão tokenizado salvo com sucesso!',
-                        );
-                      } else {
-                        AppAlerts.showError(
-                          dialogContext,
-                          message: saveResult['error'] ?? 'Não foi possível salvar o cartão.',
-                        );
-                      }
-                    } catch (e) {
-                      AppAlerts.showError(
-                        dialogContext,
-                        message: 'Não foi possível salvar o cartão. Tente novamente.',
-                      );
-                    } finally {
-                            setDialogState(() => isLoading = false);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C977),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : const Text('Adicionar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    AppAlerts.showWarning(
+      context,
+      title: 'Salvar cartão',
+      message: 'Por segurança e regras do PagBank, o cartão só pode ser salvo após um pagamento aprovado. Faça um pagamento com cartão e marque a opção "Salvar cartão".',
     );
   }
 }

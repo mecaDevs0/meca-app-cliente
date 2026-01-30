@@ -414,7 +414,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         return;
       }
 
-      final result = await _apiService.getBookingDetails(bookingId);
+      final result = await _apiService.getBookingDetails(bookingId, forceRefresh: true);
 
       if (!mounted) return;
 
@@ -473,7 +473,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         _apiService.invalidateBookingsCache();
       }
 
-      final result = await _apiService.getBookingDetails(bookingId);
+      final result = await _apiService.getBookingDetails(bookingId, forceRefresh: forceRefresh);
 
       if (!mounted) return;
 
@@ -511,7 +511,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       final bookingId = widget.booking['id']?.toString() ?? '';
       if (bookingId.isEmpty) return;
 
-      final bookingResult = await _apiService.getBookingDetails(bookingId);
+      final bookingResult = await _apiService.getBookingDetails(bookingId, forceRefresh: true);
       if (bookingResult['success'] && bookingResult['data'] != null) {
         final updatedBooking = bookingResult['data'];
         if (updatedBooking is! Map<String, dynamic>) {
@@ -614,12 +614,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     if (paid == true) {
       _paymentPromptDisplayed = false;
-      await _pollBookingStatus();
+      // Invalidar cache e recarregar booking imediatamente
+      final bookingId = widget.booking['id']?.toString();
+      if (bookingId != null) {
+        _apiService.invalidateBookingCache(bookingId);
+        _apiService.invalidateBookingsCache();
+      }
+      // Recarregar detalhes do booking para atualizar status
+      await _loadBookingDetails(forceRefresh: true);
       if (!mounted) return;
       AppAlerts.showSuccess(
         context,
         message: 'Pagamento registrado! Obrigado por usar o MECA.',
       );
+      // Atualizar UI
+      setState(() {});
     }
   }
 
@@ -1187,10 +1196,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildQuoteCard(bool isDarkMode) {
+    final merged = _mergeBookingData();
+    final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
+    
+    // CRITICAL: Se service_start_pending = true e não há orçamento, NÃO mostrar card de orçamento
+    if (serviceStartPending) {
+      final hasQuote = (merged['final_price'] != null && (merged['final_price'] is num ? merged['final_price'] > 0 : false)) ||
+                      (merged['estimated_price'] != null && (merged['estimated_price'] is num ? merged['estimated_price'] > 0 : false)) ||
+                      (merged['quote_items'] != null && merged['quote_items'] is List && (merged['quote_items'] as List).isNotEmpty);
+      if (!hasQuote) {
+        return const SizedBox.shrink(); // Não mostrar orçamento se apenas iniciou serviço sem orçamento
+      }
+    }
+    
     final quoteValue = _extractFinalPrice();
     if (quoteValue == null) return const SizedBox.shrink();
-
-    final merged = _mergeBookingData();
     final status = (merged['status'] ?? widget.booking['status'] ?? '').toString();
     final normalizedStatus = _normalizeStatusKey(status);
     final hasCompletedAt = merged['completed_at'] != null || widget.booking['completed_at'] != null;
@@ -1925,6 +1945,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       case 'pending':
       case 'pending_oficina':
         return 'pending';
+      case 'aguardando_aprovacao_orcamento':
+      case 'awaiting_quote_approval':
+        return 'awaiting_quote_approval';
+      case 'aguardando_autorizacao_inicio':
+      case 'awaiting_service_start':
+        return 'awaiting_service_start';
+      case 'veiculo_na_oficina':
+      case 'vehicle_at_workshop':
+        return 'vehicle_at_workshop';
+      case 'aguardando_aprovacao_finalizacao':
+      case 'awaiting_finalization_approval':
+        return 'awaiting_finalization_approval';
+      case 'em_disputa':
+      case 'in_dispute':
+        return 'in_dispute';
       case 'confirmado':
       case 'confirmed':
       case 'confirmado_oficina':
@@ -1940,8 +1975,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       case 'completed':
         return 'awaiting_payment';
       case 'pago':
+      case 'paid':
       case 'finalizado_cliente':
-        return 'completed';
+        return 'paid';
       case 'cancelado':
       case 'cancelled':
       case 'nao_compareceu':
@@ -1959,9 +1995,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       case 'in_progress':
         return [const Color(0xFF00C977), const Color(0xFF00B369)];
       case 'completed':
+      case 'paid':
         return [const Color(0xFF2FD65C), const Color(0xFF1FC04D)];
       case 'awaiting_payment':
         return [const Color(0xFF00B4D8), const Color(0xFF0077B6)];
+      case 'awaiting_quote_approval':
+        return [const Color(0xFFFAD961), const Color(0xFFF76B1C)];
+      case 'awaiting_service_start':
+        return [const Color(0xFF4A90E2), const Color(0xFF357ABD)];
+      case 'vehicle_at_workshop':
+        return [const Color(0xFF5BC0DE), const Color(0xFF46A8CC)];
+      case 'awaiting_finalization_approval':
+        return [const Color(0xFF00CED1), const Color(0xFF00A8AA)];
+      case 'in_dispute':
+        return [const Color(0xFFE8867C), const Color(0xFFD8766C)];
       case 'cancelled':
         return [const Color(0xFFE8867C), const Color(0xFFD8766C)];
       case 'pending_customer':
@@ -1979,9 +2026,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       case 'in_progress':
         return Icons.build_circle;
       case 'completed':
+      case 'paid':
         return Icons.done_all;
       case 'awaiting_payment':
         return Icons.payments;
+      case 'awaiting_quote_approval':
+        return Icons.receipt_long;
+      case 'awaiting_service_start':
+        return Icons.play_circle_outline;
+      case 'vehicle_at_workshop':
+        return Icons.local_parking;
+      case 'awaiting_finalization_approval':
+        return Icons.check_circle_outline;
+      case 'in_dispute':
+        return Icons.warning_amber_rounded;
       case 'cancelled':
         return Icons.cancel;
       default:
@@ -2000,8 +2058,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         return 'Confirmado';
       case 'in_progress':
         return 'Em Andamento';
+      case 'awaiting_quote_approval':
+        return 'Aguardando Aprovação do Orçamento';
+      case 'awaiting_service_start':
+        return 'Aguardando Autorização de Início';
+      case 'vehicle_at_workshop':
+        return 'Veículo na Oficina';
+      case 'awaiting_finalization_approval':
+        return 'Aguardando Aprovação da Finalização';
+      case 'in_dispute':
+        return 'Em Disputa';
       case 'completed':
-        return 'Concluído';
+      case 'paid':
+        return 'Pago';
       case 'awaiting_payment':
         return 'Aguardando Pagamento';
       case 'cancelled':
@@ -2095,15 +2164,74 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       cardColor = Colors.blue.shade50;
       borderColor = Colors.blue.shade200;
       iconColor = Colors.blue.shade700;
+    } else if (rawStatus == 'aguardando_autorizacao_inicio' || finalNormalizedStatus == 'awaiting_service_start') {
+      // Estado explícito: aguardando autorização de início de serviço
+      title = 'Serviço Iniciado - Aguardando sua confirmação';
+      description = 'A oficina iniciou o atendimento do seu veículo. Por favor, confirme para prosseguir.';
+      nextStep = 'Confirme o início do serviço usando o botão abaixo. Após confirmar, o serviço será iniciado oficialmente.';
+      icon = Icons.play_circle_outline;
+      cardColor = Colors.blue.shade50;
+      borderColor = Colors.blue.shade200;
+      iconColor = Colors.blue.shade700;
+    } else if (rawStatus == 'aguardando_aprovacao_orcamento' || finalNormalizedStatus == 'awaiting_quote_approval') {
+      // Estado explícito: aguardando aprovação de orçamento
+      final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
+      if (hasCompletedAt) {
+        title = 'Revise o orçamento final';
+        description = 'O serviço terminou e o valor final já está disponível.';
+        nextStep = 'Aprove para liberar o pagamento ou rejeite se houver algo errado.';
+      } else {
+        title = 'Revise o orçamento';
+        description = 'A oficina enviou o valor para iniciar o serviço.';
+        nextStep = 'Aceite para liberar o início ou rejeite se precisar ajustar.';
+      }
+      icon = Icons.receipt_long;
+      cardColor = Colors.amber.shade50;
+      borderColor = Colors.amber.shade200;
+      iconColor = Colors.amber.shade800;
+    } else if (rawStatus == 'veiculo_na_oficina' || finalNormalizedStatus == 'vehicle_at_workshop') {
+      // Estado explícito: veículo está na oficina (check-in realizado)
+      title = 'Veículo na Oficina';
+      description = 'Seu veículo está na oficina e pronto para atendimento.';
+      nextStep = 'A oficina iniciará o serviço em breve.';
+      icon = Icons.local_parking;
+      cardColor = Colors.blue.shade50;
+      borderColor = Colors.blue.shade200;
+      iconColor = Colors.blue.shade700;
+    } else if (rawStatus == 'aguardando_aprovacao_finalizacao' || finalNormalizedStatus == 'awaiting_finalization_approval') {
+      // Estado explícito: aguardando aprovação da finalização
+      title = 'Serviço Finalizado - Aguardando sua aprovação';
+      description = 'A oficina finalizou o serviço e enviou o orçamento final.';
+      nextStep = 'Revise o orçamento e aprove para liberar o pagamento.';
+      icon = Icons.check_circle_outline;
+      cardColor = Colors.cyan.shade50;
+      borderColor = Colors.cyan.shade200;
+      iconColor = Colors.cyan.shade700;
+    } else if (rawStatus == 'em_disputa' || finalNormalizedStatus == 'in_dispute') {
+      // Estado explícito: em disputa
+      title = 'Serviço em Disputa';
+      description = 'Há uma pendência que precisa ser resolvida com a oficina.';
+      nextStep = 'Entre em contato com a oficina para resolver a questão.';
+      icon = Icons.warning_amber_rounded;
+      cardColor = Colors.red.shade50;
+      borderColor = Colors.red.shade200;
+      iconColor = Colors.red.shade700;
     } else if (rawStatus == 'pendente_cliente' || finalNormalizedStatus == 'pending_customer') {
+      // Fallback: status antigo pendente_cliente (para compatibilidade)
       // Verificar se é sugestão de horário, orçamento ou serviço iniciado pendente
       final suggestedBy = merged['suggested_by'] ?? merged['sugerido_por'];
       final hasSuggestedDate = merged['suggested_date'] != null || merged['data_sugerida'] != null;
       final isTimeSuggestion = (suggestedBy == 'oficina' || suggestedBy == 'workshop') && hasSuggestedDate;
       final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
       
-      if (serviceStartPending) {
-        // É serviço iniciado pela oficina aguardando confirmação do cliente
+      // Verificar se há orçamento válido
+      final hasQuote = _hasFinalPrice() || 
+                      (merged['estimated_price'] != null && (merged['estimated_price'] is num ? merged['estimated_price'] > 0 : false)) ||
+                      (merged['quote_items'] != null && merged['quote_items'] is List && (merged['quote_items'] as List).isNotEmpty);
+      
+      // CRITICAL: Se service_start_pending = true E não há orçamento, mostrar card azul de início
+      if (serviceStartPending && !hasQuote) {
+        // É serviço iniciado pela oficina SEM orçamento, aguardando confirmação do cliente
         title = 'Serviço Iniciado - Aguardando sua confirmação';
         description = 'A oficina iniciou o atendimento do seu veículo. Por favor, confirme para prosseguir.';
         nextStep = 'Confirme o início do serviço usando o botão abaixo. Após confirmar, o serviço será iniciado oficialmente.';
@@ -2121,7 +2249,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         borderColor = Colors.blue.shade200;
         iconColor = Colors.blue.shade700;
       } else {
-        // É orçamento pendente
+        // É orçamento pendente (há orçamento OU service_start_pending = false)
         final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
         if (hasCompletedAt) {
           title = 'Revise o orçamento final';
@@ -2153,11 +2281,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       cardColor = Colors.cyan.shade50;
       borderColor = Colors.cyan.shade200;
       iconColor = Colors.cyan.shade700;
-    } else if (finalNormalizedStatus == 'completed') {
-      title = 'Serviço concluído';
-      description = 'Pagamento confirmado e ordem encerrada.';
-      nextStep = 'Avalie a experiência quando puder.';
-      icon = Icons.done_all;
+    } else if (finalNormalizedStatus == 'completed' || finalNormalizedStatus == 'paid' || rawStatus == 'pago') {
+      title = 'Pagamento confirmado';
+      description = 'Seu pagamento foi processado com sucesso e o serviço está finalizado.';
+      nextStep = 'Avalie a experiência quando puder. Obrigado por usar o MECA!';
+      icon = Icons.check_circle;
       cardColor = Colors.green.shade50;
       borderColor = Colors.green.shade200;
       iconColor = Colors.green.shade700;
@@ -2307,7 +2435,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               final normalizedStatus = _normalizeStatusKey(status);
               final isDarkMode = Theme.of(context).brightness == Brightness.dark;
               
-              if (serviceStartPending && (rawStatus == 'pendente_cliente' || normalizedStatus == 'pending_customer')) {
+              final rawStatusCheck = status.toLowerCase().trim();
+              // Verificar se é estado de aguardando autorização de início OU status antigo pendente_cliente com service_start_pending
+              final isAwaitingServiceStart = rawStatusCheck == 'aguardando_autorizacao_inicio' || 
+                                            normalizedStatus == 'awaiting_service_start' ||
+                                            (serviceStartPending && (rawStatusCheck == 'pendente_cliente' || normalizedStatus == 'pending_customer'));
+              if (isAwaitingServiceStart) {
                 return Column(
                   children: [
                     Container(
@@ -2375,29 +2508,57 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             ),
                           ),
                           const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () => _confirmServiceStart(),
-                              icon: const Icon(Icons.check_circle, color: Colors.white, size: 22),
-                              label: const Text(
-                                'Confirmar Início do Serviço',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
+                          // Botões de ACEITAR e REJEITAR início do serviço
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () => _rejectServiceStart(),
+                                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                                  label: const Text(
+                                    'Rejeitar',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red[600]!,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    elevation: 4,
+                                    shadowColor: Colors.red.withOpacity(0.4),
+                                  ),
                                 ),
                               ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue[600]!,
-                                padding: const EdgeInsets.symmetric(vertical: 18),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () => _confirmServiceStart(),
+                                  icon: const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                                  label: const Text(
+                                    'Aceitar',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue[600]!,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    elevation: 4,
+                                    shadowColor: Colors.blue.withOpacity(0.4),
+                                  ),
                                 ),
-                                elevation: 4,
-                                shadowColor: Colors.blue.withOpacity(0.4),
                               ),
-                            ),
+                            ],
                           ),
                         ],
                       ),
@@ -2420,10 +2581,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               final rawStatus = status.toLowerCase().trim();
               final isTimeSuggestion = merged['suggested_time'] != null || widget.booking['suggested_time'] != null;
               
-              // IMPORTANTE: Verificar se há orçamento válido (final_price > 0 ou quote_items não vazio)
+              // IMPORTANTE: Verificar se há orçamento válido (final_price OU estimated_price OU quote_items)
               final finalPriceRaw = merged['final_price'] ?? merged['finalPrice'] ?? widget.booking['final_price'] ?? widget.booking['finalPrice'];
+              final estimatedPriceRaw = merged['estimated_price'] ?? widget.booking['estimated_price'];
               final finalPrice = finalPriceRaw != null 
                   ? (finalPriceRaw is int ? finalPriceRaw : (finalPriceRaw is double ? finalPriceRaw : (finalPriceRaw is String ? double.tryParse(finalPriceRaw) ?? 0 : 0)))
+                  : 0;
+              final estimatedPrice = estimatedPriceRaw != null
+                  ? (estimatedPriceRaw is int ? estimatedPriceRaw : (estimatedPriceRaw is double ? estimatedPriceRaw : (estimatedPriceRaw is String ? double.tryParse(estimatedPriceRaw) ?? 0 : 0)))
                   : 0;
               
               final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
@@ -2431,14 +2596,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ((quoteItemsRaw is List && quoteItemsRaw.isNotEmpty) ||
                    (quoteItemsRaw is String && quoteItemsRaw.trim().isNotEmpty && quoteItemsRaw != '[]'));
               
-              // Só considerar que há orçamento se final_price > 0 OU se há quote_items válidos
-              final hasQuote = (finalPrice > 0) || hasQuoteItems;
+              // IMPORTANTE: Considerar estimated_price também como orçamento válido
+              final hasQuote = (finalPrice > 0) || (estimatedPrice > 0) || hasQuoteItems;
+              
+              // CRITICAL: Se service_start_pending = true, NÃO mostrar botões de orçamento
+              // Nesse caso, os botões de ACEITAR/REJEITAR início já estão sendo mostrados no Builder anterior
+              if (serviceStartPending) {
+                return const SizedBox.shrink();
+              }
               
               // Log para debug
               debugPrint('🔍 [OrderDetail] Verificando exibição de orçamento:');
               debugPrint('  - rawStatus: $rawStatus');
               debugPrint('  - finalPriceRaw: $finalPriceRaw');
+              debugPrint('  - estimatedPriceRaw: $estimatedPriceRaw');
               debugPrint('  - finalPrice: $finalPrice');
+              debugPrint('  - estimatedPrice: $estimatedPrice');
               debugPrint('  - quoteItemsRaw: $quoteItemsRaw');
               debugPrint('  - hasQuoteItems: $hasQuoteItems');
               debugPrint('  - hasQuote: $hasQuote');
@@ -2446,14 +2619,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               debugPrint('  - serviceStartPending: $serviceStartPending');
               
               // CRITICAL: Só exibir orçamento se:
-              // 1. Status for "pendente_cliente" (oficina enviou orçamento e está aguardando aprovação)
+              // 1. Status for "aguardando_aprovacao_orcamento" OU "aguardando_aprovacao_finalizacao"
+              //    OU "pendente_cliente" com orçamento (compatibilidade)
               // 2. NÃO for sugestão de horário
-              // 3. HÁ orçamento válido (final_price > 0 OU quote_items não vazio)
-              // 4. Serviço não foi iniciado (não está aguardando confirmação de início)
-              final shouldShowQuote = rawStatus == 'pendente_cliente' && 
-                                      !isTimeSuggestion && 
-                                      hasQuote && 
-                                      !serviceStartPending;
+              // 3. NÃO for service_start_pending sem orçamento (nesse caso, mostrar apenas botões de início)
+              // 4. HÁ orçamento válido
+              final isAwaitingFinalizationApproval = rawStatus == 'aguardando_aprovacao_finalizacao' ||
+                  normalizedStatus == 'awaiting_finalization_approval';
+              final isAwaitingQuoteApproval = rawStatus == 'aguardando_aprovacao_orcamento' || 
+                                             normalizedStatus == 'awaiting_quote_approval' ||
+                                             (rawStatus == 'pendente_cliente' && !isTimeSuggestion && hasQuote && !serviceStartPending);
+              final shouldShowQuote = (isAwaitingQuoteApproval || isAwaitingFinalizationApproval) && hasQuote;
               
               debugPrint('  - shouldShowQuote: $shouldShowQuote');
               
@@ -2969,10 +3145,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               final rawStatus = status.toLowerCase().trim();
               final isTimeSuggestion = merged['suggested_time'] != null || widget.booking['suggested_time'] != null;
               
-              // Verificar se há orçamento válido
+              // IMPORTANTE: Verificar se há orçamento válido (final_price OU estimated_price OU quote_items)
               final finalPriceRaw = merged['final_price'] ?? merged['finalPrice'] ?? widget.booking['final_price'] ?? widget.booking['finalPrice'];
+              final estimatedPriceRaw = merged['estimated_price'] ?? widget.booking['estimated_price'];
               final finalPrice = finalPriceRaw != null 
                   ? (finalPriceRaw is int ? finalPriceRaw : (finalPriceRaw is double ? finalPriceRaw : (finalPriceRaw is String ? double.tryParse(finalPriceRaw) ?? 0 : 0)))
+                  : 0;
+              final estimatedPrice = estimatedPriceRaw != null
+                  ? (estimatedPriceRaw is int ? estimatedPriceRaw : (estimatedPriceRaw is double ? estimatedPriceRaw : (estimatedPriceRaw is String ? double.tryParse(estimatedPriceRaw) ?? 0 : 0)))
                   : 0;
               
               final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
@@ -2980,11 +3160,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ((quoteItemsRaw is List && quoteItemsRaw.isNotEmpty) ||
                    (quoteItemsRaw is String && quoteItemsRaw.trim().isNotEmpty && quoteItemsRaw != '[]'));
               
-              final hasQuote = (finalPrice > 0) || hasQuoteItems;
-              final shouldShowQuote = rawStatus == 'pendente_cliente' && 
-                                      !isTimeSuggestion && 
-                                      hasQuote && 
-                                      !serviceStartPending;
+              // IMPORTANTE: Considerar estimated_price também como orçamento válido
+              final hasQuote = (finalPrice > 0) || (estimatedPrice > 0) || hasQuoteItems;
+              
+              // CRITICAL: Se service_start_pending = true, NÃO mostrar botões de orçamento
+              // Nesse caso, os botões de ACEITAR/REJEITAR início já estão sendo mostrados no Builder anterior
+              if (serviceStartPending) {
+                return const SizedBox.shrink();
+              }
+              
+              // IMPORTANTE: Quando status é 'aguardando_aprovacao_orcamento' OU 'pendente_cliente' com orçamento, mostrar botões de aprovar/rejeitar orçamento
+              // A lógica correta é: mostrar se status é aguardando_aprovacao_orcamento OU (pendente_cliente E não é sugestão de horário E há orçamento)
+              final isAwaitingFinalizationApproval = rawStatus == 'aguardando_aprovacao_finalizacao' ||
+                  normalizedStatus == 'awaiting_finalization_approval';
+              final isAwaitingQuoteApproval = rawStatus == 'aguardando_aprovacao_orcamento' || 
+                                             normalizedStatus == 'awaiting_quote_approval' ||
+                                             (rawStatus == 'pendente_cliente' && !isTimeSuggestion && hasQuote);
+              final shouldShowQuote = (isAwaitingQuoteApproval || isAwaitingFinalizationApproval) && hasQuote;
               
               debugPrint('🔍 [OrderDetail] Verificando exibição de BOTÕES de orçamento:');
               debugPrint('  - rawStatus: $rawStatus');
@@ -3021,7 +3213,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: _approveQuote,
+                  onTap: isAwaitingFinalizationApproval ? _approveFinalization : _approveQuote,
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 18),
@@ -3037,8 +3229,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           child: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
                         ),
                         const SizedBox(width: 12),
-                        const Text(
-                          'Aprovar Orçamento',
+                        Text(
+                          isAwaitingFinalizationApproval ? 'Aprovar finalização' : 'Aprovar Orçamento',
                     style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -3060,7 +3252,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
                 final isFinalQuote = quoteStatus == 'final';
                 
-                if (isFinalQuote) {
+                // IMPORTANTE: na aprovação da finalização, sempre permitir rejeição (vira disputa)
+                if (!isAwaitingFinalizationApproval && isFinalQuote) {
                   return const SizedBox.shrink();
                 }
                 
@@ -3078,7 +3271,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      onTap: () => _rejectQuote(),
+                      onTap: () => isAwaitingFinalizationApproval ? _rejectFinalization() : _rejectQuote(),
                       borderRadius: BorderRadius.circular(20),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 18),
@@ -3092,7 +3285,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              'Rejeitar Orçamento',
+                              isAwaitingFinalizationApproval ? 'Rejeitar finalização' : 'Rejeitar Orçamento',
                           style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
@@ -3214,7 +3407,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               final merged = _mergeBookingData();
               final finalStatus = merged['status'] ?? widget.booking['status'] ?? 'pending';
               final normalizedStatus = _normalizeStatusKey(finalStatus);
-              if (normalizedStatus == 'in_progress' || normalizedStatus == 'awaiting_payment' || normalizedStatus == 'completed') {
+              if (normalizedStatus == 'in_progress' || normalizedStatus == 'awaiting_payment' || normalizedStatus == 'completed' || normalizedStatus == 'paid') {
                 return Column(
                   children: [
             SizedBox(
@@ -3244,7 +3437,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               final merged = _mergeBookingData();
               final finalStatus = merged['status'] ?? widget.booking['status'] ?? 'pending';
               final normalizedStatus = _normalizeStatusKey(finalStatus);
-              if (normalizedStatus == 'awaiting_payment') {
+              
+              // NÃO mostrar botão de pagamento se status for 'pago' ou 'paid'
+              final rawStatus = finalStatus.toString().toLowerCase().trim();
+              final isPaid = rawStatus == 'pago' || rawStatus == 'paid' || normalizedStatus == 'paid';
+              
+              // Só mostrar botão se realmente estiver aguardando pagamento E não estiver pago
+              if (normalizedStatus == 'awaiting_payment' && !isPaid) {
                 return Column(
                   children: [
             SizedBox(
@@ -3280,7 +3479,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               final merged = _mergeBookingData();
               final finalStatus = merged['status'] ?? widget.booking['status'] ?? 'pending';
               final normalizedStatus = _normalizeStatusKey(finalStatus);
-              if (normalizedStatus == 'completed') {
+              if (normalizedStatus == 'completed' || normalizedStatus == 'paid') {
                 return Column(
                   children: [
             SizedBox(
@@ -3447,6 +3646,127 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         AppAlerts.showError(
           context,
           message: result['error']?.toString() ?? 'Erro ao confirmar início do serviço.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppAlerts.showError(
+        context,
+        message: 'Erro: ${e.toString()}',
+      );
+    }
+  }
+
+  /// Rejeitar início do serviço quando a oficina iniciou
+  Future<void> _rejectServiceStart() async {
+    final bookingId = widget.booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) {
+      AppAlerts.showError(context, message: 'Erro: ID do agendamento não encontrado.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1A1A1A) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.close, color: Colors.red, size: 28),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Rejeitar Início do Serviço',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Deseja rejeitar o início do serviço?',
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.grey[300] : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Ao rejeitar, o agendamento voltará ao status confirmado e a oficina precisará aguardar sua aprovação novamente.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.grey[400] : Colors.grey[600],
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.grey[400]! : Colors.grey[700]!,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[600]!,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text(
+              'Rejeitar',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final result = await _apiService.rejectServiceStart(bookingId);
+      
+      if (!mounted) return;
+      
+      if (result['success'] == true) {
+        _apiService.invalidateBookingsCache();
+        _apiService.invalidateBookingCache(bookingId);
+        
+        await _loadBookingDetails(forceRefresh: true);
+        
+        AppAlerts.showSuccess(
+          context,
+          message: 'Início do serviço rejeitado. O agendamento voltou ao status confirmado.',
+        );
+        
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (mounted) {
+            Navigator.of(context).pop(true);
+          }
+        });
+      } else {
+        AppAlerts.showError(
+          context,
+          message: result['error']?.toString() ?? 'Erro ao rejeitar início do serviço.',
         );
       }
     } catch (e) {
@@ -4366,6 +4686,161 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  Future<void> _approveFinalization() async {
+    final bookingId = widget.booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) {
+      AppAlerts.showError(context, message: 'Erro: ID do agendamento não encontrado.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Aprovar finalização'),
+        content: const Text(
+          'A oficina informou que o serviço foi finalizado e enviou o orçamento final.\n\n'
+          'Ao aprovar, você libera o pagamento.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Aprovar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final result = await _apiService.approveFinalization(bookingId);
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        _apiService.invalidateBookingsCache();
+        _apiService.invalidateBookingCache(bookingId);
+
+        await _loadBookingDetails(forceRefresh: true);
+
+        setState(() {
+          widget.booking['status'] = 'finalizado_aguardando_pagamento';
+          if (_bookingDetails != null) {
+            _bookingDetails!['status'] = 'finalizado_aguardando_pagamento';
+          }
+        });
+
+        AppAlerts.showSuccess(
+          context,
+          message: 'Finalização aprovada. Agora você pode prosseguir com o pagamento.',
+        );
+      } else {
+        AppAlerts.showError(
+          context,
+          message: result['error']?.toString() ?? 'Erro ao aprovar finalização.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppAlerts.showError(
+        context,
+        message: 'Erro ao aprovar finalização: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<void> _rejectFinalization() async {
+    final bookingId = widget.booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) {
+      AppAlerts.showError(context, message: 'Erro: ID do agendamento não encontrado.');
+      return;
+    }
+
+    final reasonController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rejeitar finalização'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Se você rejeitar, o agendamento entrará em disputa para a oficina revisar.\n\n'
+                'Você pode informar um motivo (opcional).',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Motivo (opcional)',
+                  hintText: 'Ex.: itens/valores não conferem…',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Rejeitar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final result = await _apiService.rejectFinalization(
+        bookingId,
+        reason: reasonController.text.trim().isEmpty ? null : reasonController.text.trim(),
+      );
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        _apiService.invalidateBookingsCache();
+        _apiService.invalidateBookingCache(bookingId);
+
+        await _loadBookingDetails(forceRefresh: true);
+
+        setState(() {
+          widget.booking['status'] = 'em_disputa';
+          if (_bookingDetails != null) {
+            _bookingDetails!['status'] = 'em_disputa';
+          }
+        });
+
+        AppAlerts.showSuccess(
+          context,
+          message: 'Finalização rejeitada. O agendamento entrou em disputa.',
+        );
+      } else {
+        AppAlerts.showError(
+          context,
+          message: result['error']?.toString() ?? 'Erro ao rejeitar finalização.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppAlerts.showError(
+        context,
+        message: 'Erro ao rejeitar finalização: ${e.toString()}',
+      );
+    }
+  }
+
   Future<void> _rateService() async {
     await Navigator.push<bool>(
       context,
@@ -4398,10 +4873,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   bool _shouldShowPrice() {
+    final merged = _mergeBookingData();
+    final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
+    
+    // CRITICAL: Se service_start_pending = true e não há orçamento, NÃO mostrar card de orçamento
+    if (serviceStartPending) {
+      final hasQuote = _hasFinalPrice() || 
+                      (merged['estimated_price'] != null && (merged['estimated_price'] is num ? merged['estimated_price'] > 0 : false)) ||
+                      (merged['quote_items'] != null && merged['quote_items'] is List && (merged['quote_items'] as List).isNotEmpty);
+      if (!hasQuote) {
+        return false; // Não mostrar orçamento se apenas iniciou serviço sem orçamento
+      }
+    }
+    
     return _hasFinalPrice() && !_isAwaitingClientQuote();
   }
 
   bool _shouldShowEstimateNotice() {
+    final merged = _mergeBookingData();
+    final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
+    
+    // CRITICAL: Se service_start_pending = true e não há orçamento, NÃO mostrar card de estimativa
+    if (serviceStartPending) {
+      final hasQuote = _hasFinalPrice() || 
+                      (merged['estimated_price'] != null && (merged['estimated_price'] is num ? merged['estimated_price'] > 0 : false)) ||
+                      (merged['quote_items'] != null && merged['quote_items'] is List && (merged['quote_items'] as List).isNotEmpty);
+      if (!hasQuote) {
+        return false; // Não mostrar estimativa se apenas iniciou serviço sem orçamento
+      }
+    }
+    
     return !_hasFinalPrice() || _isAwaitingClientQuote();
   }
 
@@ -4514,8 +5015,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildEstimateInfoCard(bool isDarkMode) {
+    final merged = _mergeBookingData();
+    final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
+    
+    // CRITICAL: Se service_start_pending = true e não há orçamento, NÃO mostrar card de estimativa
+    if (serviceStartPending) {
+      final hasQuote = _hasFinalPrice() || 
+                      (merged['estimated_price'] != null && (merged['estimated_price'] is num ? merged['estimated_price'] > 0 : false)) ||
+                      (merged['quote_items'] != null && merged['quote_items'] is List && (merged['quote_items'] as List).isNotEmpty);
+      if (!hasQuote) {
+        return const SizedBox.shrink(); // Não mostrar estimativa se apenas iniciou serviço sem orçamento
+      }
+    }
+    
     final awaitingQuote = _isAwaitingClientQuote();
-    final estimatedPrice = _resolveServiceAmount(_mergeBookingData());
+    final estimatedPrice = _resolveServiceAmount(merged);
     final baseColor = awaitingQuote ? Colors.orange : Colors.blue;
 
     final message = awaitingQuote

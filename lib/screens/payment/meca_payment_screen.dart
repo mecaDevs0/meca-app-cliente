@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as Math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_alerts.dart';
 import '../review/review_screen.dart';
+import 'pagbank_encrypt_card_screen.dart';
 import 'saved_cards_screen.dart';
 
 class MecaPaymentScreen extends StatefulWidget {
@@ -45,8 +47,15 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     final workshopId = widget.bookingData['workshop_id']?.toString() ?? widget.bookingData['oficina_id']?.toString();
     
     if (bookingId != null && workshopId != null && mounted) {
+      // Invalidar cache ANTES de fechar a tela para garantir que os dados sejam recarregados
+      _apiService.invalidateBookingCache(bookingId);
+          _apiService.invalidateBookingsCache();
+      _apiService.invalidateBookingsCache();
+      
+      // Retornar true para indicar que pagamento foi feito
       Navigator.pop(context, true);
-      await Future.delayed(const Duration(milliseconds: 300));
+      
+      await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
         await Navigator.push(
           context,
@@ -60,6 +69,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       }
     } else {
       if (mounted) {
+        // Mesmo sem workshopId, retornar true para indicar pagamento
         Navigator.pop(context, true);
       }
     }
@@ -143,16 +153,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     if (_isSubmitting) return;
 
     if (_selectedMethod == 'credit_card') {
-      if (_savedCards.isEmpty) {
-        AppAlerts.showWarning(
-          context,
-          title: 'Nenhum cartão disponível',
-          message: 'Adicione um cartão salvo para pagar com crédito.',
-        );
-        return;
-      }
-
-      if (_selectedCardId == null) {
+      if (_savedCards.isNotEmpty && _selectedCardId == null) {
         AppAlerts.showWarning(
           context,
           title: 'Selecione um cartão',
@@ -171,6 +172,12 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       final bookingId = widget.bookingData['id']?.toString() ?? '';
       if (bookingId.isEmpty) {
         throw Exception('Identificador do agendamento não encontrado.');
+      }
+
+      // Se não há cartões salvos, permitir pagar com um novo cartão (criptografia no cliente)
+      if (_selectedMethod == 'credit_card' && _savedCards.isEmpty) {
+        await _payWithNewCard(bookingId);
+        return;
       }
 
       String? cardToken;
@@ -201,6 +208,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         paymentMethod: _selectedMethod == 'credit_card' ? 'CREDIT_CARD' : 'PIX',
         cardToken: cardToken,
         cvv: cvv,
+        holderName: _selectedMethod == 'credit_card' ? _extractCardHolderName(_selectedCardId) : null,
         installments: _selectedMethod == 'credit_card' ? _selectedInstallments : null,
         pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
       );
@@ -216,25 +224,48 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       }
 
       final data = paymentResult['data'] as Map<String, dynamic>? ?? {};
-      final payment = Map<String, dynamic>.from(data['payment'] ?? {});
-      final charge = data['charge'];
-
-      _paymentRecord = payment;
-      _pixCode = payment['pix_qr_code'] ?? payment['pixCode'] ?? payment['pix_code'];
-      _paymentLink = payment['payment_link'] ?? payment['paymentLink'] ?? charge?['payment_link'];
-      _paymentId = payment['id']?.toString();
-      _showResult = true;
-
-      final status = (payment['status'] ?? '').toString().toLowerCase();
-      if (_selectedMethod == 'credit_card' && status == 'approved') {
+      
+      // A API retorna status diretamente em data, não em payment
+      final status = (data['status'] ?? '').toString().toLowerCase();
+      final paymentId = data['payment_id']?.toString();
+      final orderId = data['order_id']?.toString();
+      final chargeId = data['charge_id']?.toString();
+      
+      print('💳 [Payment] ========== RESPOSTA DA API ==========');
+      print('💳 [Payment] Status recebido: $status');
+      print('💳 [Payment] Payment ID: $paymentId');
+      print('💳 [Payment] Order ID: $orderId');
+      print('💳 [Payment] Charge ID: $chargeId');
+      print('💳 [Payment] Data completo: $data');
+      print('💳 [Payment] ======================================');
+      
+      // Se pagamento foi aprovado IMEDIATAMENTE, não mostrar tela de análise
+      if (_selectedMethod == 'credit_card' && (status == 'approved' || status == 'paid')) {
+        print('✅ [Payment] Pagamento APROVADO IMEDIATAMENTE - navegando para review');
         AppAlerts.showSuccess(
           context,
           message: 'Pagamento aprovado com sucesso! Obrigado por usar o MECA.',
         );
-        // Redirecionar para tela de avaliação após pagamento aprovado
+        // Invalidar cache do booking para forçar reload
+        final bookingId = widget.bookingData['id']?.toString();
+        if (bookingId != null) {
+          _apiService.invalidateBookingCache(bookingId);
+          _apiService.invalidateBookingsCache();
+        }
+        // Aguardar um pouco para garantir que o cache foi invalidado
+        await Future.delayed(const Duration(milliseconds: 500));
+        // Redirecionar imediatamente
         await _navigateToReviewScreen();
         return;
       }
+      
+      // Para PIX ou pagamentos pendentes, continuar com o fluxo normal
+      final payment = Map<String, dynamic>.from(data['payment'] ?? data);
+      _paymentRecord = payment;
+      _pixCode = payment['pix_qr_code'] ?? payment['pixCode'] ?? payment['pix_code'] ?? data['qr_code'];
+      _paymentLink = payment['payment_link'] ?? payment['paymentLink'] ?? data['payment_link'];
+      _paymentId = paymentId ?? payment['id']?.toString();
+      _showResult = true;
 
       if (_selectedMethod == 'pix') {
         AppAlerts.showInfo(
@@ -267,6 +298,258 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     }
   }
 
+  Future<void> _payWithNewCard(String bookingId) async {
+    final cardNumberController = TextEditingController();
+    final holderNameController = TextEditingController();
+    final expiryMonthController = TextEditingController();
+    final expiryYearController = TextEditingController();
+    final cvvController = TextEditingController();
+    bool saveCard = true;
+
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                title: const Text('Pagamento com novo cartão'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: cardNumberController,
+                        decoration: const InputDecoration(
+                          labelText: 'Número do cartão',
+                          hintText: '1234 5678 9012 3456',
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(19),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: holderNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Nome no cartão',
+                          hintText: 'NOME COMPLETO',
+                        ),
+                        textCapitalization: TextCapitalization.characters,
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: expiryMonthController,
+                              decoration: const InputDecoration(
+                                labelText: 'Mês',
+                                hintText: 'MM',
+                              ),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(2),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: expiryYearController,
+                              decoration: const InputDecoration(
+                                labelText: 'Ano',
+                                hintText: 'AAAA',
+                              ),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(4),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: cvvController,
+                        decoration: const InputDecoration(
+                          labelText: 'CVV',
+                          hintText: '3 ou 4 dígitos',
+                        ),
+                        keyboardType: TextInputType.number,
+                        obscureText: true,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(4),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile.adaptive(
+                        value: saveCard,
+                        onChanged: (v) => setDialogState(() => saveCard = v),
+                        title: const Text('Salvar cartão para próximas compras'),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('Cancelar'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: const Text('Continuar'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      if (confirmed != true) return;
+
+      final rawNumber = cardNumberController.text.replaceAll(' ', '');
+      final holderName = holderNameController.text.trim();
+      final expMonth = expiryMonthController.text.trim().padLeft(2, '0');
+      var expYear = expiryYearController.text.trim();
+      final cvv = cvvController.text.trim();
+
+      if (rawNumber.length < 13) {
+        AppAlerts.showWarning(context, title: 'Dados inválidos', message: 'Informe um número de cartão válido.');
+        return;
+      }
+      if (holderName.isEmpty) {
+        AppAlerts.showWarning(context, title: 'Dados inválidos', message: 'Informe o nome impresso no cartão.');
+        return;
+      }
+      if (expMonth.length != 2 || expYear.isEmpty) {
+        AppAlerts.showWarning(context, title: 'Dados inválidos', message: 'Informe o mês e o ano de validade.');
+        return;
+      }
+      if (cvv.length < 3) {
+        AppAlerts.showWarning(context, title: 'Dados inválidos', message: 'Informe um CVV válido.');
+        return;
+      }
+
+      if (expYear.length == 2) {
+        expYear = '20$expYear';
+      }
+
+      final publicKeyResult = await _apiService.getPagBankPublicKey();
+      if (!(publicKeyResult['success'] == true)) {
+        AppAlerts.showError(context, message: publicKeyResult['error'] ?? 'Erro ao obter chave pública do PagBank.');
+        return;
+      }
+      final publicKey = (publicKeyResult['data']?['public_key'] ?? '').toString();
+      if (publicKey.isEmpty) {
+        AppAlerts.showError(context, message: 'Chave pública do PagBank não disponível.');
+        return;
+      }
+
+      final encryptedCard = await Navigator.of(context).push<String?>(
+        MaterialPageRoute(
+          builder: (_) => PagBankEncryptCardScreen(
+            publicKey: publicKey,
+            holderName: holderName,
+            number: rawNumber,
+            expMonth: expMonth,
+            expYear: expYear,
+            securityCode: cvv,
+          ),
+          fullscreenDialog: true,
+        ),
+      );
+      if (encryptedCard == null || encryptedCard.isEmpty) {
+        AppAlerts.showError(context, message: 'Não foi possível criptografar o cartão. Tente novamente.');
+        return;
+      }
+
+      final lastDigits = rawNumber.substring(rawNumber.length - 4);
+      String brand = 'Cartão';
+      if (rawNumber.startsWith('4')) {
+        brand = 'VISA';
+      } else if (rawNumber.startsWith('5') || rawNumber.startsWith('2')) {
+        brand = 'MASTERCARD';
+      } else if (rawNumber.startsWith('3')) {
+        brand = 'AMEX';
+      } else if (rawNumber.startsWith('6')) {
+        brand = 'ELO';
+      }
+
+      final paymentResult = await _apiService.createBookingPayment(
+        bookingId,
+        paymentMethod: 'CREDIT_CARD',
+        cardToken: encryptedCard,
+        cvv: cvv,
+        holderName: holderName,
+        installments: _selectedInstallments,
+        saveCard: saveCard,
+        lastDigits: lastDigits,
+        brand: brand,
+        expiryMonth: expMonth,
+        expiryYear: expYear,
+      );
+
+      if (!mounted) return;
+      if (paymentResult['success'] != true) {
+        AppAlerts.showError(context, message: paymentResult['error'] ?? 'Não foi possível iniciar o pagamento agora.');
+        return;
+      }
+
+      // Atualizar cartões (se o backend salvou token após pagamento aprovado)
+      try {
+        await _loadSavedCards();
+      } catch (_) {}
+
+      final data = paymentResult['data'] as Map<String, dynamic>? ?? {};
+      final status = (data['status'] ?? '').toString().toLowerCase();
+
+      if (status == 'approved' || status == 'paid') {
+        AppAlerts.showSuccess(context, message: 'Pagamento aprovado com sucesso! Obrigado por usar o MECA.');
+        final id = widget.bookingData['id']?.toString();
+        if (id != null) {
+          _apiService.invalidateBookingCache(id);
+          _apiService.invalidateBookingsCache();
+        }
+        await Future.delayed(const Duration(milliseconds: 500));
+        await _navigateToReviewScreen();
+        return;
+      }
+
+      final payment = Map<String, dynamic>.from(data['payment'] ?? data);
+      _paymentRecord = payment;
+      _pixCode = payment['pix_qr_code'] ?? payment['pixCode'] ?? payment['pix_code'] ?? data['qr_code'];
+      _paymentLink = payment['payment_link'] ?? payment['paymentLink'] ?? data['payment_link'];
+      _paymentId = data['payment_id']?.toString() ?? payment['id']?.toString();
+      _showResult = true;
+
+      AppAlerts.showInfo(
+        context,
+        title: 'Pagamento em análise',
+        message: 'O PagBank está processando seu pagamento. Avisaremos assim que for confirmado.',
+      );
+      _startStatusPolling();
+      setState(() {});
+    } catch (e) {
+      if (mounted) {
+        AppAlerts.showError(context, message: 'Não foi possível processar o pagamento com cartão agora.');
+      }
+    } finally {
+      cardNumberController.dispose();
+      holderNameController.dispose();
+      expiryMonthController.dispose();
+      expiryYearController.dispose();
+      cvvController.dispose();
+    }
+  }
+
   void _startStatusPolling() {
     _statusTimer?.cancel();
     if (_paymentId == null) return;
@@ -292,7 +575,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         };
       });
 
-      if (status == 'approved') {
+      if (status == 'approved' || status == 'paid') {
         _statusTimer?.cancel();
         if (!silent) {
           AppAlerts.showSuccess(
@@ -320,12 +603,71 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   }
 
   String? _extractCardToken(String? cardId) {
+    if (cardId == null) {
+      print('⚠️ [Payment] cardId é null');
+      return null;
+    }
+    
+    print('🔍 [Payment] Buscando token para cardId: $cardId');
+    print('🔍 [Payment] Total de cartões salvos: ${_savedCards.length}');
+    
+    // Tentar encontrar o cartão por diferentes campos de ID
+    Map<String, dynamic>? card;
+    try {
+      card = _savedCards.firstWhere(
+        (element) {
+          final elementId = element['id']?.toString();
+          final elementCardId = element['card_id']?.toString();
+          return elementId == cardId || elementCardId == cardId;
+        },
+        orElse: () => <String, dynamic>{},
+      );
+    } catch (e) {
+      print('❌ [Payment] Erro ao buscar cartão: $e');
+      return null;
+    }
+    
+    if (card == null || card.isEmpty) {
+      print('❌ [Payment] Cartão não encontrado na lista para cardId: $cardId');
+      print('🔍 [Payment] IDs disponíveis: ${_savedCards.map((c) => c['id']?.toString()).join(", ")}');
+      return null;
+    }
+    
+    // Tentar diferentes campos de token
+    final token = card['card_token'] ?? card['cardToken'] ?? card['token'] ?? '';
+    final tokenString = token.toString();
+    
+    print('✅ [Payment] Token encontrado: ${tokenString.isNotEmpty ? tokenString.substring(0, Math.min(20, tokenString.length)) + "..." : "VAZIO"}');
+    
+    if (tokenString.isEmpty) {
+      print('❌ [Payment] Cartão encontrado mas token está vazio. Campos disponíveis: ${card.keys.join(", ")}');
+      return null;
+    }
+    
+    return tokenString;
+  }
+
+  String? _extractCardHolderName(String? cardId) {
     if (cardId == null) return null;
-    final card = _savedCards.firstWhere(
-      (element) => element['id']?.toString() == cardId,
-      orElse: () => {},
-    );
-    return (card['card_token'] ?? card['cardToken'] ?? '').toString();
+
+    Map<String, dynamic> card;
+    try {
+      card = _savedCards.firstWhere(
+        (element) {
+          final elementId = element['id']?.toString();
+          final elementCardId = element['card_id']?.toString();
+          return elementId == cardId || elementCardId == cardId;
+        },
+        orElse: () => <String, dynamic>{},
+      );
+    } catch (e) {
+      return null;
+    }
+
+    if (card.isEmpty) return null;
+
+    final holder = (card['holder_name'] ?? card['cardholder_name'] ?? card['holderName'] ?? '').toString().trim();
+    return holder.isEmpty ? null : holder;
   }
 
   Future<void> _openSavedCards() async {

@@ -100,35 +100,20 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         bookings = [];
       }
       
-      // Filtrar por status - mapear corretamente
+      // Filtrar por status - regras de "Pendentes / Confirmados / Concluídos"
+      // Pendentes: existe alguma pendência (da oficina OU sua), incluindo pagamento pendente.
+      // Confirmados: sem ação no momento (ex: confirmado, em andamento).
+      // Concluídos: somente pagos.
       bookings = bookings.where((b) {
         final bookingStatus = b['status'] ?? '';
-        final suggestedBy = b['suggested_by'] ?? b['sugerido_por'];
-        final hasSuggestedDate = b['suggested_date'] != null || b['data_sugerida'] != null;
-        // final isTimeSuggestion = (suggestedBy == 'oficina' || suggestedBy == 'workshop') && hasSuggestedDate; // Removido: variável não utilizada
+        final bucket = _bucketForStatus(bookingStatus.toString());
         
         if (_currentStatus == 'pendente_oficina') {
-          // IMPORTANTE: A aba "Pendentes" deve mostrar TODOS os agendamentos aguardando ação do cliente:
-          // - pendente_oficina: aguardando oficina aceitar
-          // - pendente_cliente: aguardando cliente aprovar orçamento OU sugestão de horário
-          // O status pendente_cliente significa que está aguardando ação do cliente, independente de ter sugestão de horário ou não
-          return bookingStatus == 'pendente_oficina' || 
-                 bookingStatus == 'pending' ||
-                 bookingStatus == 'pendente_cliente'; // SEMPRE incluir pendente_cliente (orçamento ou sugestão aguardando aprovação)
+          return bucket == 'pending';
         } else if (_currentStatus == 'confirmado') {
-          // Incluir confirmado, em_andamento, mas NÃO incluir pendente_cliente (fica em pendentes)
-          return (bookingStatus == 'confirmado' || 
-                 bookingStatus == 'confirmado_oficina' || 
-                 bookingStatus == 'confirmed' ||
-                 bookingStatus == 'em_andamento' ||
-                 bookingStatus == 'in_progress') &&
-                 bookingStatus != 'pendente_cliente'; // Excluir pendente_cliente (fica em pendentes)
+          return bucket == 'confirmed';
         } else if (_currentStatus == 'finalizado_cliente') {
-          return bookingStatus == 'finalizado_cliente' || 
-                 bookingStatus == 'finalizado_aguardando_pagamento' ||
-                 bookingStatus == 'pago' ||
-                 bookingStatus == 'concluido' || 
-                 bookingStatus == 'completed';
+          return bucket == 'completed';
         }
         
         return b['status'] == _currentStatus;
@@ -395,7 +380,9 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                         : ListView.builder(
                             padding: const EdgeInsets.all(15),
                             itemCount: isPendingTab
-                                ? pendingUpcoming.length + (hasExpiredSection ? 1 : 0)
+                                ? (pendingUpcoming.isNotEmpty ? 1 : 0) +
+                                    pendingUpcoming.length +
+                                    (hasExpiredSection ? 1 : 0)
                                 : _bookings.length,
                             itemBuilder: (context, index) {
                               if (!isPendingTab) {
@@ -403,11 +390,18 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                                 return _buildBookingCard(booking);
                               }
 
-                              if (index < pendingUpcoming.length) {
-                                return _buildBookingCard(pendingUpcoming[index]);
+                              final showBanner = pendingUpcoming.isNotEmpty;
+                              if (showBanner && index == 0) {
+                                return _buildPendingInfoBanner(pendingUpcoming);
                               }
 
-                              if (hasExpiredSection && index == pendingUpcoming.length) {
+                              final adjustedIndex = showBanner ? index - 1 : index;
+
+                              if (adjustedIndex < pendingUpcoming.length) {
+                                return _buildBookingCard(pendingUpcoming[adjustedIndex]);
+                              }
+
+                              if (hasExpiredSection && adjustedIndex == pendingUpcoming.length) {
                                 return _buildExpiredDivider(pendingExpired.length, pendingExpired);
                               }
 
@@ -422,10 +416,270 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     );
   }
 
+  Widget _buildPendingInfoBanner(List<Map<String, dynamic>> pendingBookings) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDarkMode ? const Color(0xFF1A1A1A) : Colors.white;
+    final border = const Color(0xFF00C977).withOpacity(isDarkMode ? 0.25 : 0.22);
+    final textPrimary = isDarkMode ? Colors.white : Colors.black87;
+    final textSecondary = isDarkMode ? Colors.white70 : Colors.black54;
+
+    int awaitingWorkshop = 0;
+    int awaitingYou = 0;
+    int awaitingPayment = 0;
+    for (final b in pendingBookings) {
+      final normalized = _normalizeStatusKeyForList((b['status'] ?? '').toString());
+      if (normalized == 'pending') {
+        awaitingWorkshop += 1;
+      } else if (normalized == 'awaiting_payment') {
+        awaitingPayment += 1;
+        awaitingYou += 1; // pagamento é ação do cliente
+      } else {
+        awaitingYou += 1;
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00C977).withOpacity(isDarkMode ? 0.08 : 0.10),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFF00C977).withOpacity(0.14),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.info_outline, color: Color(0xFF00C977), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Pendentes',
+                  style: TextStyle(
+                    color: textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Aqui aparecem agendamentos que ainda têm alguma pendência — '
+                  'aguardando a oficina ou aguardando uma ação sua (aprovação, autorização ou pagamento).',
+                  style: TextStyle(
+                    color: textSecondary,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildPendingPillCompact(
+                        label: 'Oficina',
+                        value: awaitingWorkshop.toString(),
+                        icon: Icons.storefront_outlined,
+                        bg: isDarkMode ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+                        fg: textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildPendingPillCompact(
+                        label: 'Você',
+                        value: awaitingYou.toString(),
+                        icon: Icons.person_outline,
+                        bg: isDarkMode ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+                        fg: textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildPendingPillCompact(
+                        label: 'Pago',
+                        value: awaitingPayment.toString(),
+                        icon: Icons.payments_outlined,
+                        bg: isDarkMode ? const Color(0xFF1A2338) : const Color(0xFFE0F2FF),
+                        fg: isDarkMode ? Colors.white70 : const Color(0xFF1B6DC1),
+                        isMuted: awaitingPayment == 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingPillCompact({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color bg,
+    required Color fg,
+    bool isMuted = false,
+  }) {
+    final effectiveFg = isMuted ? fg.withOpacity(0.55) : fg;
+    final effectiveBg = isMuted ? bg.withOpacity(0.55) : bg;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: effectiveBg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: effectiveFg),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: effectiveFg,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                value,
+                style: TextStyle(
+                  color: effectiveFg,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPendingPill({
+    required String label,
+    required IconData icon,
+    required Color bg,
+    required Color fg,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: fg),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _normalizeStatusKeyForList(String rawStatus) {
+    final normalized = rawStatus.toLowerCase().trim();
+    switch (normalized) {
+      case 'pendente_cliente':
+        return 'pending_customer';
+      case 'pendente_oficina':
+      case 'pendente':
+      case 'pending':
+      case 'pending_oficina':
+        return 'pending';
+      case 'aguardando_aprovacao_orcamento':
+      case 'awaiting_quote_approval':
+        return 'awaiting_quote_approval';
+      case 'aguardando_autorizacao_inicio':
+      case 'awaiting_service_start':
+        return 'awaiting_service_start';
+      case 'aguardando_aprovacao_finalizacao':
+      case 'awaiting_finalization_approval':
+        return 'awaiting_finalization_approval';
+      case 'em_disputa':
+      case 'in_dispute':
+        return 'in_dispute';
+      case 'confirmado':
+      case 'confirmed':
+      case 'confirmado_oficina':
+        return 'confirmed';
+      case 'em_andamento':
+      case 'in_progress':
+      case 'started':
+        return 'in_progress';
+      case 'finalizado_aguardando_pagamento':
+      case 'aguardando_pagamento':
+      case 'awaiting_payment':
+      case 'finalizado':
+      case 'concluido':
+      case 'concluído':
+      case 'completed':
+        return 'awaiting_payment';
+      case 'pago':
+      case 'paid':
+      case 'finalizado_cliente':
+        return 'paid';
+      case 'cancelado':
+      case 'cancelled':
+      case 'nao_compareceu':
+        return 'cancelled';
+      default:
+        return 'pending';
+    }
+  }
+
+  String _bucketForStatus(String rawStatus) {
+    final normalized = _normalizeStatusKeyForList(rawStatus);
+    if (normalized == 'paid') return 'completed';
+    if (normalized == 'confirmed' || normalized == 'in_progress') return 'confirmed';
+    return 'pending';
+  }
+
   Widget _buildBookingCard(Map<String, dynamic> booking, {bool isExpired = false}) {
     final status = booking['status'] ?? 'pending';
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final statusConfig = _getStatusConfig(status, isDarkMode: isDarkMode);
+    final normalizedStatus = _normalizeStatusKeyForList((status ?? '').toString());
+    final isAwaitingPayment = normalizedStatus == 'awaiting_payment';
     final attachments = (booking['customer_uploads'] is List)
         ? List<Map<String, dynamic>>.from(booking['customer_uploads'])
         : (booking['customerUploads'] is List)
@@ -546,6 +800,34 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   ],
                 ),
                 const SizedBox(height: 15),
+
+                if (isAwaitingPayment) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: (isDarkMode ? const Color(0xFF1A2338) : const Color(0xFFE0F2FF)).withOpacity(0.55),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.payments_outlined, color: const Color(0xFF1B6DC1).withOpacity(0.85), size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Pagamento pendente. Para concluir o serviço e poder avaliar a oficina, finalize o pagamento.',
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white70 : Colors.black87,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 12.5,
+                              height: 1.25,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 // Date & Time - Suporte para janela de horários
                 Builder(
@@ -1279,13 +1561,24 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       // Mapear status para verificar correspondência
       final normalizedStatus = status.toLowerCase();
       if (normalizedStatus == 'pendente_oficina') {
-        // Notificações de pendentes: quando oficina sugere horário, confirma, etc
-        if (title.contains('pendente') || 
-            title.contains('sugestão') || 
-            title.contains('horário') ||
+        // Pendentes incluem: aguardando oficina OU aguardando você (aprovações, autorização, pagamento)
+        if (title.contains('pendente') ||
             message.contains('pendente') ||
+            title.contains('sugestão') ||
             message.contains('sugestão') ||
-            bookingStatus.contains('pendente')) {
+            title.contains('horário') ||
+            message.contains('horário') ||
+            title.contains('orçamento') ||
+            message.contains('orçamento') ||
+            title.contains('aprovar') ||
+            message.contains('aprovar') ||
+            title.contains('autoriz') ||
+            message.contains('autoriz') ||
+            title.contains('pagamento') ||
+            message.contains('pagamento') ||
+            bookingStatus.contains('pendente') ||
+            bookingStatus.contains('aguardando') ||
+            bookingStatus.contains('finalizado_aguardando_pagamento')) {
           return true;
         }
       } else if (normalizedStatus == 'confirmado') {
@@ -1299,15 +1592,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           return true;
         }
       } else if (normalizedStatus == 'finalizado_cliente') {
-        // Notificações de concluídos: quando serviço é finalizado
-        if (title.contains('finalizado') || 
-            title.contains('concluído') ||
-            title.contains('concluido') ||
-            message.contains('finalizado') ||
-            message.contains('concluído') ||
-            message.contains('concluido') ||
-            bookingStatus.contains('finalizado') ||
-            bookingStatus.contains('completed')) {
+        // Concluídos (nesta aba) = PAGOS
+        if (title.contains('pago') ||
+            title.contains('pagamento confirmado') ||
+            message.contains('pago') ||
+            message.contains('pagamento confirmado') ||
+            bookingStatus.contains('pago') ||
+            bookingStatus.contains('paid') ||
+            bookingStatus.contains('finalizado_cliente')) {
           return true;
         }
       }

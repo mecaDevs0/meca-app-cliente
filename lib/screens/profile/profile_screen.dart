@@ -36,14 +36,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  Future<void> _loadCustomerData() async {
+  Future<void> _loadCustomerData({bool forceRefresh = false}) async {
     if (!mounted) return;
     
     setState(() => _isLoading = true);
     
     try {
-      // Obter dados reais do perfil do usuário
-      final result = await _apiService.getUserProfile();
+      // Obter dados reais do perfil do usuário (forçar refresh se necessário)
+      final result = await _apiService.getUserProfile(forceRefresh: forceRefresh);
       
       if (!mounted) return;
       
@@ -551,10 +551,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _editProfile() async {
     final result = await Navigator.pushNamed(context, '/edit-profile');
     if (result == true) {
-      // Invalidar cache antes de recarregar para garantir dados atualizados
+      // Invalidar cache ANTES de recarregar para garantir dados atualizados
       _apiService.invalidateProfileCache();
-      // Recarregar dados do perfil se houve atualização
-      await _loadCustomerData();
+      // Recarregar dados do perfil FORÇANDO refresh (ignora cache)
+      await _loadCustomerData(forceRefresh: true);
     }
   }
 

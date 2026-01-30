@@ -41,8 +41,9 @@ class UploadService {
   UploadService() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiBaseUrl,
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 30),
+      connectTimeout: const Duration(seconds: 60), // Aumentado para 60s
+      receiveTimeout: const Duration(seconds: 120), // Aumentado para 120s (upload pode demorar)
+      sendTimeout: const Duration(seconds: 120), // Timeout para envio
       headers: {
         'Content-Type': 'multipart/form-data',
       },

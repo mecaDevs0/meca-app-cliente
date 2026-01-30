@@ -31,8 +31,8 @@ class ApiService {
           options.headers['Authorization'] = 'Bearer $token';
         }
         
-        // Verificar cache para requisições GET
-        if (options.method == 'GET') {
+        // Verificar cache para requisições GET (mas não se skipCache estiver ativo)
+        if (options.method == 'GET' && options.extra['skipCache'] != true) {
           final cacheKey = _getCacheKey(options.uri.toString(), options.queryParameters);
           final cached = _cache[cacheKey];
           if (cached != null && !cached.isExpired) {
@@ -44,6 +44,8 @@ class ApiService {
             ));
           }
           AppLogger.cache('MISS', cacheKey);
+        } else if (options.extra['skipCache'] == true) {
+          AppLogger.cache('SKIP', options.uri.toString());
         }
         
         AppLogger.api(options.method, options.uri.toString());
@@ -134,6 +136,13 @@ class ApiService {
     _cache.removeWhere((key, entry) {
       return key.contains('/vehicles') || 
              key.contains('/vehicle');
+    });
+  }
+
+  // Invalidar cache de cartões salvos
+  void invalidateSavedCardsCache() {
+    _cache.removeWhere((key, entry) {
+      return key.contains('/saved-cards');
     });
   }
 
@@ -306,7 +315,14 @@ class ApiService {
       }
       
       print('🔍 Buscando veículo pela placa na API: $cleanPlate');
-      final response = await _dio.get('/vehicles/plate/$cleanPlate');
+      // Timeout específico para busca de placas: 90s (API externa pode ser lenta)
+      final response = await _dio.get(
+        '/vehicles/plate/$cleanPlate',
+        options: Options(
+          receiveTimeout: const Duration(seconds: 90), // 90s para busca de placas
+          sendTimeout: const Duration(seconds: 90),
+        ),
+      );
       
       if (response.data != null && response.data['success'] == true) {
         return {
@@ -398,7 +414,12 @@ class ApiService {
         
         if (data is Map) {
           // Se data já é um Map, usar diretamente ou buscar 'workshop'
+          // IMPORTANTE: Preservar 'schedule' que vem do banco RDS AWS
           workshop = data['workshop'] ?? data;
+          // Garantir que 'schedule' está presente (vem do banco via WorkshopRepository.getSchedule)
+          if (data['schedule'] != null && workshop['schedule'] == null) {
+            workshop['schedule'] = data['schedule'];
+          }
         } else {
           workshop = {'id': workshopId};
         }
@@ -461,10 +482,26 @@ class ApiService {
   }
 
   // Obter perfil do usuário
-  Future<Map<String, dynamic>> getProfile() async {
+  Future<Map<String, dynamic>> getProfile({bool forceRefresh = false}) async {
     try {
       await loadToken();
-      final response = await _dio.get('/customers/profile');
+      
+      // Invalidar cache se forçado ANTES de fazer a requisição
+      if (forceRefresh) {
+        invalidateProfileCache();
+      }
+      
+      // Adicionar timestamp na query string para forçar bypass do cache quando forceRefresh
+      final queryParams = forceRefresh ? {'_t': DateTime.now().millisecondsSinceEpoch.toString()} : null;
+      
+      final response = await _dio.get(
+        '/customers/profile',
+        queryParameters: queryParams,
+        options: Options(
+          // Forçar bypass do cache do interceptor quando forceRefresh
+          extra: forceRefresh ? {'skipCache': true} : {},
+        ),
+      );
       
       if (response.data != null && response.data['success'] == true) {
         return {'success': true, 'data': response.data['data']};
@@ -477,8 +514,8 @@ class ApiService {
   }
 
   // Alias para getUserProfile (usado pelo profile_screen)
-  Future<Map<String, dynamic>> getUserProfile() async {
-    return getProfile();
+  Future<Map<String, dynamic>> getUserProfile({bool forceRefresh = false}) async {
+    return getProfile(forceRefresh: forceRefresh);
   }
 
   // Obter agendamentos do usuário
@@ -771,7 +808,7 @@ class ApiService {
     } catch (e) {
       if (e is DioException) {
         final errorMessage = e.response?.data?['error']?.toString() ?? 
-                            e.message ?? 
+                            e.message ??
                             'Erro ao confirmar início do serviço';
         return {'success': false, 'error': errorMessage};
       }
@@ -779,6 +816,30 @@ class ApiService {
     }
   }
 
+  /// Rejeitar início do serviço quando a oficina iniciou
+  Future<Map<String, dynamic>> rejectServiceStart(String bookingId) async {
+    try {
+      await loadToken();
+      final response = await _dio.put('/bookings/$bookingId/reject-service-start');
+      
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'data': response.data['data']};
+      } else {
+        return {'success': false, 'error': response.data['error'] ?? 'Erro ao rejeitar início do serviço'};
+      }
+    } catch (e) {
+      if (e is DioException) {
+        final errorMessage = e.response?.data?['error']?.toString() ?? 
+                            e.message ??
+                            'Erro ao rejeitar início do serviço';
+        return {'success': false, 'error': errorMessage};
+      }
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // Cancelar agendamento
+  // Aprovar orçamento proposto pela oficina
   Future<Map<String, dynamic>> approveQuote(String bookingId) async {
     try {
       await loadToken();
@@ -809,6 +870,52 @@ class ApiService {
       }
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  /// Aprovar finalização do serviço (cliente)
+  Future<Map<String, dynamic>> approveFinalization(String bookingId) async {
+    try {
+      await loadToken();
+      final response = await _dio.put('/bookings/$bookingId/approve-finalization');
+
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'data': response.data['data']};
+      } else {
+        return {'success': false, 'error': response.data['error'] ?? 'Erro ao aprovar finalização'};
+      }
+    } catch (e) {
+      if (e is DioException) {
+        final errorMessage = e.response?.data?['error']?.toString() ??
+            e.message ??
+            'Erro ao aprovar finalização';
+        return {'success': false, 'error': errorMessage};
+      }
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Rejeitar finalização do serviço (cliente) -> vira disputa
+  Future<Map<String, dynamic>> rejectFinalization(String bookingId, {String? reason}) async {
+    try {
+      await loadToken();
+      final response = await _dio.put('/bookings/$bookingId/reject-finalization', data: {
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+      });
+
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'data': response.data['data']};
+      } else {
+        return {'success': false, 'error': response.data['error'] ?? 'Erro ao rejeitar finalização'};
+      }
+    } catch (e) {
+      if (e is DioException) {
+        final errorMessage = e.response?.data?['error']?.toString() ??
+            e.message ??
+            'Erro ao rejeitar finalização';
+        return {'success': false, 'error': errorMessage};
+      }
+      return {'success': false, 'error': e.toString()};
     }
   }
 
@@ -1430,6 +1537,31 @@ class ApiService {
   }
 
   // Salvar cartão de crédito (direto com API que tokeniza internamente)
+  // Obter chave pública do PagBank para tokenização
+  Future<Map<String, dynamic>> getPagBankPublicKey() async {
+    try {
+      // Rota pública, não precisa de autenticação
+      // Usar skipCache para sempre obter a chave mais recente
+      final response = await _dio.get(
+        '/pagbank/public-key',
+        options: Options(extra: {'skipCache': true}),
+      );
+      
+      if (response.data != null && response.data['success'] == true) {
+        final publicKey = response.data['data']?['public_key'];
+        if (publicKey != null && publicKey.isNotEmpty) {
+          return {'success': true, 'data': {'public_key': publicKey}};
+        }
+      }
+      return {'success': false, 'error': response.data['error'] ?? 'Chave pública não retornada'};
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  // DEPRECATED: saveCardDirect não deve ser usado em produção
+  // Use saveCard com token já tokenizado pelo PagBank
+  @Deprecated('Use saveCard com token já tokenizado. Não envie número do cartão diretamente.')
   Future<Map<String, dynamic>> saveCardDirect({
     required String customerId,
     required String cardNumber,
@@ -1439,26 +1571,12 @@ class ApiService {
     required String holderName,
     bool isDefault = false,
   }) async {
-    try {
-      await loadToken();
-      final response = await _dio.post('/saved-cards', data: {
-        'customerId': customerId,
-        'cardNumber': cardNumber,
-        'expiryMonth': expiryMonth,
-        'expiryYear': expiryYear,
-        'cvv': cvv,
-        'holderName': holderName,
-        'isDefault': isDefault,
-      });
-      
-      if (response.data != null && response.data['success'] == true) {
-        return {'success': true, 'data': response.data['data']};
-      } else {
-        return {'success': false, 'error': response.data['error'] ?? 'Erro ao salvar cartão'};
-      }
-    } catch (e) {
-      return {'success': false, 'error': _getErrorMessage(e)};
-    }
+    // PRODUÇÃO REAL: Rejeitar número do cartão diretamente
+    return {
+      'success': false,
+      'error': 'Número do cartão não pode ser enviado diretamente por questões de segurança. Tokenize o cartão usando a chave pública do PagBank antes de salvar.',
+      'public_key_endpoint': '/pagbank/public-key'
+    };
   }
 
   // Salvar cartão de crédito (com token já gerado)
@@ -1484,6 +1602,8 @@ class ApiService {
       });
       
       if (response.data != null && response.data['success'] == true) {
+        // IMPORTANTE: Invalidar cache de cartões após salvar
+        invalidateSavedCardsCache();
         return {'success': true, 'data': response.data['data']};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao salvar cartão'};
@@ -1510,10 +1630,16 @@ class ApiService {
   }
 
   // Obter detalhes de um agendamento específico
-  Future<Map<String, dynamic>> getBookingDetails(String bookingId) async {
+  Future<Map<String, dynamic>> getBookingDetails(String bookingId, {bool forceRefresh = false}) async {
     try {
       await loadToken();
-      final response = await _dio.get('/bookings/$bookingId');
+      
+      // IMPORTANTE: Se forceRefresh, adicionar timestamp para bypassar cache
+      final url = forceRefresh 
+          ? '/bookings/$bookingId?_t=${DateTime.now().millisecondsSinceEpoch}'
+          : '/bookings/$bookingId';
+      
+      final response = await _dio.get(url);
       
       if (response.data != null && response.data['success'] == true) {
         final data = response.data['data'];
@@ -1541,6 +1667,8 @@ class ApiService {
       final response = await _dio.put('/saved-cards/$cardId/set-default');
       
       if (response.data != null && response.data['success'] == true) {
+        // Invalidar cache após definir como padrão
+        invalidateSavedCardsCache();
         return {'success': true, 'data': response.data['data']};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao definir cartão como padrão'};
@@ -1613,6 +1741,8 @@ class ApiService {
       final response = await _dio.delete('/saved-cards/$cardId');
       
       if (response.data != null && response.data['success'] == true) {
+        // Invalidar cache após deletar
+        invalidateSavedCardsCache();
         return {'success': true, 'data': response.data['data']};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao remover cartão'};
@@ -1681,51 +1811,21 @@ class ApiService {
     required String paymentMethod,
     String? cardToken,
     String? cvv,
+    String? holderName,
     int? installments,
     int? pixExpirationInSeconds,
+    bool? saveCard,
+    String? lastDigits,
+    String? brand,
+    String? expiryMonth,
+    String? expiryYear,
   }) async {
     try {
       await loadToken();
       
-      // Primeiro validar o booking
-      final validationResponse = await _dio.post('/bookings/$bookingId/payment', data: {});
-      
-      if (validationResponse.data == null || validationResponse.data['success'] != true) {
-        return {
-          'success': false,
-          'error': validationResponse.data?['error'] ?? 'Não foi possível validar o agendamento para pagamento.',
-        };
-      }
-      
-      final bookingData = validationResponse.data['data'] as Map<String, dynamic>? ?? {};
-      
-      // Converter amount de forma segura (pode vir como int ou double)
-      double? amount;
-      final rawAmount = bookingData['amount'];
-      if (rawAmount != null) {
-        if (rawAmount is int) {
-          amount = rawAmount.toDouble();
-        } else if (rawAmount is double) {
-          amount = rawAmount;
-        } else if (rawAmount is num) {
-          amount = rawAmount.toDouble();
-        } else if (rawAmount is String) {
-          amount = double.tryParse(rawAmount.replaceAll(',', '.'));
-        }
-      }
-      
-      if (amount == null || amount <= 0) {
-        return {
-          'success': false,
-          'error': 'Valor do agendamento não encontrado.',
-        };
-      }
-      
-      // Agora criar o pagamento usando o endpoint /payments
+      // Criar pagamento diretamente no endpoint /bookings/:id/payment
       final payload = <String, dynamic>{
-        'bookingId': bookingId,
         'paymentMethod': paymentMethod.toUpperCase(),
-        'amount': amount,
       };
 
       if (cardToken != null && cardToken.isNotEmpty) {
@@ -1736,6 +1836,10 @@ class ApiService {
         payload['cvv'] = cvv;
       }
 
+      if (holderName != null && holderName.trim().isNotEmpty) {
+        payload['holderName'] = holderName.trim();
+      }
+
       if (installments != null && installments > 0) {
         payload['installments'] = installments;
       }
@@ -1744,7 +1848,26 @@ class ApiService {
         payload['pixExpiration'] = pixExpirationInSeconds;
       }
 
-      final response = await _dio.post('/payments', data: payload);
+      if (saveCard == true) {
+        payload['saveCard'] = true;
+      }
+
+      if (lastDigits != null && lastDigits.trim().isNotEmpty) {
+        payload['lastDigits'] = lastDigits.trim();
+      }
+      if (brand != null && brand.trim().isNotEmpty) {
+        payload['brand'] = brand.trim();
+      }
+      if (expiryMonth != null && expiryMonth.trim().isNotEmpty) {
+        payload['expiryMonth'] = expiryMonth.trim();
+      }
+      if (expiryYear != null && expiryYear.trim().isNotEmpty) {
+        payload['expiryYear'] = expiryYear.trim();
+      }
+
+      print('💳 [API] Criando pagamento para booking $bookingId com payload: paymentMethod=${payload['paymentMethod']}, hasCardToken=${payload.containsKey('cardToken')}, hasCvv=${payload.containsKey('cvv')}, installments=${payload['installments']}');
+
+      final response = await _dio.post('/bookings/$bookingId/payment', data: payload);
 
       if (response.data != null && response.data['success'] == true) {
         return {

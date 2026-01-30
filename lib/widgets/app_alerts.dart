@@ -73,6 +73,11 @@ class AppAlerts {
     required _AlertType type,
     required Duration duration,
   }) async {
+    // Verificar se o context está montado antes de usar Theme.of
+    if (!context.mounted) {
+      return;
+    }
+    
     final theme = Theme.of(context);
     final colors = _colorsForType(type, theme);
     final icon = _iconForType(type);
@@ -87,6 +92,7 @@ class AppAlerts {
       }
     }
 
+    // Verificar novamente após dismiss (pode ter demorado)
     if (!context.mounted) {
       return;
     }

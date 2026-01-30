@@ -820,20 +820,44 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
   Widget _buildWorkingHoursCard() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final workingHours = _workshop!['working_hours'] ?? {};
     
-    // Horários padrão se não houver dados
-    final defaultHours = {
-      'monday': {'start': '08:00', 'end': '18:00'},
-      'tuesday': {'start': '08:00', 'end': '18:00'},
-      'wednesday': {'start': '08:00', 'end': '18:00'},
-      'thursday': {'start': '08:00', 'end': '18:00'},
-      'friday': {'start': '08:00', 'end': '18:00'},
-      'saturday': {'start': '08:00', 'end': '12:00'},
-      'sunday': null,
-    };
+    // CRITICAL: Buscar horários REAIS do campo 'schedule' retornado pela API
+    // A API retorna schedule no formato: { monday: { is_open: true, start_time: '08:00', end_time: '18:00' }, ... }
+    final scheduleRaw = _workshop!['schedule'];
+    Map<String, dynamic> scheduleData = {};
     
-    final hours = workingHours.isNotEmpty ? workingHours : defaultHours;
+    if (scheduleRaw != null) {
+      if (scheduleRaw is String) {
+        try {
+          scheduleData = jsonDecode(scheduleRaw);
+        } catch (e) {
+          scheduleData = {};
+        }
+      } else if (scheduleRaw is Map) {
+        scheduleData = Map<String, dynamic>.from(scheduleRaw);
+      }
+    }
+    
+    // Converter formato da API (is_open, start_time, end_time) para formato do app (start, end)
+    final hours = <String, Map<String, String>?>{};
+    final dayKeys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    
+    for (final dayKey in dayKeys) {
+      final dayData = scheduleData[dayKey];
+      if (dayData != null && dayData is Map) {
+        final isOpen = dayData['is_open'] == true;
+        if (isOpen && dayData['start_time'] != null && dayData['end_time'] != null) {
+          hours[dayKey] = {
+            'start': dayData['start_time'].toString(),
+            'end': dayData['end_time'].toString(),
+          };
+        } else {
+          hours[dayKey] = null; // Fechado
+        }
+      } else {
+        hours[dayKey] = null; // Sem dados = fechado
+      }
+    }
     
     return Container(
       decoration: BoxDecoration(
