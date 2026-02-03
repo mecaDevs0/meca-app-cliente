@@ -371,7 +371,8 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
     AppAlerts.showWarning(
       context,
       title: 'Salvar cartão',
-      message: 'Por segurança e regras do PagBank, o cartão só pode ser salvo após um pagamento aprovado. Faça um pagamento com cartão e marque a opção "Salvar cartão".',
+      message: 'Por segurança e regras do PagBank, o cartão só pode ser salvo após um pagamento aprovado.\n\n'
+          'Para usar um novo cartão, faça o pagamento normalmente e, se quiser, marque a opção "Salvar cartão" durante o pagamento.',
     );
   }
 }

@@ -38,8 +38,11 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   final ApiService _apiService = ApiService();
   final NumberFormat _currencyFormatter = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
+  static const String _newCardSentinel = '__new_card__';
+
   bool _loadingCards = true;
   bool _isSubmitting = false;
+  bool _isCheckingStatus = false;
   bool _showResult = false;
 
   Future<void> _navigateToReviewScreen() async {
@@ -89,6 +92,38 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
   Timer? _statusTimer;
 
+  String _statusLabel(String raw) {
+    final s = raw.toLowerCase().trim();
+    switch (s) {
+      case 'approved':
+      case 'paid':
+        return 'Aprovado';
+      case 'pending':
+      case 'in_analysis':
+      case 'waiting':
+      case 'authorized':
+        return 'Em análise';
+      case 'declined':
+      case 'denied':
+        return 'Negado';
+      case 'cancelled':
+      case 'canceled':
+        return 'Cancelado';
+      case 'refunded':
+        return 'Estornado';
+      default:
+        return s.isEmpty ? 'Indisponível' : s.toUpperCase();
+    }
+  }
+
+  String _declineHelpText(String? gatewayMessage) {
+    final msg = (gatewayMessage ?? '').trim();
+    if (msg.isNotEmpty) {
+      return '$msg\n\nO que fazer: tente outro cartão, verifique limite/dados do cartão, ou use PIX.';
+    }
+    return 'O PagBank/PagSeguro não autorizou a transação.\n\nO que fazer: tente outro cartão, verifique limite/dados do cartão, ou use PIX.';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -109,12 +144,22 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     });
 
     try {
-      final result = await _apiService.getSavedCards();
+      // Sempre forçar refresh aqui: lista de cartões pode mudar após pagamentos com "Salvar cartão"
+      final result = await _apiService.getSavedCards(forceRefresh: true);
       if (!mounted) return;
 
       if (result['success']) {
         final cards = List<Map<String, dynamic>>.from(result['data'] ?? []);
-        _savedCards = cards.where((card) => (card['card_token'] ?? card['cardToken'] ?? '').toString().isNotEmpty).toList();
+        // Filtrar cartões válidos para pagamento:
+        // - Tokens PagBank normalmente começam com "CARD_"
+        // - (Tokens "CHAR_" são IDs de charge e dão INVALID_CARD_ID)
+        _savedCards = cards.where((card) {
+          final token = (card['card_token'] ?? card['cardToken'] ?? '').toString();
+          if (token.isEmpty) return false;
+          // Só aceitar tokens de cartão (CARD_). Qualquer outro formato deve ser ignorado.
+          if (!token.startsWith('CARD_')) return false;
+          return true;
+        }).toList();
 
         if (_savedCards.isNotEmpty) {
           _selectedCardId = _savedCards.first['id']?.toString();
@@ -152,6 +197,16 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   Future<void> _handlePay() async {
     if (_isSubmitting) return;
 
+    // Evitar pagamento duplicado: se já existe um pagamento em análise nesta tela, não criar outro
+    if (_paymentId != null && _showResult) {
+      AppAlerts.showInfo(
+        context,
+        title: 'Pagamento já iniciado',
+        message: 'Seu pagamento já foi iniciado e está em análise. Aguarde a confirmação ou toque em "Atualizar status".',
+      );
+      return;
+    }
+
     if (_selectedMethod == 'credit_card') {
       if (_savedCards.isNotEmpty && _selectedCardId == null) {
         AppAlerts.showWarning(
@@ -172,6 +227,12 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       final bookingId = widget.bookingData['id']?.toString() ?? '';
       if (bookingId.isEmpty) {
         throw Exception('Identificador do agendamento não encontrado.');
+      }
+
+      // Permitir pagar com um novo cartão mesmo se houver cartões salvos
+      if (_selectedMethod == 'credit_card' && _selectedCardId == _newCardSentinel) {
+        await _payWithNewCard(bookingId);
+        return;
       }
 
       // Se não há cartões salvos, permitir pagar com um novo cartão (criptografia no cliente)
@@ -216,9 +277,63 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       if (!mounted) return;
 
       if (!paymentResult['success']) {
+        final errMsg = (paymentResult['error'] ?? '').toString();
+        final normalized = errMsg.toUpperCase();
+
+        // Caso comum em produção: token de cartão salvo antigo/inválido para o PagBank (INVALID_CARD_ID)
+        // Nesse cenário, removemos o cartão inválido automaticamente e direcionamos para "outro cartão".
+        if (_selectedMethod == 'credit_card' && normalized.contains('INVALID_CARD_ID')) {
+          if (!mounted) return;
+
+          final badCardId = _selectedCardId;
+          if (badCardId != null && badCardId.isNotEmpty && badCardId != _newCardSentinel) {
+            try {
+              await _apiService.deleteCard(badCardId);
+            } catch (_) {}
+          }
+
+          if (badCardId != null) {
+            _savedCards.removeWhere((c) => c['id']?.toString() == badCardId);
+            _selectedCardId = _savedCards.isNotEmpty ? _savedCards.first['id']?.toString() : null;
+          }
+
+          try {
+            await _loadSavedCards();
+          } catch (_) {}
+
+          final proceed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Cartão inválido removido'),
+                  content: const Text(
+                    'Removemos este cartão da sua lista porque ele não pôde ser validado pelo PagBank.\n\n'
+                    'Para continuar, use outro cartão agora. Se quiser, marque "Salvar cartão" no pagamento para salvar novamente.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancelar'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Usar outro cartão'),
+                    ),
+                  ],
+                ),
+              ) ??
+              false;
+
+          if (proceed == true) {
+            await _payWithNewCard(bookingId);
+          } else {
+            setState(() => _isSubmitting = false);
+          }
+          return;
+        }
+
         AppAlerts.showError(
           context,
-          message: paymentResult['error'] ?? 'Não foi possível iniciar o pagamento agora.',
+          message: errMsg.isNotEmpty ? errMsg : 'Não foi possível iniciar o pagamento agora.',
         );
         return;
       }
@@ -266,6 +381,24 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       _paymentLink = payment['payment_link'] ?? payment['paymentLink'] ?? data['payment_link'];
       _paymentId = paymentId ?? payment['id']?.toString();
       _showResult = true;
+
+      final gatewayMessage = (data['gateway_message'] ?? payment['gateway_message'] ?? '').toString().trim();
+      final isDeclined = status == 'declined' || status == 'denied';
+      final isCancelled = status == 'cancelled' || status == 'canceled';
+
+      if (_selectedMethod == 'credit_card' && (isDeclined || isCancelled)) {
+        // Não iniciar polling infinito: status final (recusado/cancelado)
+        _statusTimer?.cancel();
+        AppAlerts.showWarning(
+          context,
+          title: isDeclined ? 'Pagamento recusado' : 'Pagamento cancelado',
+          message: gatewayMessage.isNotEmpty
+              ? gatewayMessage
+              : (isDeclined ? 'O PagBank/PagSeguro não autorizou o pagamento. Tente outro cartão.' : 'O pagamento foi cancelado.'),
+        );
+        setState(() {});
+        return;
+      }
 
       if (_selectedMethod == 'pix') {
         AppAlerts.showInfo(
@@ -530,10 +663,26 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       _paymentId = data['payment_id']?.toString() ?? payment['id']?.toString();
       _showResult = true;
 
+      final normalized = status.toLowerCase();
+      final gatewayMessage = (data['gateway_message'] ?? payment['gateway_message'] ?? '').toString().trim();
+      final isDeclined = normalized == 'declined' || normalized == 'denied';
+      final isCancelled = normalized == 'cancelled' || normalized == 'canceled';
+
+      if (isDeclined || isCancelled) {
+        _statusTimer?.cancel();
+        AppAlerts.showWarning(
+          context,
+          title: isDeclined ? 'Pagamento negado' : 'Pagamento cancelado',
+          message: isDeclined ? _declineHelpText(gatewayMessage) : 'O pagamento foi cancelado. Você pode tentar novamente.',
+        );
+        setState(() {});
+        return;
+      }
+
       AppAlerts.showInfo(
         context,
         title: 'Pagamento em análise',
-        message: 'O PagBank está processando seu pagamento. Avisaremos assim que for confirmado.',
+        message: 'O PagBank está processando seu pagamento. Você pode acompanhar o status aqui.',
       );
       _startStatusPolling();
       setState(() {});
@@ -560,6 +709,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
   Future<void> _checkPaymentStatus({bool silent = false}) async {
     if (_paymentId == null) return;
+    if (_isCheckingStatus) return;
+
+    setState(() => _isCheckingStatus = true);
 
     final result = await _apiService.getPaymentStatus(_paymentId!);
     if (!mounted) return;
@@ -572,6 +724,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           ...?_paymentRecord,
           'status': status,
           'approved_at': data['approved_at'],
+          'gateway_status': data['gateway_status'],
+          'gateway_code': data['gateway_code'],
+          'gateway_message': data['gateway_message'],
         };
       });
 
@@ -587,6 +742,21 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           // Redirecionar para tela de avaliação após pagamento confirmado
           await _navigateToReviewScreen();
         }
+      } else if (status == 'declined' || status == 'denied') {
+        _statusTimer?.cancel();
+        if (!silent) {
+          AppAlerts.showWarning(
+            context,
+            title: 'Pagamento negado',
+            message: _declineHelpText(_paymentRecord?['gateway_message']?.toString()),
+          );
+        }
+      } else if (!silent) {
+        AppAlerts.showInfo(
+          context,
+          title: 'Status atualizado',
+          message: status == 'pending' ? 'Ainda em análise pelo PagBank.' : 'Status atual: ${_statusLabel(status)}',
+        );
       } else if (!silent && status == 'cancelled') {
         AppAlerts.showWarning(
           context,
@@ -599,6 +769,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         context,
         message: result['error'] ?? 'Não foi possível atualizar o status do pagamento.',
       );
+    }
+
+    if (mounted) {
+      setState(() => _isCheckingStatus = false);
     }
   }
 
@@ -704,7 +878,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               const SizedBox(height: 20),
               if (_selectedMethod == 'credit_card')
                 _loadingCards ? const Center(child: CircularProgressIndicator()) : _buildSavedCardsSection(theme),
-              if (_selectedMethod == 'credit_card' && _selectedCardId != null) ...[
+              if (_selectedMethod == 'credit_card' && _selectedCardId != null && _selectedCardId != _newCardSentinel) ...[
                 const SizedBox(height: 20),
                 _buildCvvSection(theme),
               ],
@@ -720,36 +894,48 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(20),
-        child: SizedBox(
-          height: 56,
-          child: ElevatedButton(
-            onPressed: _isSubmitting ? null : _handlePay,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: theme.colorScheme.primary,
-              foregroundColor: theme.colorScheme.onPrimary,
-              textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      // Quando o pagamento já foi iniciado, escondemos o botão principal para evitar confusão/duplicação.
+      bottomNavigationBar: _showResult
+          ? null
+          : Padding(
+              padding: const EdgeInsets.all(20),
+              child: SizedBox(
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isSubmitting ? null : _handlePay,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: theme.colorScheme.onPrimary,
+                    textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-            child: _isSubmitting
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : Text(
-                    _selectedMethod == 'credit_card'
-                        ? 'Pagar ${_currencyFormatter.format(widget.totalAmount)}'
-                        : 'Gerar PIX de ${_currencyFormatter.format(widget.totalAmount)}',
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text(
+                          _selectedMethod == 'credit_card'
+                              ? 'Pagar ${_currencyFormatter.format(widget.totalAmount)}'
+                              : 'Gerar PIX de ${_currencyFormatter.format(widget.totalAmount)}',
+                        ),
                 ),
               ),
-          ),
-      ),
+            ),
     );
   }
 
   Widget _buildPaymentSummaryCard(ThemeData theme) {
+    // Evitar divergência de arredondamento na UI do split:
+    // Ex.: 1,50 * 7% = 0,105 -> 0,11 e 1,39 (centavos: 150 -> 11 + 139)
+    // Se fizer conta em double e arredondar no fim, pode aparecer 0,11 e 1,40 (soma 1,51).
+    final totalCents = (widget.totalAmount * 100).round();
+    final mecaFeeCents = (totalCents * 0.07).round();
+    final workshopCents = totalCents - mecaFeeCents;
+    final mecaFeeDisplay = mecaFeeCents / 100.0;
+    final workshopDisplay = workshopCents / 100.0;
+
     final surfaceColor = theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.9);
     final borderColor = theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15);
 
@@ -787,14 +973,14 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             _buildSummaryRow(
               theme,
               'Taxa MECA (7%)',
-              _currencyFormatter.format(widget.mecaFee),
+              _currencyFormatter.format(mecaFeeDisplay),
               secondary: true,
             ),
             const SizedBox(height: 8),
             _buildSummaryRow(
               theme,
               'Valor que a oficina receberá',
-              _currencyFormatter.format(widget.serviceAmount - widget.mecaFee),
+              _currencyFormatter.format(workshopDisplay),
               secondary: true,
             ),
           ],
@@ -923,9 +1109,16 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
-              onPressed: _openSavedCards,
+              onPressed: () async {
+                final bookingId = widget.bookingData['id']?.toString() ?? '';
+                if (bookingId.isNotEmpty) {
+                  await _payWithNewCard(bookingId);
+                } else {
+                  _openSavedCards();
+                }
+              },
               icon: const Icon(Icons.add),
-              label: const Text('Adicionar cartão'),
+              label: const Text('Usar outro cartão agora'),
             ),
           ],
         ),
@@ -968,6 +1161,20 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             ),
             if (card != _savedCards.last) const SizedBox(height: 12),
           ],
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: () async {
+              setState(() {
+                _selectedCardId = _newCardSentinel;
+              });
+              final bookingId = widget.bookingData['id']?.toString() ?? '';
+              if (bookingId.isNotEmpty) {
+                await _payWithNewCard(bookingId);
+              }
+            },
+            icon: const Icon(Icons.add_card),
+            label: const Text('Usar outro cartão agora'),
+          ),
         ],
       ),
     );
@@ -1103,6 +1310,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   Widget _buildResultSection(ThemeData theme) {
     final status = (_paymentRecord?['status'] ?? '').toString().toLowerCase();
     final isPix = _selectedMethod == 'pix';
+    final isDeclined = status == 'declined' || status == 'denied';
+    final isCancelled = status == 'cancelled' || status == 'canceled';
+    final gatewayMessage = (_paymentRecord?['gateway_message'] ?? '').toString().trim();
 
     return Container(
       width: double.infinity,
@@ -1120,11 +1330,15 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               Icon(
                 status == 'approved'
                     ? Icons.check_circle
+                    : (isDeclined || isCancelled)
+                        ? Icons.error_outline
                     : isPix
                         ? Icons.qr_code_2
                         : Icons.access_time,
                 color: status == 'approved'
                     ? theme.colorScheme.primary
+                    : (isDeclined || isCancelled)
+                        ? Colors.redAccent
                     : theme.colorScheme.secondary,
                 size: 32,
           ),
@@ -1133,27 +1347,68 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                 child: Text(
                   status == 'approved'
                       ? 'Pagamento confirmado! Obrigado por usar o MECA.'
-                      : isPix
-                          ? 'PIX gerado. Copie o código abaixo e finalize em seu aplicativo bancário.'
-                          : 'Pagamento em análise. A confirmação pode levar alguns instantes.',
+                      : (isDeclined
+                          ? 'Pagamento negado. Veja o motivo abaixo.'
+                          : (isCancelled
+                              ? 'Pagamento cancelado.'
+                              : (isPix
+                                  ? 'PIX gerado. Copie o código abaixo e finalize em seu aplicativo bancário.'
+                                  : 'Pagamento em análise. A confirmação pode levar alguns instantes.'))),
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
+          if (isDeclined) ...[
+            Text(
+              'Motivo: ${gatewayMessage.isNotEmpty ? gatewayMessage : 'Não autorizado pelo PagBank/PagSeguro'}',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.85),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'O que fazer: tente outro cartão, verifique limite/dados do cartão, ou use PIX.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.75),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           if (isPix) _buildPixResult(theme) else _buildCardResult(theme),
           const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isSubmitting ? null : () => _checkPaymentStatus(silent: false),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Atualizar status'),
+              if (isDeclined || isCancelled) ...[
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      // Permitir tentar novamente sem sair da tela
+                      _statusTimer?.cancel();
+                      setState(() {
+                        _showResult = false;
+                        _paymentId = null;
+                        _paymentRecord = null;
+                        _pixCode = null;
+                        _paymentLink = null;
+                      });
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Tentar novamente'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
+              ] else ...[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: (_isSubmitting || _isCheckingStatus) ? null : () => _checkPaymentStatus(silent: false),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Atualizar status'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () {
@@ -1223,14 +1478,24 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
   Widget _buildCardResult(ThemeData theme) {
     final status = (_paymentRecord?['status'] ?? '').toString().toLowerCase();
+    final gatewayMessage = (_paymentRecord?['gateway_message'] ?? '').toString().trim();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Status atual: ${status == 'approved' ? 'Aprovado' : status == 'pending' ? 'Em análise' : status.toUpperCase()}',
+          'Status atual: ${_statusLabel(status)}',
           style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
+        if ((status == 'declined' || status == 'denied') && gatewayMessage.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Motivo: $gatewayMessage',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.8),
+            ),
+          ),
+        ],
         if (_paymentRecord?['installments'] != null && (_paymentRecord?['installments'] ?? 1) > 1) ...[
           const SizedBox(height: 8),
           Text(

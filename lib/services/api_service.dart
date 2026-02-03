@@ -53,7 +53,9 @@ class ApiService {
       },
       onResponse: (response, handler) {
         // Cachear respostas GET bem-sucedidas
-        if (response.requestOptions.method == 'GET' && response.statusCode == 200) {
+        if (response.requestOptions.method == 'GET' &&
+            response.statusCode == 200 &&
+            response.requestOptions.extra['skipCache'] != true) {
           final cacheKey = _getCacheKey(
             response.requestOptions.uri.toString(),
             response.requestOptions.queryParameters,
@@ -92,6 +94,8 @@ class ApiService {
   }
 
   String _getCacheKey(String url, Map<String, dynamic>? params) {
+    // Em Dio, `uri.toString()` já inclui querystring; evitar duplicar params (ex.: "...?a=1?a=1")
+    if (url.contains('?')) return url;
     if (params == null || params.isEmpty) return url;
     final sortedParams = Map.fromEntries(
       params.entries.toList()..sort((a, b) => a.key.compareTo(b.key))
@@ -1614,10 +1618,14 @@ class ApiService {
   }
 
   // Obter cartões salvos
-  Future<Map<String, dynamic>> getSavedCards() async {
+  Future<Map<String, dynamic>> getSavedCards({bool forceRefresh = false}) async {
     try {
       await loadToken();
-      final response = await _dio.get('/saved-cards');
+      final response = await _dio.get(
+        '/saved-cards',
+        options: Options(extra: {'skipCache': forceRefresh}),
+        queryParameters: forceRefresh ? {'_t': DateTime.now().millisecondsSinceEpoch} : null,
+      );
       
       if (response.data != null && response.data['success'] == true) {
         return {'success': true, 'data': response.data['data']};
@@ -1888,7 +1896,12 @@ class ApiService {
   Future<Map<String, dynamic>> getPaymentStatus(String paymentId) async {
     try {
       await loadToken();
-      final response = await _dio.get('/payments/$paymentId/status');
+      // CRITICAL: status de pagamento NÃO pode usar cache (senão o polling fica travado em HIT)
+      final response = await _dio.get(
+        '/payments/$paymentId/status',
+        options: Options(extra: {'skipCache': true}),
+        queryParameters: {'_t': DateTime.now().millisecondsSinceEpoch},
+      );
 
       if (response.data != null && response.data['success'] == true) {
         return {'success': true, 'data': response.data['data']};

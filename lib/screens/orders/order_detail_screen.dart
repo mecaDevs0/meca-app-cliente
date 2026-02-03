@@ -255,7 +255,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     return normalized == 'finalizado' ||
         normalized == 'finalizado_cliente' ||
         normalized == 'completed' ||
-        normalized == 'finalizado_aguardando_pagamento';
+        normalized == 'finalizado_aguardando_pagamento' ||
+        normalized == 'aguardando_pagamento' ||
+        normalized == 'awaiting_payment';
   }
 
   Future<void> _showPaymentPrompt(Map<String, dynamic> bookingData) async {
@@ -1969,6 +1971,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       case 'started':
         return 'in_progress';
       case 'finalizado_aguardando_pagamento':
+      case 'aguardando_pagamento':
+      case 'awaiting_payment':
       case 'finalizado':
       case 'concluido':
       case 'concluído':
@@ -3407,7 +3411,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               final merged = _mergeBookingData();
               final finalStatus = merged['status'] ?? widget.booking['status'] ?? 'pending';
               final normalizedStatus = _normalizeStatusKey(finalStatus);
-              if (normalizedStatus == 'in_progress' || normalizedStatus == 'awaiting_payment' || normalizedStatus == 'completed' || normalizedStatus == 'paid') {
+              if (normalizedStatus == 'in_progress' ||
+                  normalizedStatus == 'awaiting_finalization_approval' ||
+                  normalizedStatus == 'in_dispute' ||
+                  normalizedStatus == 'awaiting_payment' ||
+                  normalizedStatus == 'completed' ||
+                  normalizedStatus == 'paid') {
                 return Column(
                   children: [
             SizedBox(
