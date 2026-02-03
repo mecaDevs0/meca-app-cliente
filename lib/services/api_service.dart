@@ -194,40 +194,38 @@ class ApiService {
     return {'success': false, 'error': errorMessage};
   }
 
-  // Login
+  // Login (com retry em caso de timeout para API instável)
   Future<Map<String, dynamic>> login(String email, String password) async {
-    try {
-      final normalizedEmail = email.trim().toLowerCase();
-      final normalizedPassword = password.trim();
+    final normalizedEmail = email.trim().toLowerCase();
+    final normalizedPassword = password.trim();
+    AppLogger.info('🔐 [Login] Tentando login para: $normalizedEmail', tag: 'Auth');
 
-      AppLogger.info('🔐 [Login] Tentando login para: $normalizedEmail', tag: 'Auth');
-
-      final response = await _dio.post('/auth/login', data: {
-        'email': normalizedEmail,
-        'password': normalizedPassword,
-      });
-
-      AppLogger.info('✅ [Login] Resposta recebida: ${response.statusCode}', tag: 'Auth');
-      AppLogger.info('📦 [Login] Dados: ${response.data}', tag: 'Auth');
-
-      return await _handleAuthResponse(response, fallbackError: 'Erro no login');
-    } catch (e) {
-      AppLogger.error('❌ [Login] Erro: ${e.toString()}', tag: 'Auth', error: e);
-      
-      if (e is DioException) {
-        final statusCode = e.response?.statusCode;
-        AppLogger.warning('⚠️ [Login] Status: $statusCode', tag: 'Auth');
-        
-        // Log detalhado da resposta de erro
-        if (e.response?.data != null) {
-          AppLogger.info('📦 [Login] Erro data: ${e.response?.data}', tag: 'Auth');
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final response = await _dio.post('/auth/login', data: {
+          'email': normalizedEmail,
+          'password': normalizedPassword,
+        });
+        AppLogger.info('✅ [Login] Resposta recebida: ${response.statusCode}', tag: 'Auth');
+        return await _handleAuthResponse(response, fallbackError: 'Erro no login');
+      } catch (e) {
+        final isTimeout = e is DioException &&
+            (e.type == DioExceptionType.connectionTimeout ||
+                e.type == DioExceptionType.receiveTimeout ||
+                e.type == DioExceptionType.sendTimeout);
+        if (isTimeout && attempt == 1) {
+          AppLogger.warning('⚠️ [Login] Timeout, tentando novamente (2/2)', tag: 'Auth');
+          continue;
         }
-        
-        final message = _resolveFriendlyMessage(e, default401: 'Email ou senha incorretos. Confira seus dados e tente novamente.');
-        return {'success': false, 'error': message};
+        AppLogger.error('❌ [Login] Erro: ${e.toString()}', tag: 'Auth', error: e);
+        if (e is DioException) {
+          final message = _resolveFriendlyMessage(e, default401: 'Email ou senha incorretos. Confira seus dados e tente novamente.');
+          return {'success': false, 'error': message};
+        }
+        return {'success': false, 'error': 'Não foi possível entrar. Verifique sua conexão e tente novamente.'};
       }
-      return {'success': false, 'error': 'Não foi possível entrar. Verifique sua conexão e tente novamente.'};
     }
+    return {'success': false, 'error': 'Não foi possível entrar. Verifique sua conexão e tente novamente.'};
   }
 
   // Registro
@@ -272,12 +270,17 @@ class ApiService {
   Future<Map<String, dynamic>> saveDeviceToken(String onesignalPlayerId, {String? platform}) async {
     try {
       await loadToken();
-      
-      final response = await _dio.post('/device-tokens', data: {
-        'onesignal_player_id': onesignalPlayerId,
-        'platform': platform ?? (Platform.isAndroid ? 'android' : 'ios'),
-      });
-      
+      final response = await _dio.post(
+        '/device-tokens',
+        data: {
+          'onesignal_player_id': onesignalPlayerId,
+          'platform': platform ?? (Platform.isAndroid ? 'android' : 'ios'),
+        },
+        options: Options(
+          sendTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 15),
+        ),
+      );
       return {'success': true, 'data': response.data['data'] ?? response.data};
     } catch (e) {
       if (e is DioException) {
@@ -363,8 +366,12 @@ class ApiService {
         queryParams['q'] = searchQuery.trim();
       }
       
-      // Usar /workshop diretamente (mais confiável)
-      final response = await _dio.get('/workshop', queryParameters: queryParams);
+      // Usar /workshop diretamente; skipCache para sempre trazer logos atualizados da API
+      final response = await _dio.get(
+        '/workshop',
+        queryParameters: queryParams,
+        options: Options(extra: {'skipCache': true}),
+      );
       
       if (response.data != null && response.data['success'] == true) {
         final data = response.data['data'];
@@ -391,13 +398,19 @@ class ApiService {
     }
   }
 
-  // Obter todas as oficinas
+  // Obter todas as oficinas (API retorna data: { workshops } ou data como lista)
   Future<Map<String, dynamic>> getAllWorkshops() async {
     try {
       final response = await _dio.get('/workshop');
-      
       if (response.data != null && response.data['success'] == true) {
-        return {'success': true, 'data': response.data['data']};
+        final data = response.data['data'];
+        List<dynamic> workshops = [];
+        if (data is Map) {
+          workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
+        } else if (data is List) {
+          workshops = data;
+        }
+        return {'success': true, 'data': workshops};
       } else {
         return {'success': false, 'error': 'Erro ao buscar oficinas'};
       }
@@ -485,36 +498,37 @@ class ApiService {
     }
   }
 
-  // Obter perfil do usuário
+  // Obter perfil do usuário (com retry em timeout para API instável)
   Future<Map<String, dynamic>> getProfile({bool forceRefresh = false}) async {
-    try {
-      await loadToken();
-      
-      // Invalidar cache se forçado ANTES de fazer a requisição
-      if (forceRefresh) {
-        invalidateProfileCache();
-      }
-      
-      // Adicionar timestamp na query string para forçar bypass do cache quando forceRefresh
-      final queryParams = forceRefresh ? {'_t': DateTime.now().millisecondsSinceEpoch.toString()} : null;
-      
-      final response = await _dio.get(
-        '/customers/profile',
-        queryParameters: queryParams,
-        options: Options(
-          // Forçar bypass do cache do interceptor quando forceRefresh
-          extra: forceRefresh ? {'skipCache': true} : {},
-        ),
-      );
-      
-      if (response.data != null && response.data['success'] == true) {
-        return {'success': true, 'data': response.data['data']};
-      } else {
+    await loadToken();
+    if (forceRefresh) invalidateProfileCache();
+    final queryParams = forceRefresh ? {'_t': DateTime.now().millisecondsSinceEpoch.toString()} : null;
+    final options = Options(extra: forceRefresh ? {'skipCache': true} : {});
+
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final response = await _dio.get(
+          '/customers/profile',
+          queryParameters: queryParams,
+          options: options,
+        );
+        if (response.data != null && response.data['success'] == true) {
+          return {'success': true, 'data': response.data['data']};
+        }
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao buscar perfil'};
+      } catch (e) {
+        final isTimeout = e is DioException &&
+            (e.type == DioExceptionType.connectionTimeout ||
+                e.type == DioExceptionType.receiveTimeout ||
+                e.type == DioExceptionType.sendTimeout);
+        if (isTimeout && attempt == 1) {
+          AppLogger.warning('⚠️ [API] Timeout em /customers/profile, tentando novamente (2/2)', tag: 'API');
+          continue;
+        }
+        return {'success': false, 'error': _getErrorMessage(e)};
       }
-    } catch (e) {
-      return {'success': false, 'error': _getErrorMessage(e)};
     }
+    return {'success': false, 'error': 'Timeout de conexão. Verifique sua internet.'};
   }
 
   // Alias para getUserProfile (usado pelo profile_screen)

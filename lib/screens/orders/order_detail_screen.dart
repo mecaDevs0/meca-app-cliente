@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/price_utils.dart';
@@ -729,68 +730,78 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     'Oficina',
                     [
                       if (_bookingDetails?['workshop_logo_url'] != null || widget.booking['workshop_logo_url'] != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Row(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  (_bookingDetails?['workshop_logo_url'] ?? widget.booking['workshop_logo_url'] ?? '').toString(),
-                                  width: 50,
-                                  height: 50,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => Container(
-                                    width: 50,
-                                    height: 50,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF00C977).withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
+                        Builder(
+                          builder: (context) {
+                            final workshopId = (_bookingDetails?['workshop_id'] ?? widget.booking['workshop_id'] ?? _bookingDetails?['workshop']?['id'] ?? widget.booking['workshop']?['id'])?.toString() ?? '';
+                            final hasLogo = (_bookingDetails?['workshop_logo_url'] ?? widget.booking['workshop_logo_url'] ?? '').toString().trim().isNotEmpty;
+                            final logoUrl = (workshopId.isNotEmpty && hasLogo)
+                                ? '${AppConfig.apiBaseUrl}/workshop/$workshopId/logo/image'
+                                : null;
+                            if (logoUrl == null) return const SizedBox.shrink();
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Row(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      logoUrl,
+                                      width: 50,
+                                      height: 50,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) => Container(
+                                        width: 50,
+                                        height: 50,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF00C977).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
                                     child: const Icon(Icons.build, color: Color(0xFF00C977)),
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      (_bookingDetails?['workshop_name'] ?? widget.booking['workshop_name'] ?? 'Oficina').toString(),
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDarkMode ? Colors.white : Colors.black87,
-                                      ),
-                                    ),
-                                    if (_bookingDetails?['workshop_rating'] != null)
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.star, color: Colors.amber, size: 16),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            (_bookingDetails?['workshop_rating'] ?? 0).toString(),
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
-                                            ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          (_bookingDetails?['workshop_name'] ?? widget.booking['workshop_name'] ?? 'Oficina').toString(),
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDarkMode ? Colors.white : Colors.black87,
                                           ),
-                                          if (_bookingDetails?['workshop_total_reviews'] != null)
-                                            Text(
-                                              ' (${_bookingDetails?['workshop_total_reviews']} avaliações)',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                                        ),
+                                        if (_bookingDetails?['workshop_rating'] != null)
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.star, color: Colors.amber, size: 16),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                (_bookingDetails?['workshop_rating'] ?? 0).toString(),
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                                                ),
                                               ),
-                                            ),
-                                        ],
-                                      ),
-                                  ],
-                                ),
+                                              if (_bookingDetails?['workshop_total_reviews'] != null)
+                                                Text(
+                                                  ' (${_bookingDetails?['workshop_total_reviews']} avaliações)',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       _buildInfoRow(
                         Icons.build_circle,

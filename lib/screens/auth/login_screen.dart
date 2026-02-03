@@ -123,49 +123,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         );
         _tabController.animateTo(0);
       } else {
-        // Salvar device token após login bem-sucedido
-        // Aguardar um pouco para garantir que o OneSignal está pronto
-        await Future.delayed(const Duration(milliseconds: 500));
-        try {
-          // Tentar obter o token até 3 vezes com delay
-          String? playerId;
-          for (int i = 0; i < 3; i++) {
-            playerId = OneSignalService.getSubscriptionId();
-            if (playerId != null && playerId.isNotEmpty) {
-              print('[Login] Token OneSignal encontrado: ${playerId.substring(0, 20)}...');
-              break;
-            }
-            await Future.delayed(const Duration(milliseconds: 500));
-          }
-          
-        if (playerId != null && playerId.isNotEmpty) {
-          // Associar external user ID ao OneSignal após login
-          try {
-            final prefs = await _apiService.getStorage();
-            final userId = prefs.getString('user_id');
-            if (userId != null) {
-              await OneSignalService.setExternalUserId(userId);
-              print('[Login] External User ID associado ao OneSignal: $userId');
-            }
-          } catch (e) {
-            print('[Login] Erro ao associar external user ID: $e');
-          }
-          
-          final result = await _apiService.saveDeviceToken(playerId);
-          if (result['success'] == true) {
-            print('[Login] Device token salvo com sucesso no backend');
-          } else {
-            print('[Login] Erro ao salvar device token: ${result['error']}');
-          }
-        } else {
-          print('[Login] Token OneSignal não disponível após login');
-        }
-        } catch (e) {
-          if (kDebugMode) {
-            print('[Login] Erro ao salvar device token após login: $e');
-          }
-        }
+        // Entrar na tela principal imediatamente; device token em background (não bloqueia login)
         await _onLoginSuccess();
+        _saveDeviceTokenInBackground();
       }
     } else {
       if (!mounted) return;
@@ -576,6 +536,31 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
+
+  void _saveDeviceTokenInBackground() {
+    Future.microtask(() async {
+      try {
+        await Future.delayed(const Duration(milliseconds: 500));
+        final playerId = OneSignalService.getSubscriptionId();
+        if (playerId == null || playerId.isEmpty) return;
+        final prefs = await _apiService.getStorage();
+        final userId = prefs.getString('user_id');
+        if (userId != null) {
+          await OneSignalService.setExternalUserId(userId);
+        }
+        final result = await _apiService.saveDeviceToken(playerId);
+        if (kDebugMode) {
+          if (result['success'] == true) {
+            print('[Login] Device token salvo em background');
+          } else {
+            print('[Login] Device token em background: ${result['error']}');
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) print('[Login] Device token background: $e');
+      }
+    });
+  }
 
   Future<void> _onLoginSuccess() async {
     if (!mounted) return;

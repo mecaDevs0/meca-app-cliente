@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../utils/formatters.dart';
 import '../booking/booking_screen.dart';
@@ -28,6 +29,16 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   bool _loading = false;
   String _error = '';
   bool _showAllServices = false;
+
+  /// URL do logo sempre via proxy da API (evita 403 do S3). Nunca retorna URL S3 direta.
+  String? get _safeWorkshopLogoUrl {
+    final raw = _workshop?['logo_url']?.toString()?.trim();
+    final id = _workshop?['id']?.toString();
+    if (id != null && id.isNotEmpty && raw != null && raw.isNotEmpty) {
+      return '${AppConfig.apiBaseUrl}/workshop/$id/logo/image';
+    }
+    return (raw != null && raw.isNotEmpty && !raw.contains('amazonaws.com')) ? raw : null;
+  }
 
   @override
   void initState() {
@@ -282,10 +293,12 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     final String workshopName = (_workshop!['name'] ?? 'Oficina').toString();
     final double? rating = _getWorkshopRating();
     
-    // Seguir EXATAMENTE a mesma lógica da tela de oficinas (linha 753-756)
-    // Na tela de lista usa: workshop['logo_url'] diretamente
-    // Garantir que seja string (como na tela de lista)
-    final logoUrl = _workshop!['logo_url']?.toString();
+    // Logo sempre via proxy da API (evita 403 do S3).
+    final raw = _workshop!['logo_url']?.toString()?.trim();
+    final id = _workshop!['id']?.toString();
+    final String? logoUrl = (id != null && id.isNotEmpty && raw != null && raw.isNotEmpty)
+        ? '${AppConfig.apiBaseUrl}/workshop/$id/logo/image'
+        : (raw != null && raw.isNotEmpty && !raw.contains('amazonaws.com') ? raw : null);
 
     return CustomScrollView(
       slivers: [
@@ -1114,7 +1127,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                   servicePrice: price != null && price > 0 ? price.toString() : '',
                   serviceDuration: duration?.toString() ?? rawDuration?.toString() ?? '',
                   workshopName: workshopName,
-                  workshopLogoUrl: _workshop?['logo_url']?.toString(),
+                  workshopLogoUrl: _safeWorkshopLogoUrl,
                 ),
               ),
             );
@@ -1286,7 +1299,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                   servicePrice: '0',
                   serviceDuration: '',
                   workshopName: _workshop?['name'] ?? 'Oficina',
-                  workshopLogoUrl: _workshop?['logo_url']?.toString(),
+                  workshopLogoUrl: _safeWorkshopLogoUrl,
                 ),
               ),
             );

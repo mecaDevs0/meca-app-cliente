@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' show Position, Geolocator;
 
+import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../services/location_service.dart';
 import '../../utils/price_utils.dart';
@@ -501,28 +502,36 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                     color: const Color(0xFF00C977).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: (workshop['logo_url'] != null && 
-                          workshop['logo_url'].toString().isNotEmpty && 
-                          workshop['logo_url'].toString().startsWith('http'))
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            workshop['logo_url'].toString(),
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const Icon(
-                                Icons.build,
-                                color: Color(0xFF00C977),
-                                size: 24,
-                              );
-                            },
-                          ),
-                        )
-                      : const Icon(
-                          Icons.build,
-                          color: Color(0xFF00C977),
-                          size: 24,
-                        ),
+                  child: Builder(
+                    builder: (context) {
+                      final raw = workshop['logo_url']?.toString() ?? '';
+                      final id = workshop['id']?.toString() ?? widget.workshopId ?? '';
+                      // Sempre usar proxy da API quando temos id e logo (evita 403 do S3)
+                      final logoUrl = (id.isNotEmpty && raw.trim().isNotEmpty)
+                          ? '${AppConfig.apiBaseUrl}/workshop/$id/logo/image'
+                          : (raw.isNotEmpty && raw.startsWith('http') && !raw.contains('amazonaws.com') ? raw : null);
+                      return logoUrl != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              logoUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(
+                                  Icons.build,
+                                  color: Color(0xFF00C977),
+                                  size: 24,
+                                );
+                              },
+                            ),
+                          )
+                        : const Icon(
+                            Icons.build,
+                            color: Color(0xFF00C977),
+                            size: 24,
+                          );
+                    },
+                  ),
                 ),
                 const SizedBox(width: 16),
                 
@@ -715,7 +724,9 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
           servicePrice: _service?['price']?.toString() ?? '0',
           serviceDuration: _service?['duration']?.toString() ?? '',
           workshopName: workshop['name'] ?? 'Oficina',
-          workshopLogoUrl: workshop['logo_url']?.toString(),
+          workshopLogoUrl: (workshop['id'] != null && workshop['id'].toString().isNotEmpty && (workshop['logo_url']?.toString().trim().isNotEmpty ?? false))
+              ? '${AppConfig.apiBaseUrl}/workshop/${workshop['id']}/logo/image'
+              : null,
         ),
       ),
     );

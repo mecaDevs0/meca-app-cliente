@@ -7,11 +7,11 @@ class AppConfig {
   /// URL base da API (Produção - HTTPS via NGINX)
   static const String apiBaseUrl = 'https://api.mecabr.com';
   
-  /// Timeout de conexão (segundos) - Otimizado para EC2
-  static const int connectionTimeout = 60;
+  /// Timeout de conexão (segundos) - Falha rápida se API inacessível (DNS/SG)
+  static const int connectionTimeout = 25;
   
-  /// Timeout de recebimento (segundos) - Otimizado para EC2
-  static const int receiveTimeout = 60; // Timeout padrão para requisições normais
+  /// Timeout de recebimento (segundos)
+  static const int receiveTimeout = 30;
   static const int plateSearchTimeout = 90; // Timeout específico para busca de placas (API externa pode ser lenta)
   
   // ========================================

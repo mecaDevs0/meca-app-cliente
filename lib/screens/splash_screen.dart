@@ -57,16 +57,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       if (!mounted) return;
       
       if (result['success'] == true) {
-        // Se usuário já está logado, salvar device token
-        try {
-          final playerId = OneSignalService.getSubscriptionId();
-          if (playerId != null) {
-            await _apiService.saveDeviceToken(playerId);
-          }
-        } catch (e) {
-          // Silenciar erro
-        }
+        // Ir para home imediatamente; device token em background
         Navigator.pushReplacementNamed(context, '/home');
+        _saveDeviceTokenInBackground();
       } else {
         Navigator.pushReplacementNamed(context, '/login');
       }
@@ -76,6 +69,17 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         Navigator.pushReplacementNamed(context, '/login');
       }
     }
+  }
+
+  void _saveDeviceTokenInBackground() {
+    Future.microtask(() async {
+      try {
+        final playerId = OneSignalService.getSubscriptionId();
+        if (playerId != null && playerId.isNotEmpty) {
+          await _apiService.saveDeviceToken(playerId);
+        }
+      } catch (_) {}
+    });
   }
 
   @override

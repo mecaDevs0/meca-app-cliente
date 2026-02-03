@@ -5,6 +5,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
+import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../services/location_service.dart';
 import '../../utils/cep_formatter.dart';
@@ -772,62 +773,69 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
               children: [
                 Row(
                   children: [
-                    // Logo da oficina
-                    Container(
-                      width: 70,
-                      height: 70,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF00C977), Color(0xFF00B369)],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00C977).withOpacity(0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: workshop['logo_url'] != null && 
-                             workshop['logo_url'].isNotEmpty && 
-                             workshop['logo_url'] != '' &&
-                             workshop['logo_url'].startsWith('http')
-                          ? ClipRRect(
+                    // Logo: SEMPRE via proxy da API (evita 403 do S3). Tentar carregar sempre que tiver id (404 = placeholder).
+                    Builder(
+                      builder: (context) {
+                        final workshopId = workshop['id']?.toString();
+                        final logoUrl = (workshopId != null && workshopId.isNotEmpty)
+                            ? '${AppConfig.apiBaseUrl}/workshop/$workshopId/logo/image'
+                            : null;
+                        if (logoUrl == null || logoUrl.isEmpty) {
+                          return Container(
+                            width: 70,
+                            height: 70,
+                            decoration: BoxDecoration(
+                              color: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[100],
                               borderRadius: BorderRadius.circular(20),
-                              child: Image.network(
-                                workshop['logo_url'],
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[200],
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Icon(
-                                      Icons.store_outlined,
-                                      color: isDarkMode ? Colors.grey[500] : Colors.grey[400],
-                                      size: 28,
-                                    ),
-                                  );
-                                },
-                              ),
-                            )
-                          : Container(
-                              decoration: BoxDecoration(
-                                color: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[100],
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-                                  width: 1,
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.store_outlined,
-                                color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
-                                size: 28,
+                              border: Border.all(
+                                color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+                                width: 1,
                               ),
                             ),
+                            child: Icon(
+                              Icons.store_outlined,
+                              color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
+                              size: 28,
+                            ),
+                          );
+                        }
+                        return Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF00C977).withOpacity(0.3),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Image.network(
+                              logoUrl,
+                              fit: BoxFit.cover,
+                              width: 70,
+                              height: 70,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    color: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[200],
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Icon(
+                                    Icons.store_outlined,
+                                    color: isDarkMode ? Colors.grey[500] : Colors.grey[400],
+                                    size: 28,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(width: 16),
                     Expanded(

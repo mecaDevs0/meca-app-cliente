@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../utils/price_utils.dart';
 import '../../widgets/app_alerts.dart';
@@ -337,15 +338,15 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              // Logo da oficina ou ícone padrão
+              // Logo da oficina: sempre via proxy da API (evita 403 do S3)
               Builder(
                 builder: (context) {
-                  final workshopLogoUrl = item['workshop_logo_url']?.toString() ?? 
-                                         item['workshop']?['logo_url']?.toString();
-                  
-                  if (workshopLogoUrl != null && 
-                      workshopLogoUrl.isNotEmpty &&
-                      workshopLogoUrl.startsWith('http')) {
+                  final workshopId = item['workshop_id']?.toString() ?? item['workshop']?['id']?.toString() ?? '';
+                  final hasLogo = (item['workshop_logo_url'] ?? item['workshop']?['logo_url'])?.toString().trim().isNotEmpty ?? false;
+                  final logoUrl = (workshopId.isNotEmpty && hasLogo)
+                      ? '${AppConfig.apiBaseUrl}/workshop/$workshopId/logo/image'
+                      : null;
+                  if (logoUrl != null) {
                     return Container(
                       width: 16,
                       height: 16,
@@ -356,7 +357,7 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: Image.network(
-                          workshopLogoUrl,
+                          logoUrl,
                           width: 16,
                           height: 16,
                           fit: BoxFit.cover,

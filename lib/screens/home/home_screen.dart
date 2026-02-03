@@ -6,6 +6,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../services/location_service.dart';
 import '../../services/theme_service.dart';
@@ -1196,9 +1197,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final distanceLabel = _formatDistanceLabel(workshop['distance']);
     final double? ratingValue =
         _parseDouble(workshop['rating']) ?? _parseDouble(workshop['average_rating']);
-    final hasLogo = workshop['logo_url'] != null && 
-                    workshop['logo_url'].toString().trim().isNotEmpty &&
-                    workshop['logo_url'].toString().startsWith('http');
+    final rawLogo = workshop['logo_url']?.toString() ?? '';
+    final workshopId = workshop['id']?.toString();
+    final bool isS3 = rawLogo.contains('amazonaws.com');
+    final String? logoUrl = (workshopId != null && workshopId.isNotEmpty && (rawLogo.isNotEmpty || workshop['logo_url'] != null))
+        ? '${AppConfig.apiBaseUrl}/workshop/$workshopId/logo/image'
+        : (rawLogo.isNotEmpty && rawLogo.startsWith('http') && !isS3 ? rawLogo : null);
+    final hasLogo = logoUrl != null;
 
     return GestureDetector(
       onTap: () {
@@ -1273,7 +1278,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               clipBehavior: Clip.hardEdge,
                               children: [
                                 Image.network(
-                                  workshop['logo_url'].toString(),
+                                  logoUrl!,
                                   width: double.infinity,
                                   height: 120,
                                   fit: BoxFit.cover,
@@ -1713,11 +1718,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final booking = _inProgressBookings.first; // Pegar o primeiro serviço em andamento
     final serviceName = booking['service_name'] ?? booking['service']?['name'] ?? 'Serviço';
     final workshopName = booking['workshop_name'] ?? booking['workshop']?['name'] ?? 'Oficina';
-    final workshopLogoUrl = booking['workshop_logo_url'] ?? 
-                            booking['workshop']?['logo_url']?.toString();
-    final hasLogo = workshopLogoUrl != null && 
-                    workshopLogoUrl.toString().trim().isNotEmpty &&
-                    workshopLogoUrl.toString() != 'null';
+    final workshopId = booking['workshop_id']?.toString() ?? booking['workshop']?['id']?.toString();
+    final rawLogo = booking['workshop_logo_url'] ?? booking['workshop']?['logo_url']?.toString() ?? '';
+    // Sempre usar proxy da API para logo (evita 403 do S3). Nunca usar URL S3 direta.
+    final workshopLogoUrl = (workshopId != null && workshopId.isNotEmpty && rawLogo.toString().trim().isNotEmpty)
+        ? '${AppConfig.apiBaseUrl}/workshop/$workshopId/logo/image'
+        : null;
+    final hasLogo = workshopLogoUrl != null;
     
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
@@ -1750,7 +1757,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
-                          workshopLogoUrl.toString(),
+                          workshopLogoUrl!,
                           width: 40,
                           height: 40,
                           fit: BoxFit.cover,
