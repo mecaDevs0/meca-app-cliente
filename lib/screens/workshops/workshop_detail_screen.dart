@@ -51,26 +51,41 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       _loading = true;
       _error = '';
     });
-    
+
     try {
-      final result = await _apiService.getWorkshopDetails(widget.workshopId);
-      
+      final futureDetails = _apiService.getWorkshopDetails(widget.workshopId);
+      final futureServices = _apiService.getWorkshopServices(widget.workshopId);
+      final results = await Future.wait([futureDetails, futureServices]);
+
       if (!mounted) return;
-      
+      final result = results[0] as Map<String, dynamic>;
+      final servicesResult = results[1] as Map<String, dynamic>;
+
       if (result['success']) {
-        // O ApiService agora retorna data diretamente, não data.workshop
-        final rawWorkshop = Map<String, dynamic>.from(
-          result['data'] ?? {},
-        );
-
-        final services = await _loadWorkshopServices();
-
-        if (!mounted) return;
+        final rawWorkshop = Map<String, dynamic>.from(result['data'] ?? {});
         final normalizedWorkshop = _normalizeWorkshop(rawWorkshop);
-        
+        List<Map<String, dynamic>> servicesList = [];
+        if (servicesResult['success']) {
+          final rawData = servicesResult['data'];
+          if (rawData is List) {
+            servicesList = rawData
+                .whereType<Map>()
+                .map((s) => _normalizeService(Map<String, dynamic>.from(s)))
+                .toList();
+          } else if (rawData is Map) {
+            final nested = rawData['services'] ?? rawData['data'];
+            if (nested is List) {
+              servicesList = nested
+                  .whereType<Map>()
+                  .map((s) => _normalizeService(Map<String, dynamic>.from(s)))
+                  .toList();
+            }
+          }
+        }
+        if (!mounted) return;
         setState(() {
           _workshop = normalizedWorkshop;
-          _services = services;
+          _services = servicesList;
           _loading = false;
           _error = '';
           _showAllServices = false;

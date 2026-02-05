@@ -39,6 +39,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _locationServicesDisabled = false;
   bool _isInSaoPaulo = false;
   bool _checkingLocation = false;
+  /// True quando a lista de oficinas próximas foi obtida com coordenadas de fallback (ex.: São Paulo) por falta de permissão/posição.
+  bool _usedFallbackLocationForNearby = false;
+  static const double _nearbyWorkshopsRadiusKm = 25.0;
 
   @override
   void initState() {
@@ -71,123 +74,100 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _upcomingBookings = [];
       _inProgressBookings = [];
       _nearbyWorkshops = [];
+      _usedFallbackLocationForNearby = false;
     });
-    
-    // IMPORTANTE: Invalidar cache se forçar refresh
-    if (forceRefresh) {
-      _apiService.invalidateBookingsCache();
-    }
-    
+
+    if (forceRefresh) _apiService.invalidateBookingsCache();
+
     try {
-      // Carregar agendamentos do usuário real
-      final bookingsResponse = await _apiService.getBookings();
+      // Paralelizar: agendamentos e localização+oficinas ao mesmo tempo (resposta muito mais rápida)
+      final futureBookings = _apiService.getBookings();
+      final futureLocationAndNearby = _loadLocationAndNearby();
+
+      await Future.wait([futureBookings, futureLocationAndNearby]);
+
+      if (!mounted) return;
+      final bookingsResponse = await futureBookings;
       if (bookingsResponse['success']) {
         final data = bookingsResponse['data'];
         final bookingsList = data is List ? data : (data is Map ? (data['bookings'] ?? data['data'] ?? []) : []);
         final bookings = List<Map<String, dynamic>>.from(bookingsList);
-        
-        // Filtrar serviços em andamento
+
         final inProgress = bookings.where((b) {
           final status = (b['status'] ?? '').toString().toLowerCase();
           return status == 'em_andamento' || status == 'in_progress';
         }).toList();
-        
-        // Filtrar apenas agendamentos futuros ou pendentes (excluindo em andamento) e ordenar por data
+
         final now = DateTime.now();
         final upcoming = bookings.where((b) {
           final status = b['status'] ?? '';
           final statusLower = status.toString().toLowerCase();
-          
-          // Excluir serviços em andamento
-          if (statusLower == 'em_andamento' || statusLower == 'in_progress') {
-            return false;
-          }
-          
-          // Incluir pendentes, confirmados E pendente_cliente (sugestão de horário pendente)
-          final isPendingOrConfirmed = status == 'pendente_oficina' || 
-                                      status == 'confirmed' || 
-                                      status == 'confirmado' ||
-                                      status == 'pendente_cliente' ||
-                                      status == 'aguardando_autorizacao_inicio' ||
-                                      statusLower == 'awaiting_service_start' ||
-                                      statusLower == 'pending_cliente' ||
-                                      statusLower == 'pending_customer';
-          
+          if (statusLower == 'em_andamento' || statusLower == 'in_progress') return false;
+          final isPendingOrConfirmed = status == 'pendente_oficina' || status == 'confirmed' || status == 'confirmado' ||
+              status == 'pendente_cliente' || status == 'aguardando_autorizacao_inicio' ||
+              statusLower == 'awaiting_service_start' || statusLower == 'pending_cliente' || statusLower == 'pending_customer';
           if (!isPendingOrConfirmed) return false;
-          
-          // Verificar se é agendamento futuro
           final appointmentDate = b['appointment_date'] ?? b['scheduled_date'];
           if (appointmentDate != null) {
             try {
               final date = DateTime.parse(appointmentDate);
               return date.isAfter(now) || date.isAtSameMomentAs(now);
             } catch (e) {
-              return true; // Se não conseguir parsear, incluir para não perder dados
+              return true;
             }
           }
-          
-          return true; // Incluir se não tiver data
+          return true;
         }).toList();
-        
-        // Ordenar por data mais próxima primeiro
+
         upcoming.sort((a, b) {
           final dateA = a['appointment_date'] ?? a['scheduled_date'];
           final dateB = b['appointment_date'] ?? b['scheduled_date'];
-          
           if (dateA == null && dateB == null) return 0;
           if (dateA == null) return 1;
           if (dateB == null) return -1;
-          
           try {
-            final dateAObj = DateTime.parse(dateA);
-            final dateBObj = DateTime.parse(dateB);
-            return dateAObj.compareTo(dateBObj);
+            return DateTime.parse(dateA).compareTo(DateTime.parse(dateB));
           } catch (e) {
             return 0;
           }
         });
-        
-        if (!mounted) return;
+
         setState(() {
-          _upcomingBookings = upcoming.take(3).toList(); // Pegar apenas os 3 mais próximos
+          _upcomingBookings = upcoming.take(3).toList();
           _inProgressBookings = inProgress;
         });
       }
-      
-      final locationStatus = await _syncLocationStatus();
-      if (locationStatus.canRequestPosition) {
-        try {
-          final position = await _locationService.getCurrentPosition();
-          if (position != null) {
-            _currentPosition = position;
-            print('📍 [Home] Localização obtida: lat=${position.latitude}, lng=${position.longitude}');
-            await _updateNearbyWorkshops(position.latitude, position.longitude);
-            print('📍 [Home] Chamando _checkIfInSaoPaulo...');
-            await _checkIfInSaoPaulo(position.latitude, position.longitude);
-            print('📍 [Home] _checkIfInSaoPaulo concluído');
-          } else {
-            await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude);
-            await _checkIfInSaoPaulo(_fallbackLatitude, _fallbackLongitude);
-          }
-        } catch (e) {
-          print('Erro ao obter localização: $e');
-          await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude);
-          await _checkIfInSaoPaulo(_fallbackLatitude, _fallbackLongitude);
-        }
-      } else {
-        if (!mounted) return;
-        setState(() {
-          _nearbyWorkshops = [];
-          _isInSaoPaulo = false;
-        });
-      }
-      
     } catch (e) {
       print('Erro ao carregar dados: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  /// Carrega localização e oficinas próximas em paralelo com getBookings (não bloqueia a home).
+  Future<void> _loadLocationAndNearby() async {
+    final locationStatus = await _syncLocationStatus();
+    if (locationStatus.canRequestPosition) {
+      try {
+        final position = await _locationService.getCurrentPosition();
+        if (position != null) {
+          _currentPosition = position;
+          await _updateNearbyWorkshops(position.latitude, position.longitude, usedFallback: false);
+          await _checkIfInSaoPaulo(position.latitude, position.longitude);
+        } else {
+          await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude, usedFallback: true);
+          await _checkIfInSaoPaulo(_fallbackLatitude, _fallbackLongitude);
+        }
+      } catch (e) {
+        print('Erro ao obter localização: $e');
+        await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude, usedFallback: true);
+        await _checkIfInSaoPaulo(_fallbackLatitude, _fallbackLongitude);
+      }
+    } else {
+      await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude, usedFallback: true);
+      if (mounted) setState(() => _isInSaoPaulo = false);
     }
   }
 
@@ -932,11 +912,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Oficinas Próximas',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Oficinas Próximas',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (_usedFallbackLocationForNearby && _nearbyWorkshops.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Mostrando oficinas em São Paulo. Ative a localização para ver as mais próximas de você.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             Container(
@@ -1144,16 +1143,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _updateNearbyWorkshops(double latitude, double longitude) async {
+  Future<void> _updateNearbyWorkshops(double latitude, double longitude, {bool usedFallback = false}) async {
     final workshopsResponse = await _apiService.getNearbyWorkshops(
       latitude,
       longitude,
-      10.0,
+      _nearbyWorkshopsRadiusKm,
     );
 
     if (!mounted) return;
 
-    if (workshopsResponse['success']) {
+    if (workshopsResponse['success'] == true) {
       final data = workshopsResponse['data'];
       List<dynamic> workshops = [];
 
@@ -1164,6 +1163,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       }
 
       setState(() {
+        _usedFallbackLocationForNearby = usedFallback;
         _nearbyWorkshops = workshops
             .whereType<Map>()
             .map((w) => _normalizeWorkshop(Map<String, dynamic>.from(w)))
@@ -1172,6 +1172,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       });
     } else {
       setState(() {
+        _usedFallbackLocationForNearby = usedFallback;
         _nearbyWorkshops = [];
       });
     }

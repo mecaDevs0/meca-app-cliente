@@ -263,6 +263,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         cvv = _cvvController.text.trim();
       }
 
+      final workshopAccountId = (widget.bookingData['workshop_pagbank_account_id'] ?? widget.bookingData['workshopPagbankAccountId'])?.toString().trim();
       // Usar createBookingPayment que valida o status do booking antes de criar pagamento
       final paymentResult = await _apiService.createBookingPayment(
         bookingId,
@@ -272,6 +273,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         holderName: _selectedMethod == 'credit_card' ? _extractCardHolderName(_selectedCardId) : null,
         installments: _selectedMethod == 'credit_card' ? _selectedInstallments : null,
         pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
+        workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
       );
 
       if (!mounted) return;
@@ -616,6 +618,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         brand = 'ELO';
       }
 
+      final workshopAccountId = (widget.bookingData['workshop_pagbank_account_id'] ?? widget.bookingData['workshopPagbankAccountId'])?.toString().trim();
       final paymentResult = await _apiService.createBookingPayment(
         bookingId,
         paymentMethod: 'CREDIT_CARD',
@@ -628,6 +631,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         brand: brand,
         expiryMonth: expMonth,
         expiryYear: expYear,
+        workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
       );
 
       if (!mounted) return;
@@ -967,23 +971,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             'Valor do orçamento final',
             _currencyFormatter.format(widget.serviceAmount),
           ),
-          // PASSO 9: Mostrar split de pagamento (7% MECA / 93% Oficina)
-          if (widget.mecaFee > 0) ...[
-            const SizedBox(height: 8),
-            _buildSummaryRow(
-              theme,
-              'Taxa MECA (7%)',
-              _currencyFormatter.format(mecaFeeDisplay),
-              secondary: true,
-            ),
-            const SizedBox(height: 8),
-            _buildSummaryRow(
-              theme,
-              'Valor que a oficina receberá',
-              _currencyFormatter.format(workshopDisplay),
-              secondary: true,
-            ),
-          ],
+          // Cliente não deve ver detalhes do split (taxa MECA/oficina)
           const Divider(height: 24),
           _buildSummaryRow(
             theme,

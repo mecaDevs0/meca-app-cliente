@@ -752,13 +752,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _buildFAQItem(isDark, 'Como agendar um serviço?'),
+                      _buildFAQItem(isDark, 'Como agendar um serviço?', 'Busque uma oficina no mapa ou lista, escolha o serviço, data e horário e confirme. A oficina aprovará e você receberá a confirmação.'),
                       const SizedBox(height: 12),
-                      _buildFAQItem(isDark, 'Como cancelar um agendamento?'),
+                      _buildFAQItem(isDark, 'Como cancelar um agendamento?', 'Você pode cancelar até 2 horas antes do horário pelo app. Depois disso, entre em contato com a oficina.'),
                       const SizedBox(height: 12),
-                      _buildFAQItem(isDark, 'Como alterar meus dados?'),
+                      _buildFAQItem(isDark, 'Como alterar meus dados?', 'No Perfil, toque em "Editar perfil" para alterar nome, e-mail, telefone e outros dados.'),
                       const SizedBox(height: 12),
-                      _buildFAQItem(isDark, 'Como funciona o pagamento?'),
+                      _buildFAQItem(isDark, 'Como funciona o pagamento?', 'Após a oficina finalizar o serviço e você aprovar o orçamento, pague no app por PIX ou cartão. O valor é repassado automaticamente à oficina.'),
             ],
           ),
         ),
@@ -930,16 +930,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildFAQItem(bool isDark, String question) {
+  Widget _buildFAQItem(bool isDark, String question, String answer) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[50],
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+          width: 1,
+        ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
+            margin: const EdgeInsets.only(top: 6),
             width: 6,
             height: 6,
             decoration: BoxDecoration(
@@ -949,13 +955,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              question,
-              style: TextStyle(
-                fontSize: 15,
-                color: isDark ? Colors.white : const Color(0xFF252940),
-                fontWeight: FontWeight.w500,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  question,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: isDark ? Colors.white : const Color(0xFF252940),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  answer,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

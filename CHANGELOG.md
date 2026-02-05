@@ -1,5 +1,18 @@
 # Changelog - MECA App Cliente
 
+## [2.1.1] - 2026-02-05
+
+### Fixed
+- Corrigida tela preta na tela de avaliacao de servico apos pagamento
+- Resolvidos erros de semantics.parentDataDirty no Flutter
+- Corrigidos conflitos de layout com Spacer dentro de SingleChildScrollView
+- Melhorada estabilidade da renderizacao de widgets
+
+### Changed
+- Simplificada estrutura de layout da tela de avaliacao
+- Removido LayoutBuilder e ConstrainedBox desnecessarios
+- Substituido Spacer por SizedBox com altura fixa
+
 ## [2.1.0] - 2026-02-05
 
 ### Added

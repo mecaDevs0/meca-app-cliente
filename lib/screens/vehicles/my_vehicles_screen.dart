@@ -356,14 +356,16 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
                                   ),
                                 ),
                               ),
-                              // Ícone do carro
+                              // Ícone do carro - cor dinâmica baseada na luminosidade do fundo
                               Icon(
                                 Icons.electric_car_rounded,
-                                color: Colors.white,
+                                color: _getIconColorForBackground(vehicleColor),
                                 size: 36,
                                 shadows: [
                                   Shadow(
-                                    color: Colors.black.withOpacity(0.2),
+                                    color: (_getIconColorForBackground(vehicleColor) == Colors.white 
+                                        ? Colors.black 
+                                        : Colors.white).withOpacity(0.3),
                                     blurRadius: 4,
                                     offset: const Offset(0, 2),
                                   ),
@@ -593,35 +595,92 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
       return const Color(0xFF00C977); // Cor padrão MECA
     }
     
-    final colorStr = colorValue.toString().toLowerCase().trim();
+    // Normalizar: remover espaços, acentos e converter para lowercase
+    final colorStr = colorValue.toString()
+        .toLowerCase()
+        .trim()
+        .replaceAll(RegExp(r'\s+'), '') // Remove espaços extras
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ã', 'a')
+        .replaceAll('õ', 'o')
+        .replaceAll('ç', 'c');
     
-    // Mapeamento de cores comuns
+    // Mapeamento de cores comuns (incluindo variações de gênero e plural)
     final colorMap = {
+      // Vermelho
       'vermelho': Colors.red,
+      'vermelha': Colors.red,
+      'vermelhos': Colors.red,
+      'vermelhas': Colors.red,
       'red': Colors.red,
+      // Azul
       'azul': Colors.blue,
+      'azuis': Colors.blue,
       'blue': Colors.blue,
+      // Verde
       'verde': Colors.green,
+      'verdes': Colors.green,
       'green': Colors.green,
+      // Amarelo
       'amarelo': Colors.yellow,
+      'amarela': Colors.yellow,
+      'amarelos': Colors.yellow,
+      'amarelas': Colors.yellow,
       'yellow': Colors.yellow,
+      // Branco
       'branco': Colors.white,
+      'branca': Colors.white,
+      'brancos': Colors.white,
+      'brancas': Colors.white,
       'white': Colors.white,
+      // Preto
       'preto': Colors.black,
+      'preta': Colors.black,
+      'pretos': Colors.black,
+      'pretas': Colors.black,
       'black': Colors.black,
+      // Cinza
       'cinza': Colors.grey,
+      'cinzas': Colors.grey,
       'gray': Colors.grey,
+      'grey': Colors.grey,
       'gris': Colors.grey,
+      // Prata
       'prata': Colors.grey[300]!,
+      'pratas': Colors.grey[300]!,
       'silver': Colors.grey[300]!,
+      // Laranja
       'laranja': Colors.orange,
+      'laranjas': Colors.orange,
       'orange': Colors.orange,
+      // Rosa
       'rosa': Colors.pink,
+      'rosas': Colors.pink,
       'pink': Colors.pink,
+      // Roxo
       'roxo': Colors.purple,
+      'roxa': Colors.purple,
+      'roxos': Colors.purple,
+      'roxas': Colors.purple,
       'purple': Colors.purple,
+      // Marrom
       'marrom': Colors.brown,
+      'marrons': Colors.brown,
       'brown': Colors.brown,
+      // Bege
+      'bege': Colors.brown[200]!,
+      'beges': Colors.brown[200]!,
+      'beige': Colors.brown[200]!,
+      // Dourado
+      'dourado': Colors.amber,
+      'dourada': Colors.amber,
+      'dourados': Colors.amber,
+      'douradas': Colors.amber,
+      'gold': Colors.amber,
     };
     
     // Tentar encontrar cor no mapa
@@ -640,5 +699,13 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
     
     // Cor padrão se não conseguir identificar
     return const Color(0xFF00C977);
+  }
+  
+  // Helper para determinar se devemos usar ícone branco ou preto baseado na luminosidade da cor
+  Color _getIconColorForBackground(Color backgroundColor) {
+    // Calcular luminosidade relativa usando a fórmula padrão
+    final luminance = backgroundColor.computeLuminance();
+    // Se a cor for clara (luminância > 0.5), usar ícone escuro, caso contrário usar branco
+    return luminance > 0.5 ? Colors.black87 : Colors.white;
   }
 }

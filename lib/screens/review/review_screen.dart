@@ -117,15 +117,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
         elevation: 0,
       ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight - 38),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
                     Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
@@ -273,8 +269,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                         ],
                       ),
                     ),
-                    const Spacer(),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 24),
                     SizedBox(
                       height: 54,
                       child: ElevatedButton(
@@ -302,11 +297,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
                               ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            );
-          },
+            ],
+          ),
         ),
       ),
     );

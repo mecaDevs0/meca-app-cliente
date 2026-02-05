@@ -14,10 +14,11 @@ class ApiService {
   ApiService() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiBaseUrl,
-      connectTimeout: Duration(seconds: AppConfig.connectionTimeout), // 60 segundos para EC2
-      receiveTimeout: Duration(seconds: AppConfig.receiveTimeout), // 60 segundos para EC2
+      connectTimeout: Duration(seconds: AppConfig.connectionTimeout),
+      receiveTimeout: Duration(seconds: AppConfig.receiveTimeout),
       headers: {
         'Content-Type': 'application/json',
+        'Accept-Encoding': 'gzip',
         'x-publishable-api-key': 'pk_8913f91e8557d24f01440879c36cdb8c81e6ef346ec9a14dc6582ba87d06e9e9',
       },
     ));
@@ -1007,7 +1008,7 @@ class ApiService {
     }
   }
 
-  // Obter notificações recentes
+  // Obter notificações recentes (sempre sem cache para dados atualizados)
   Future<Map<String, dynamic>> getNotifications({int limit = 20, bool? read}) async {
     try {
       await loadToken();
@@ -1016,7 +1017,11 @@ class ApiService {
         queryParams['read'] = read.toString();
       }
       
-      final response = await _dio.get('/notifications', queryParameters: queryParams);
+      final response = await _dio.get(
+        '/notifications',
+        queryParameters: queryParams,
+        options: Options(extra: {'skipCache': true}),
+      );
       
       if (response.data != null && response.data['success'] == true) {
         final payload = response.data['data'];
@@ -1024,17 +1029,21 @@ class ApiService {
           return {'success': true, 'data': payload};
         }
         if (payload is List) {
+          final list = payload.whereType<Map>().map<Map<String, dynamic>>((n) {
+            if (n is Map<String, dynamic>) return Map<String, dynamic>.from(n);
+            return Map<String, dynamic>.from(n as Map);
+          }).toList();
           return {
             'success': true,
             'data': {
-              'notifications': payload,
-              'unread_count': payload.whereType<Map>().where((n) => !(n['read'] == true || n['is_read'] == true)).length,
+              'notifications': list,
+              'unread_count': list.where((n) => !(n['read'] == true || n['is_read'] == true)).length,
             },
           };
         }
         return {'success': true, 'data': {'notifications': const [], 'unread_count': 0}};
       } else {
-        return {'success': false, 'error': response.data['error'] ?? 'Erro ao buscar notificações'};
+        return {'success': false, 'error': response.data?['error'] ?? 'Erro ao buscar notificações'};
       }
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
@@ -1841,6 +1850,7 @@ class ApiService {
     String? brand,
     String? expiryMonth,
     String? expiryYear,
+    String? workshopPagbankAccountId,
   }) async {
     try {
       await loadToken();
@@ -1885,6 +1895,10 @@ class ApiService {
       }
       if (expiryYear != null && expiryYear.trim().isNotEmpty) {
         payload['expiryYear'] = expiryYear.trim();
+      }
+      if (workshopPagbankAccountId != null && workshopPagbankAccountId.trim().isNotEmpty) {
+        payload['workshopAccountId'] = workshopPagbankAccountId.trim();
+        payload['pagbankAccountId'] = workshopPagbankAccountId.trim();
       }
 
       print('💳 [API] Criando pagamento para booking $bookingId com payload: paymentMethod=${payload['paymentMethod']}, hasCardToken=${payload.containsKey('cardToken')}, hasCvv=${payload.containsKey('cvv')}, installments=${payload['installments']}');

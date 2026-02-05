@@ -536,6 +536,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         normalizedBooking['status'] = status;
 
         widget.booking.addAll(normalizedBooking);
+        if (!mounted) return;
         setState(() {
           _bookingDetails = _bookingDetails == null
               ? normalizedBooking
@@ -1516,7 +1517,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           ),
                           const SizedBox(width: 12),
                           Text(
-                            PriceUtils.formatCurrency(diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue) ?? 'R\$ 0,00',
+                            PriceUtils.formatCurrency(_diagnosticValueInReais(diagnosticValue)) ?? 'R\$ 0,00',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 15,
@@ -2066,32 +2067,57 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final normalized = _normalizeStatusKey(status);
     switch (normalized) {
       case 'pending_customer':
-        return 'Aguardando você';
+        return 'Aguardando Sua Resposta';
       case 'pending':
-        return 'Aguardando oficina';
+      case 'pendente':
+      case 'pendente_oficina':
+        return 'Aguardando Oficina';
       case 'confirmed':
+      case 'confirmado':
         return 'Confirmado';
       case 'in_progress':
+      case 'em_andamento':
         return 'Em Andamento';
       case 'awaiting_quote_approval':
-        return 'Aguardando Aprovação do Orçamento';
+      case 'aguardando_aprovacao_orcamento':
+        return 'Orçamento - Aguardando Aprovação';
       case 'awaiting_service_start':
+      case 'aguardando_autorizacao_inicio':
         return 'Aguardando Autorização de Início';
       case 'vehicle_at_workshop':
+      case 'veiculo_na_oficina':
         return 'Veículo na Oficina';
       case 'awaiting_finalization_approval':
-        return 'Aguardando Aprovação da Finalização';
+      case 'aguardando_aprovacao_finalizacao':
+        return 'Aguardando Aprovação de Finalização';
       case 'in_dispute':
+      case 'em_disputa':
         return 'Em Disputa';
       case 'completed':
+      case 'concluido':
+      case 'concluído':
+        return 'Concluído';
       case 'paid':
+      case 'pago':
         return 'Pago';
       case 'awaiting_payment':
+      case 'aguardando_pagamento':
+      case 'finalizado_aguardando_pagamento':
         return 'Aguardando Pagamento';
       case 'cancelled':
+      case 'cancelado':
         return 'Cancelado';
+      case 'rejected':
+      case 'rejeitado':
+        return 'Rejeitado';
       default:
-        return 'Aguardando Confirmação';
+        // Se não reconhecer, formatar o status original de forma legível
+        final formatted = status
+            .replaceAll('_', ' ')
+            .split(' ')
+            .map((word) => word.isEmpty ? '' : word[0].toUpperCase() + word.substring(1).toLowerCase())
+            .join(' ');
+        return formatted.isEmpty ? 'Aguardando Confirmação' : formatted;
     }
   }
 
@@ -2421,1120 +2447,416 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final hasQuote = (merged['final_price'] != null && merged['final_price'] > 0) ||
                      (_bookingDetails?['final_price'] != null && _bookingDetails!['final_price'] > 0);
     
+    // Se não há nenhuma ação para o cliente (sugestão de horário, autorizar início, aprovar orçamento, avaliar), não exibir o bloco de ações
+    final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
+    final rawStatusForActions = (merged['status'] ?? status).toString().toLowerCase().trim();
+    final isAwaitingServiceStart = rawStatusForActions == 'aguardando_autorizacao_inicio' ||
+        _normalizeStatusKey(merged['status'] ?? status) == 'awaiting_service_start' ||
+        (serviceStartPending && (rawStatusForActions == 'pendente_cliente' || _normalizeStatusKey(merged['status'] ?? status) == 'pending_customer'));
+    final hasTimeSuggestionCard = isTimeSuggestion && rawStatusForActions != 'confirmado' && rawStatusForActions != 'confirmed';
+    final hasQuoteApproval = (rawStatusForActions == 'aguardando_aprovacao_orcamento' || _normalizeStatusKey(merged['status'] ?? status) == 'awaiting_quote_approval' ||
+        (rawStatusForActions == 'pendente_cliente' && !isTimeSuggestion && hasQuote)) ||
+        (rawStatusForActions == 'aguardando_aprovacao_finalizacao' || _normalizeStatusKey(merged['status'] ?? status) == 'awaiting_finalization_approval');
+    final hasRateButton = _normalizeStatusKey(merged['status'] ?? status) == 'completed' || _normalizeStatusKey(merged['status'] ?? status) == 'paid';
+    final hasPaymentButton = rawStatusForActions == 'aguardando_pagamento' || _normalizeStatusKey(merged['status'] ?? status) == 'awaiting_payment';
+    
+    // CORREÇÃO: Coletar todos os widgets de ação primeiro e só renderizar o Container se houver pelo menos 1
+    final actionWidgets = <Widget>[];
+    
+    // 1. Card de sugestão de horário
+    if (hasTimeSuggestionCard) {
+      final currentStatus = (merged['status'] ?? '').toString().toLowerCase().trim();
+      if (currentStatus != 'confirmado' && currentStatus != 'confirmed') {
+        actionWidgets.add(_buildTimeSuggestionCard(merged));
+        actionWidgets.add(const SizedBox(height: 20));
+      }
+    }
+    
+    // 2. Botão de autorizar início do serviço
+    if (isAwaitingServiceStart) {
+      actionWidgets.add(_buildServiceStartAuthorizationButton());
+      actionWidgets.add(const SizedBox(height: 20));
+    }
+    
+    // 3. Botões de aprovação de orçamento
+    if (hasQuoteApproval && hasQuote) {
+      actionWidgets.add(_buildQuoteApprovalButtons());
+      actionWidgets.add(const SizedBox(height: 20));
+    }
+    
+    // 4. Botão de pagar (status aguardando pagamento)
+    if (hasPaymentButton) {
+      actionWidgets.add(_buildPaymentButton());
+      actionWidgets.add(const SizedBox(height: 20));
+    }
+    
+    // 5. Botão de avaliar
+    if (hasRateButton) {
+      actionWidgets.add(_buildRateButton());
+    }
+    
+    // Só renderizar o Container se houver pelo menos 1 widget de ação
+    if (actionWidgets.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
     return Container(
       padding: const EdgeInsets.all(20),
       child: Column(
+        children: actionWidgets,
+      ),
+    );
+  }
+  
+  // Helper methods para construir cada ação individualmente
+  Widget _buildServiceStartAuthorizationButton() {
+    final merged = _mergeBookingData();
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDarkMode 
+            ? Colors.blue[900]!.withOpacity(0.2) 
+            : Colors.blue[50]!,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.blue[300]!,
+          width: 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Card para sugestão de horário da oficina (apenas se não estiver confirmado)
-          // IMPORTANTE: Verificar status antes de exibir
-          Builder(
-            builder: (context) {
-              final currentStatus = (merged['status'] ?? '').toString().toLowerCase().trim();
-              if (isTimeSuggestion && currentStatus != 'confirmado' && currentStatus != 'confirmed') {
-                return Column(
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.play_circle_outline,
+                  color: Colors.blue,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildTimeSuggestionCard(merged),
-                    const SizedBox(height: 20),
+                    Text(
+                      'Serviço Iniciado pela Oficina',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode ? Colors.white : Colors.blue[900]!,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'A oficina iniciou o atendimento',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDarkMode ? Colors.grey[300] : Colors.blue[700]!,
+                      ),
+                    ),
                   ],
-                );
-              }
-              return const SizedBox.shrink();
-            },
+                ),
+              ),
+            ],
           ),
-          // Botão para confirmar início do serviço quando serviço foi iniciado pela oficina
-          Builder(
-            builder: (context) {
-              final merged = _mergeBookingData();
-              final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
-              final status = merged['status']?.toString() ?? widget.booking['status']?.toString() ?? 'pending';
-              final normalizedStatus = _normalizeStatusKey(status);
-              final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-              
-              final rawStatusCheck = status.toLowerCase().trim();
-              // Verificar se é estado de aguardando autorização de início OU status antigo pendente_cliente com service_start_pending
-              final isAwaitingServiceStart = rawStatusCheck == 'aguardando_autorizacao_inicio' || 
-                                            normalizedStatus == 'awaiting_service_start' ||
-                                            (serviceStartPending && (rawStatusCheck == 'pendente_cliente' || normalizedStatus == 'pending_customer'));
-              if (isAwaitingServiceStart) {
-                return Column(
+          const SizedBox(height: 16),
+          Text(
+            'A oficina iniciou o atendimento do seu veículo. Por favor, confirme para prosseguir oficialmente.',
+            style: TextStyle(
+              fontSize: 15,
+              color: isDarkMode ? Colors.grey[300] : Colors.blue[800]!,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _rejectServiceStart(),
+                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                  label: const Text(
+                    'Rejeitar',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red[600]!,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 4,
+                    shadowColor: Colors.red.withOpacity(0.4),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _confirmServiceStart(),
+                  icon: const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  label: const Text(
+                    'Aceitar',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[600]!,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 4,
+                    shadowColor: Colors.blue.withOpacity(0.4),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildQuoteApprovalButtons() {
+    final merged = _mergeBookingData();
+    final status = merged['status']?.toString() ?? widget.booking['status']?.toString() ?? 'pending';
+    final rawStatus = status.toLowerCase().trim();
+    final normalizedStatus = _normalizeStatusKey(status);
+    final isAwaitingFinalizationApproval = rawStatus == 'aguardando_aprovacao_finalizacao' ||
+        normalizedStatus == 'awaiting_finalization_approval';
+    final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
+    final isFinalQuote = quoteStatus == 'final';
+    
+    return Column(
+      children: [
+        // Botão de aprovar orçamento/finalização
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF00C977), Color(0xFF00B369)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF00C977).withOpacity(0.4),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: isAwaitingFinalizationApproval ? _approveFinalization : _approveQuote,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: isDarkMode 
-                            ? Colors.blue[900]!.withOpacity(0.2) 
-                            : Colors.blue[50]!,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.blue[300]!,
-                          width: 2,
-                        ),
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(
-                                  Icons.play_circle_outline,
-                                  color: Colors.blue,
-                                  size: 28,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Serviço Iniciado pela Oficina',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDarkMode ? Colors.white : Colors.blue[900]!,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'A oficina iniciou o atendimento',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: isDarkMode ? Colors.grey[300] : Colors.blue[700]!,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'A oficina iniciou o atendimento do seu veículo. Por favor, confirme para prosseguir oficialmente.',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: isDarkMode ? Colors.grey[300] : Colors.blue[800]!,
-                              height: 1.5,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          // Botões de ACEITAR e REJEITAR início do serviço
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () => _rejectServiceStart(),
-                                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
-                                  label: const Text(
-                                    'Rejeitar',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red[600]!,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    elevation: 4,
-                                    shadowColor: Colors.red.withOpacity(0.4),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () => _confirmServiceStart(),
-                                  icon: const Icon(Icons.check_circle, color: Colors.white, size: 20),
-                                  label: const Text(
-                                    'Aceitar',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue[600]!,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    elevation: 4,
-                                    shadowColor: Colors.blue.withOpacity(0.4),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                      child: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      isAwaitingFinalizationApproval ? 'Aprovar Finalização' : 'Aprovar Orçamento',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: -0.5,
                       ),
                     ),
-                    const SizedBox(height: 20),
                   ],
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          // Botão para aprovar orçamento quando status for pendente_cliente E não for sugestão de horário E não for serviço iniciado
-          Builder(
-            builder: (context) {
-              final merged = _mergeBookingData();
-              final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
-              final status = merged['status']?.toString() ?? widget.booking['status']?.toString() ?? 'pending';
-              final normalizedStatus = _normalizeStatusKey(status);
-              final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-              final rawStatus = status.toLowerCase().trim();
-              final isTimeSuggestion = merged['suggested_time'] != null || widget.booking['suggested_time'] != null;
-              
-              // IMPORTANTE: Verificar se há orçamento válido (final_price OU estimated_price OU quote_items)
-              final finalPriceRaw = merged['final_price'] ?? merged['finalPrice'] ?? widget.booking['final_price'] ?? widget.booking['finalPrice'];
-              final estimatedPriceRaw = merged['estimated_price'] ?? widget.booking['estimated_price'];
-              final finalPrice = finalPriceRaw != null 
-                  ? (finalPriceRaw is int ? finalPriceRaw : (finalPriceRaw is double ? finalPriceRaw : (finalPriceRaw is String ? double.tryParse(finalPriceRaw) ?? 0 : 0)))
-                  : 0;
-              final estimatedPrice = estimatedPriceRaw != null
-                  ? (estimatedPriceRaw is int ? estimatedPriceRaw : (estimatedPriceRaw is double ? estimatedPriceRaw : (estimatedPriceRaw is String ? double.tryParse(estimatedPriceRaw) ?? 0 : 0)))
-                  : 0;
-              
-              final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
-              final hasQuoteItems = quoteItemsRaw != null && 
-                  ((quoteItemsRaw is List && quoteItemsRaw.isNotEmpty) ||
-                   (quoteItemsRaw is String && quoteItemsRaw.trim().isNotEmpty && quoteItemsRaw != '[]'));
-              
-              // IMPORTANTE: Considerar estimated_price também como orçamento válido
-              final hasQuote = (finalPrice > 0) || (estimatedPrice > 0) || hasQuoteItems;
-              
-              // CRITICAL: Se service_start_pending = true, NÃO mostrar botões de orçamento
-              // Nesse caso, os botões de ACEITAR/REJEITAR início já estão sendo mostrados no Builder anterior
-              if (serviceStartPending) {
-                return const SizedBox.shrink();
-              }
-              
-              // Log para debug
-              debugPrint('🔍 [OrderDetail] Verificando exibição de orçamento:');
-              debugPrint('  - rawStatus: $rawStatus');
-              debugPrint('  - finalPriceRaw: $finalPriceRaw');
-              debugPrint('  - estimatedPriceRaw: $estimatedPriceRaw');
-              debugPrint('  - finalPrice: $finalPrice');
-              debugPrint('  - estimatedPrice: $estimatedPrice');
-              debugPrint('  - quoteItemsRaw: $quoteItemsRaw');
-              debugPrint('  - hasQuoteItems: $hasQuoteItems');
-              debugPrint('  - hasQuote: $hasQuote');
-              debugPrint('  - isTimeSuggestion: $isTimeSuggestion');
-              debugPrint('  - serviceStartPending: $serviceStartPending');
-              
-              // CRITICAL: Só exibir orçamento se:
-              // 1. Status for "aguardando_aprovacao_orcamento" OU "aguardando_aprovacao_finalizacao"
-              //    OU "pendente_cliente" com orçamento (compatibilidade)
-              // 2. NÃO for sugestão de horário
-              // 3. NÃO for service_start_pending sem orçamento (nesse caso, mostrar apenas botões de início)
-              // 4. HÁ orçamento válido
-              final isAwaitingFinalizationApproval = rawStatus == 'aguardando_aprovacao_finalizacao' ||
-                  normalizedStatus == 'awaiting_finalization_approval';
-              final isAwaitingQuoteApproval = rawStatus == 'aguardando_aprovacao_orcamento' || 
-                                             normalizedStatus == 'awaiting_quote_approval' ||
-                                             (rawStatus == 'pendente_cliente' && !isTimeSuggestion && hasQuote && !serviceStartPending);
-              final shouldShowQuote = (isAwaitingQuoteApproval || isAwaitingFinalizationApproval) && hasQuote;
-              
-              debugPrint('  - shouldShowQuote: $shouldShowQuote');
-              
-              if (!shouldShowQuote) {
-                return const SizedBox.shrink();
-              }
-              
-              // Se chegou aqui, significa que deve exibir o card de orçamento
-              if (shouldShowQuote) {
-                // Card principal de orçamento - DESIGN MODERNO E ELEGANTE
-                return Builder(
-                  builder: (context) {
-                    final merged = _mergeBookingData();
-                final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
-                
-                // Processar quoteItems de forma robusta
-                List<dynamic>? quoteItems;
-                if (quoteItemsRaw != null) {
-                  if (quoteItemsRaw is List) {
-                    quoteItems = quoteItemsRaw;
-                  } else if (quoteItemsRaw is String) {
-                    try {
-                      final parsed = jsonDecode(quoteItemsRaw);
-                      if (parsed is List) {
-                        quoteItems = parsed;
-                      }
-                    } catch (e) {
-                      debugPrint('⚠️ [OrderDetail] Erro ao fazer parse de quote_items (String): $e');
-                    }
-                  }
-                }
-                
-                final diagnosticValueRaw = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
-                final diagnosticValue = _parseDiagnosticValue(diagnosticValueRaw);
-                final hasDetailedQuote = quoteItems != null && quoteItems.isNotEmpty;
-                final hasDiagnostic = diagnosticValue != null && diagnosticValue > 0;
-                final finalPriceRaw = _bookingDetails?['final_price'] ?? widget.booking['final_price'];
-                final finalPrice = finalPriceRaw != null ? (finalPriceRaw is int ? finalPriceRaw / 100.0 : finalPriceRaw is double ? finalPriceRaw : (finalPriceRaw is String ? double.tryParse(finalPriceRaw) ?? 0.0 : 0.0)) : 0.0;
-                final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
-                
-                // Debug: Log para verificar items
-                debugPrint('🔍 [OrderDetail] Quote Items Debug:');
-                debugPrint('  - quoteItemsRaw type: ${quoteItemsRaw.runtimeType}');
-                debugPrint('  - quoteItemsRaw: $quoteItemsRaw');
-                debugPrint('  - quoteItems: $quoteItems');
-                debugPrint('  - hasDetailedQuote: $hasDetailedQuote');
-                debugPrint('  - quoteItems length: ${quoteItems?.length ?? 0}');
-                if (quoteItems != null && quoteItems.isNotEmpty) {
-                  debugPrint('  - First item: ${quoteItems[0]}');
-                  debugPrint('  - First item type: ${quoteItems[0].runtimeType}');
-                  debugPrint('  - First item keys: ${quoteItems[0] is Map ? (quoteItems[0] as Map).keys.toList() : 'N/A'}');
-                } else {
-                  debugPrint('  ⚠️ Nenhum item encontrado!');
-                }
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark 
-                        ? const Color(0xFF1C1C1E)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                  ),
-                ],
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                      // Header elegante
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xFF00C977).withOpacity(0.1),
-                              const Color(0xFF00C977).withOpacity(0.05),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(24),
-                            topRight: Radius.circular(24),
-                          ),
-                        ),
-                        child: Row(
-                    children: [
-                      Container(
-                              width: 56,
-                              height: 56,
-                        decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF00C977), Color(0xFF00B369)],
-                                ),
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF00C977).withOpacity(0.3),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(Icons.receipt_long_rounded, color: Colors.white, size: 28),
-                            ),
-                            const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                                  Text(
-                              'Orçamento Disponível',
-                              style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w700,
-                                      color: Theme.of(context).brightness == Brightness.dark 
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      letterSpacing: -0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                                  Text(
-                                    hasCompletedAt
-                                    ? 'Orçamento final - Aprove para pagar'
-                                        : 'Orçamento inicial - Aprove para iniciar',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: Theme.of(context).brightness == Brightness.dark 
-                                          ? Colors.grey[400]
-                                          : Colors.grey[600],
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                      ),
-                      
-                      // Valor total destacado
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark 
-                              ? const Color(0xFF2C2C2E)
-                              : Colors.grey[50],
-                          border: Border(
-                            top: BorderSide(
-                              color: Theme.of(context).brightness == Brightness.dark 
-                                  ? Colors.grey[800]!
-                                  : Colors.grey[200]!,
-                              width: 1,
-                            ),
-                            bottom: BorderSide(
-                              color: Theme.of(context).brightness == Brightness.dark 
-                                  ? Colors.grey[800]!
-                                  : Colors.grey[200]!,
-                              width: 1,
-                            ),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Valor Total',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).brightness == Brightness.dark 
-                                      ? Colors.grey[300]
-                                      : Colors.grey[700],
-                                  letterSpacing: -0.3,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Flexible(
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerRight,
-                                child: Text(
-                                  PriceUtils.formatCurrency(finalPrice) ?? 'R\$ 0,00',
-                                  style: TextStyle(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF00C977),
-                                  letterSpacing: -1,
-                                ),
-                                textAlign: TextAlign.end,
-                                maxLines: 1,
-                              ),
-                            ),
-                          ),
-                          ],
-                        ),
-                      ),
-                      
-                      // Breakdown detalhado - DESIGN MODERNO
-                      if (hasDetailedQuote || hasDiagnostic) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              top: BorderSide(
-                                color: Theme.of(context).brightness == Brightness.dark 
-                                    ? Colors.grey[800]!
-                                    : Colors.grey[200]!,
-                                width: 1,
-                              ),
-                            ),
-                      ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                              Text(
-                                'Detalhamento',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).brightness == Brightness.dark 
-                                      ? Colors.grey[300]
-                                      : Colors.grey[700],
-                                  letterSpacing: -0.3,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              
-                                // Items do orçamento
-                              if (hasDetailedQuote && quoteItems != null) ...[
-                                ...List<Widget>.from(quoteItems!.asMap().entries.map<Widget>((entry) {
-                                  final index = entry.key;
-                                  final item = entry.value;
-                                  final description = item['description'] ?? 'Item sem descrição';
-                                  final quantityRaw = item['quantity'] ?? 1;
-                                  final quantity = quantityRaw is int ? quantityRaw : (quantityRaw is String ? int.tryParse(quantityRaw) ?? 1 : 1);
-                                  final unitPriceRaw = item['unit_price'] ?? 0;
-                                  final unitPriceCents = unitPriceRaw is int ? unitPriceRaw : (unitPriceRaw is String ? int.tryParse(unitPriceRaw) ?? 0 : (unitPriceRaw is double ? unitPriceRaw.toInt() : 0));
-                                  final unitPrice = unitPriceCents / 100.0;
-                                  final totalItem = unitPrice * quantity;
-                                  
-                                  return Container(
-                                    margin: EdgeInsets.only(bottom: index < (quoteItems?.length ?? 0) - 1 ? 12 : 0),
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).brightness == Brightness.dark 
-                                          ? const Color(0xFF2C2C2E)
-                                          : Colors.white,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: Theme.of(context).brightness == Brightness.dark 
-                                            ? Colors.grey[700]!
-                                            : Colors.grey[200]!,
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.center,
-                                      children: [
-                                        // Conteúdo principal - título e detalhes
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              // Título do item - destaque principal
-                                              Text(
-                                                description,
-                                                style: TextStyle(
-                                                  color: Theme.of(context).brightness == Brightness.dark 
-                                                      ? Colors.white
-                                                      : Colors.black87,
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w700,
-                                                  letterSpacing: -0.4,
-                                                  height: 1.3,
-                                                ),
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                              const SizedBox(height: 6),
-                                              // Linha simples e limpa: "1x R$ 10,00"
-                                              Text(
-                                                '$quantity${quantity > 1 ? 'x' : 'x'} ${PriceUtils.formatCurrency(unitPrice)}',
-                                                style: TextStyle(
-                                                  color: Theme.of(context).brightness == Brightness.dark 
-                                                      ? Colors.grey[400]
-                                                      : Colors.grey[600],
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w500,
-                                                  letterSpacing: -0.2,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 16),
-                                        // Valor total - destaque verde à direita
-                                        Flexible(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.end,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                        Text(
-                                          PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
-                                                style: TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: const Color(0xFF00C977),
-                                                  letterSpacing: -0.6,
-                                                  height: 1.2,
-                                                ),
-                                                textAlign: TextAlign.end,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                })),
-                                if (hasDiagnostic) const SizedBox(height: 12),
-                              ],
-                                
-                                // Valor do diagnóstico (se houver)
-                              if (hasDiagnostic) ...[
-                                Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).brightness == Brightness.dark 
-                                        ? const Color(0xFF2C2C2E)
-                                        : Colors.blue[50],
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: Theme.of(context).brightness == Brightness.dark 
-                                          ? Colors.blue[800]!
-                                          : Colors.blue[200]!,
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 44,
-                                        height: 44,
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              Colors.blue[400]!,
-                                              Colors.blue[600]!,
-                                            ],
-                                          ),
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: const Icon(Icons.search_rounded, color: Colors.white, size: 22),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'Diagnóstico',
-                                            style: TextStyle(
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.w600,
-                                                letterSpacing: -0.3,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                          Text(
-                                              'Análise inicial do veículo',
-                                            style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w400,
-                                                color: Theme.of(context).brightness == Brightness.dark 
-                                                    ? Colors.grey[400]
-                                                    : Colors.grey[600],
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ],
-                                      ),
-                                      ),
-                                      Flexible(
-                                        child: Text(
-                                          PriceUtils.formatCurrency(diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue) ?? 'R\$ 0,00',
-                                      style: TextStyle(
-                                            fontSize: 17,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.blue[700],
-                                            letterSpacing: -0.5,
-                                          ),
-                                          textAlign: TextAlign.end,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                      ),
-                                    ),
-                                  ],
-                            ],
-                          ),
-                        ),
-                      ],
-                        ],
-                      ),
-                          );
-                  },
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          // Exibir motivo do orçamento (se houver)
-          Builder(
-              builder: (context) {
-                final merged = _mergeBookingData();
-                final quoteReason = merged['quote_reason'] ?? widget.booking['quote_reason'];
-                
-                if (quoteReason == null || (quoteReason is String && quoteReason.trim().isEmpty)) {
-                  return const SizedBox.shrink();
-                }
-                
-                return Container(
-                  margin: const EdgeInsets.only(top: 24, bottom: 24),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark 
-                        ? const Color(0xFF2C2C2E)
-                        : Colors.purple[50],
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Theme.of(context).brightness == Brightness.dark 
-                          ? Colors.purple[800]!
-                          : Colors.purple[200]!,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.purple[400]!,
-                                  Colors.purple[600]!,
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(Icons.note_alt_rounded, color: Colors.white, size: 22),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              'Motivo do Orçamento',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Theme.of(context).brightness == Brightness.dark 
-                                    ? Colors.white
-                                    : Colors.purple[900],
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        quoteReason.toString(),
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w400,
-                          color: Theme.of(context).brightness == Brightness.dark 
-                              ? Colors.grey[300]
-                              : Colors.grey[800],
-                          height: 1.6,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
             ),
-          // Botões de ação - DESIGN MODERNO E ELEGANTE
-          // IMPORTANTE: Só exibir se houver orçamento válido e status correto
-          Builder(
-            builder: (context) {
-              final merged = _mergeBookingData();
-              final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
-              final status = merged['status']?.toString() ?? widget.booking['status']?.toString() ?? 'pending';
-              final rawStatus = status.toLowerCase().trim();
-              final isTimeSuggestion = merged['suggested_time'] != null || widget.booking['suggested_time'] != null;
-              
-              // IMPORTANTE: Verificar se há orçamento válido (final_price OU estimated_price OU quote_items)
-              final finalPriceRaw = merged['final_price'] ?? merged['finalPrice'] ?? widget.booking['final_price'] ?? widget.booking['finalPrice'];
-              final estimatedPriceRaw = merged['estimated_price'] ?? widget.booking['estimated_price'];
-              final finalPrice = finalPriceRaw != null 
-                  ? (finalPriceRaw is int ? finalPriceRaw : (finalPriceRaw is double ? finalPriceRaw : (finalPriceRaw is String ? double.tryParse(finalPriceRaw) ?? 0 : 0)))
-                  : 0;
-              final estimatedPrice = estimatedPriceRaw != null
-                  ? (estimatedPriceRaw is int ? estimatedPriceRaw : (estimatedPriceRaw is double ? estimatedPriceRaw : (estimatedPriceRaw is String ? double.tryParse(estimatedPriceRaw) ?? 0 : 0)))
-                  : 0;
-              
-              final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
-              final hasQuoteItems = quoteItemsRaw != null && 
-                  ((quoteItemsRaw is List && quoteItemsRaw.isNotEmpty) ||
-                   (quoteItemsRaw is String && quoteItemsRaw.trim().isNotEmpty && quoteItemsRaw != '[]'));
-              
-              // IMPORTANTE: Considerar estimated_price também como orçamento válido
-              final hasQuote = (finalPrice > 0) || (estimatedPrice > 0) || hasQuoteItems;
-              
-              // CRITICAL: Se service_start_pending = true, NÃO mostrar botões de orçamento
-              // Nesse caso, os botões de ACEITAR/REJEITAR início já estão sendo mostrados no Builder anterior
-              if (serviceStartPending) {
-                return const SizedBox.shrink();
-              }
-              
-              // IMPORTANTE: Quando status é 'aguardando_aprovacao_orcamento' OU 'pendente_cliente' com orçamento, mostrar botões de aprovar/rejeitar orçamento
-              // A lógica correta é: mostrar se status é aguardando_aprovacao_orcamento OU (pendente_cliente E não é sugestão de horário E há orçamento)
-              final isAwaitingFinalizationApproval = rawStatus == 'aguardando_aprovacao_finalizacao' ||
-                  normalizedStatus == 'awaiting_finalization_approval';
-              final isAwaitingQuoteApproval = rawStatus == 'aguardando_aprovacao_orcamento' || 
-                                             normalizedStatus == 'awaiting_quote_approval' ||
-                                             (rawStatus == 'pendente_cliente' && !isTimeSuggestion && hasQuote);
-              final shouldShowQuote = (isAwaitingQuoteApproval || isAwaitingFinalizationApproval) && hasQuote;
-              
-              debugPrint('🔍 [OrderDetail] Verificando exibição de BOTÕES de orçamento:');
-              debugPrint('  - rawStatus: $rawStatus');
-              debugPrint('  - finalPrice: $finalPrice');
-              debugPrint('  - hasQuoteItems: $hasQuoteItems');
-              debugPrint('  - hasQuote: $hasQuote');
-              debugPrint('  - shouldShowQuote: $shouldShowQuote');
-              
-              if (!shouldShowQuote) {
-                return const SizedBox.shrink();
-              }
-              
-              return Column(
-                children: [
-                  const SizedBox(height: 24),
-                  // Botão de aprovar
-                  Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
+          ),
+        ),
+        // Botão de rejeitar (não mostrar se for orçamento final e não for finalização)
+        if (isAwaitingFinalizationApproval || !isFinalQuote)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Theme.of(context).brightness == Brightness.dark 
+                    ? Colors.grey[700]!
+                    : Colors.grey[300]!,
+                width: 2,
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => isAwaitingFinalizationApproval ? _rejectFinalization() : _rejectQuote(),
                 borderRadius: BorderRadius.circular(20),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF00C977), Color(0xFF00B369)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF00C977).withOpacity(0.4),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: isAwaitingFinalizationApproval ? _approveFinalization : _approveQuote,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          isAwaitingFinalizationApproval ? 'Aprovar finalização' : 'Aprovar Orçamento',
-                    style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            
-            // Botão de rejeitar
-            Builder(
-              builder: (context) {
-                final merged = _mergeBookingData();
-                final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
-                final isFinalQuote = quoteStatus == 'final';
-                
-                // IMPORTANTE: na aprovação da finalização, sempre permitir rejeição (vira disputa)
-                if (!isAwaitingFinalizationApproval && isFinalQuote) {
-                  return const SizedBox.shrink();
-                }
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Theme.of(context).brightness == Brightness.dark 
-                          ? Colors.grey[700]!
-                          : Colors.grey[300]!,
-                      width: 2,
-                    ),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => isAwaitingFinalizationApproval ? _rejectFinalization() : _rejectQuote(),
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                            Icon(
-                              Icons.close_rounded,
-                              color: Colors.red[600],
-                              size: 24,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              isAwaitingFinalizationApproval ? 'Rejeitar finalização' : 'Rejeitar Orçamento',
-                          style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.red[600],
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                          ],
-                          ),
-                        ),
-                      ),
-                    ),
-                );
-              },
-            ),
-            
-            // Mensagem informativa - DESIGN MODERNO
-            Builder(
-              builder: (context) {
-                final merged = _mergeBookingData();
-                final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
-                final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
-                final isFinalQuote = quoteStatus == 'final';
-                final diagnosticValueRaw = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
-                final diagnosticValue = _parseDiagnosticValue(diagnosticValueRaw);
-                final hasDiagnostic = diagnosticValue != null && diagnosticValue > 0;
-                
-                String message;
-                Color bgColor;
-                Color textColor;
-                Color iconBgColor;
-                
-                if (isFinalQuote) {
-                  message = 'Este é o orçamento final após o serviço. Aprove para realizar o pagamento.';
-                  bgColor = Theme.of(context).brightness == Brightness.dark 
-                      ? Colors.green[900]!.withOpacity(0.2)
-                      : Colors.green[50]!;
-                  textColor = Theme.of(context).brightness == Brightness.dark 
-                      ? Colors.green[300]!
-                      : Colors.green[900]!;
-                  iconBgColor = Colors.green[600]!;
-                } else if (hasCompletedAt) {
-                  message = 'Após aprovar, você poderá realizar o pagamento do serviço.';
-                  bgColor = Theme.of(context).brightness == Brightness.dark 
-                      ? Colors.blue[900]!.withOpacity(0.2)
-                      : Colors.blue[50]!;
-                  textColor = Theme.of(context).brightness == Brightness.dark 
-                      ? Colors.blue[300]!
-                      : Colors.blue[900]!;
-                  iconBgColor = Colors.blue[600]!;
-                } else {
-                  final diagnosticInReais = diagnosticValue != null 
-                      ? (diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue)
-                      : 0.0;
-                  message = hasDiagnostic
-                      ? 'Ao aprovar, a oficina iniciará o serviço. Se rejeitar, você pagará apenas o diagnóstico (${PriceUtils.formatCurrency(diagnosticInReais)}).'
-                      : 'Após aprovar, a oficina poderá iniciar o serviço.';
-                  bgColor = Theme.of(context).brightness == Brightness.dark 
-                      ? Colors.blue[900]!.withOpacity(0.2)
-                      : Colors.blue[50]!;
-                  textColor = Theme.of(context).brightness == Brightness.dark 
-                      ? Colors.blue[300]!
-                      : Colors.blue[900]!;
-                  iconBgColor = Colors.blue[600]!;
-                }
-                
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: bgColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Theme.of(context).brightness == Brightness.dark 
-                          ? Colors.grey[800]!
-                          : Colors.grey[200]!,
-                      width: 1,
-                    ),
-                  ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: iconBgColor.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.info_outline_rounded,
-                          color: iconBgColor,
-                          size: 18,
-                        ),
+                      Icon(
+                        Icons.close_rounded,
+                        color: Colors.red[600],
+                        size: 24,
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          message,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: textColor,
-                            fontWeight: FontWeight.w500,
-                            height: 1.4,
-                          ),
+                      Text(
+                        isAwaitingFinalizationApproval ? 'Rejeitar Finalização' : 'Rejeitar Orçamento',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.red[600],
+                          letterSpacing: -0.5,
                         ),
                       ),
                     ],
                   ),
-                );
-              },
-            ),
-                ],
-              );
-            },
-          ),
-          Builder(
-            builder: (context) {
-              final merged = _mergeBookingData();
-              final finalStatus = merged['status'] ?? widget.booking['status'] ?? 'pending';
-              final normalizedStatus = _normalizeStatusKey(finalStatus);
-              if (normalizedStatus == 'in_progress' ||
-                  normalizedStatus == 'awaiting_finalization_approval' ||
-                  normalizedStatus == 'in_dispute' ||
-                  normalizedStatus == 'awaiting_payment' ||
-                  normalizedStatus == 'completed' ||
-                  normalizedStatus == 'paid') {
-                return Column(
-                  children: [
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _viewEvidence,
-                icon: const Icon(Icons.photo_camera),
-                label: const Text('Ver Provas da Oficina'),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFF00C977)),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-                  ],
-                );
-              }
-              return const SizedBox.shrink();
-            },
           ),
-          Builder(
-            builder: (context) {
-              final merged = _mergeBookingData();
-              final finalStatus = merged['status'] ?? widget.booking['status'] ?? 'pending';
-              final normalizedStatus = _normalizeStatusKey(finalStatus);
-              
-              // NÃO mostrar botão de pagamento se status for 'pago' ou 'paid'
-              final rawStatus = finalStatus.toString().toLowerCase().trim();
-              final isPaid = rawStatus == 'pago' || rawStatus == 'paid' || normalizedStatus == 'paid';
-              
-              // Só mostrar botão se realmente estiver aguardando pagamento E não estiver pago
-              if (normalizedStatus == 'awaiting_payment' && !isPaid) {
-                return Column(
-                  children: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _redirectToPayment(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00B4D8),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+      ],
+    );
+  }
+  
+  Widget _buildRateButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _rateService,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF00C977),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: const Text(
+          'Avaliar Serviço',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentButton() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? const Color(0xFF00C977).withOpacity(0.15)
+            : const Color(0xFF00C977).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF00C977),
+          width: 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C977).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  'Realizar Pagamento',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                child: const Icon(
+                  Icons.payments,
+                  color: Color(0xFF00C977),
+                  size: 28,
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-                  ],
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          Builder(
-            builder: (context) {
-              final merged = _mergeBookingData();
-              final finalStatus = merged['status'] ?? widget.booking['status'] ?? 'pending';
-              final normalizedStatus = _normalizeStatusKey(finalStatus);
-              if (normalizedStatus == 'completed' || normalizedStatus == 'paid') {
-                return Column(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _rateService,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00C977),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Avaliar Serviço',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                    Text(
+                      'Pagamento pendente',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode ? Colors.white : Colors.green[900],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Realize o pagamento para concluir o serviço.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDarkMode ? Colors.grey[300] : Colors.green.shade800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _redirectToPayment(bookingData: _mergeBookingData()),
+              icon: const Icon(Icons.payment, color: Colors.white, size: 22),
+              label: const Text(
+                'Pagar agora',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00C977),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 4,
+              ),
             ),
-            const SizedBox(height: 12),
-                  ],
-                );
-              }
-              return const SizedBox.shrink();
-            },
           ),
         ],
       ),
     );
   }
 
+  
   void _showQuoteDetailModal(Map<String, dynamic> merged, List quoteItems, dynamic diagnosticValue, bool isDarkMode) {
     showModalBottomSheet(
       context: context,
@@ -3985,6 +3307,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         );
         
         // Atualizar o status local baseado na resposta da API
+        if (!mounted) return;
         setState(() {
           widget.booking['status'] = newStatus;
           if (_bookingDetails != null) {
@@ -4000,18 +3323,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           }
         });
       } else {
+        AppAlerts.showError(
+          context,
+          message: result['error'] ?? 'Erro ao aprovar orçamento. Tente novamente.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
       AppAlerts.showError(
         context,
-        message: result['error'] ?? 'Erro ao aprovar orçamento. Tente novamente.',
+        message: 'Erro ao aprovar orçamento: ${e.toString()}',
       );
     }
-  } catch (e) {
-    if (!mounted) return;
-    AppAlerts.showError(
-      context,
-      message: 'Erro ao aprovar orçamento: ${e.toString()}',
-    );
-  }
   }
 
   Widget _buildTimeSuggestionCard(Map<String, dynamic> merged) {
@@ -4591,7 +3914,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        PriceUtils.formatCurrency(diagnosticValue / 100) ?? 'R\$ 0,00',
+                        PriceUtils.formatCurrency(_diagnosticValueInReais(diagnosticValue)) ?? 'R\$ 0,00',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -4745,7 +4068,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         _apiService.invalidateBookingCache(bookingId);
 
         await _loadBookingDetails(forceRefresh: true);
-
+        if (!mounted) return;
         setState(() {
           widget.booking['status'] = 'finalizado_aguardando_pagamento';
           if (_bookingDetails != null) {
@@ -4834,7 +4157,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         _apiService.invalidateBookingCache(bookingId);
 
         await _loadBookingDetails(forceRefresh: true);
-
+        if (!mounted) return;
         setState(() {
           widget.booking['status'] = 'em_disputa';
           if (_bookingDetails != null) {
@@ -4987,6 +4310,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       return raw;
     }
     return null;
+  }
+
+  /// Valor do diagnóstico em reais. A API envia sempre em centavos (inteiro).
+  double _diagnosticValueInReais(dynamic raw) {
+    final v = _parseDiagnosticValue(raw);
+    if (v == null || v <= 0) return 0.0;
+    return v / 100.0;
   }
 
   double? _parseBackendPrice(dynamic raw) {
@@ -5461,8 +4791,7 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
     }
     final diagnosticValue = _parseDiagnosticValue(widget.diagnosticValue);
     if (diagnosticValue != null && diagnosticValue > 0) {
-      // Se > 1000, provavelmente está em centavos, converter para reais
-      total += diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue;
+      total += diagnosticValue / 100.0;
     }
     return total;
   }
@@ -5700,7 +5029,7 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
                     if (diagnosticValue == null || diagnosticValue <= 0) {
                       return const SizedBox.shrink();
                     }
-                    final diagnosticInReais = diagnosticValue > 1000 ? diagnosticValue / 100.0 : diagnosticValue;
+                    final diagnosticInReais = diagnosticValue / 100.0;
                     return Column(
                       children: [
                   const SizedBox(height: 12),
