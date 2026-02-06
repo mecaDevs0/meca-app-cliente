@@ -16,8 +16,9 @@
     <!-- REMOVIDAS as permissões READ_MEDIA_IMAGES e READ_MEDIA_VIDEO conforme política do Google Play -->
     <!-- O app usa o Photo Picker do sistema (via image_picker) que não requer essas permissões -->
     <!-- Para Android 13+ (API 33+), o Photo Picker é usado automaticamente -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
+    <!-- Usando maxSdkVersion para FORÇAR remoção no Android 13+ onde essas permissões são proibidas -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:maxSdkVersion="32" tools:node="replace" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" android:maxSdkVersion="32" tools:node="replace" />
     
     <!-- Permissão de notificações (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
