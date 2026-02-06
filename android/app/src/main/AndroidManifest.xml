@@ -12,9 +12,12 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <!-- NOTA: READ_MEDIA_IMAGES foi removida para seguir a política do Google Play.
-         O app usa o Photo Picker do Android (via image_picker) que não requer permissões.
-         Para Android 13+ (API 33+), o Photo Picker é usado automaticamente quando não há permissões declaradas. -->
+    
+    <!-- REMOVIDAS as permissões READ_MEDIA_IMAGES e READ_MEDIA_VIDEO conforme política do Google Play -->
+    <!-- O app usa o Photo Picker do sistema (via image_picker) que não requer essas permissões -->
+    <!-- Para Android 13+ (API 33+), o Photo Picker é usado automaticamente -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
     
     <!-- Permissão de notificações (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
