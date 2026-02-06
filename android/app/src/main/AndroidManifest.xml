@@ -7,19 +7,20 @@
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
     
-    <!-- Permissões de câmera e armazenamento para fotos -->
-    <!-- O app precisa acessar a câmera e galeria para que os clientes possam enviar fotos dos serviços realizados em seus veículos como evidência para as oficinas -->
+    <!-- ESTRATEGIA PHOTO PICKER - CONFORMIDADE GOOGLE PLAY -->
+    <!-- App usa EXCLUSIVAMENTE o Photo Picker nativo do Android (todas versoes) -->
+    <!-- Photo Picker NAO requer permissoes de leitura de storage ou media -->
+    <!-- CAMERA: unica permissao mantida para tirar fotos novas -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     
-    <!-- FORÇAR REMOCAO TOTAL das permissões READ_MEDIA_IMAGES e READ_MEDIA_VIDEO -->
-    <!-- Google Play rejeita apps com uso infrequente de fotos que incluem essas permissões -->
-    <!-- App usa Photo Picker do sistema (Android 13+) que NÃO requer essas permissões -->
-    <!-- Para Android 12 e abaixo, usa READ_EXTERNAL_STORAGE (já declarado acima) -->
+    <!-- REMOCAO TOTAL E AGRESSIVA de TODAS permissoes de storage e media -->
+    <!-- Estas permissoes causam rejeicao no Google Play para apps com uso infrequente -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:node="remove" />
     
     <!-- Permissão de notificações (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -30,7 +31,8 @@
     <application
         android:label="Meca"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="false">
         
         <meta-data android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyCYwC18HPIVBXRoeM-p1-x6bJR0mM-vp9E"/>
