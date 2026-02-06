@@ -70,6 +70,13 @@ android {
         }
     }
     
+    // Força remoção de permissões READ_MEDIA do manifest final
+    androidComponents {
+        onVariants { variant ->
+            variant.packaging.resources.excludes.add("META-INF/com/android/build/gradle/app-metadata.properties")
+        }
+    }
+    
     splits {
         abi {
             isEnable = false

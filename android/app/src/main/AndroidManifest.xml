@@ -13,12 +13,13 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     
-    <!-- REMOVIDAS as permissões READ_MEDIA_IMAGES e READ_MEDIA_VIDEO conforme política do Google Play -->
-    <!-- O app usa o Photo Picker do sistema (via image_picker) que não requer essas permissões -->
-    <!-- Para Android 13+ (API 33+), o Photo Picker é usado automaticamente -->
-    <!-- Usando maxSdkVersion para FORÇAR remoção no Android 13+ onde essas permissões são proibidas -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:maxSdkVersion="32" tools:node="replace" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" android:maxSdkVersion="32" tools:node="replace" />
+    <!-- FORÇAR REMOCAO TOTAL das permissões READ_MEDIA_IMAGES e READ_MEDIA_VIDEO -->
+    <!-- Google Play rejeita apps com uso infrequente de fotos que incluem essas permissões -->
+    <!-- App usa Photo Picker do sistema (Android 13+) que NÃO requer essas permissões -->
+    <!-- Para Android 12 e abaixo, usa READ_EXTERNAL_STORAGE (já declarado acima) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove" />
     
     <!-- Permissão de notificações (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
