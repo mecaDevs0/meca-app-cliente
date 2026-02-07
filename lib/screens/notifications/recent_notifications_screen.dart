@@ -97,13 +97,43 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
 
   Future<void> _markAllAsRead() async {
     try {
-      await _apiService.markAllNotificationsRead();
+      final result = await _apiService.markAllNotificationsRead();
       if (!mounted) return;
-      final provider = Provider.of<NotificationProvider>(context, listen: false);
-      provider.clearAll();
-      _loadNotifications();
+      
+      if (result['success'] == true) {
+        final provider = Provider.of<NotificationProvider>(context, listen: false);
+        provider.clearAll();
+        await _loadNotifications();
+        
+        // Mostrar feedback de sucesso
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Todas as notificações foram marcadas como lidas'),
+            backgroundColor: Color(0xFF00C977),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        // Mostrar erro
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erro ao marcar notificações como lidas'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
       print('Erro ao marcar todas como lidas: $e');
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Erro ao conectar com o servidor. Tente novamente.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
   }
 
