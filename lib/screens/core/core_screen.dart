@@ -83,6 +83,12 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
   Future<void> _refreshUnreadNotifications() async {
     final notificationProvider = Provider.of<NotificationProvider>(context, listen: false);
     try {
+      // PROTEÇÃO: Se usuário já marcou como lidas (contador = 0), NÃO sobrescrever
+      if (notificationProvider.unreadNotifications == 0 && notificationProvider.notifications.isNotEmpty) {
+        print('🔒 [CoreScreen] Mantendo notificações locais (já marcadas como lidas)');
+        return;
+      }
+      
       final result = await _apiService.getNotifications(limit: 100);
       if (result['success'] == true) {
         final data = result['data'];

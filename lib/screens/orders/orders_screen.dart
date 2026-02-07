@@ -64,8 +64,9 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         }).toList();
         provider.setNotifications(updatedNotifications);
         provider.setUnreadNotifications(0, resetBadge: true);
-        // Recarregar notificações para garantir sincronização
-        _loadBookings(forceRefresh: false);
+      // Recarregar bookings para garantir sincronização
+      // NÃO recarregar notificações - já foram marcadas localmente
+      _loadBookings(forceRefresh: false);
       }
     } catch (e) {
       // Silenciar erros
