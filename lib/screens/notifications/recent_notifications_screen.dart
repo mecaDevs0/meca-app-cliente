@@ -102,8 +102,26 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
       
       if (result['success'] == true) {
         final provider = Provider.of<NotificationProvider>(context, listen: false);
-        provider.clearAll();
-        await _loadNotifications();
+        
+        // PRIMEIRO: Marcar todas as notificações locais como lidas
+        final updatedNotifications = _notifications.map((n) {
+          return Map<String, dynamic>.from(n)
+            ..['is_read'] = true
+            ..['read'] = true;
+        }).toList();
+        
+        // Atualizar estado local imediatamente
+        setState(() {
+          _notifications = updatedNotifications;
+          _unreadCount = 0;
+        });
+        
+        // Atualizar provider
+        provider.setNotifications(updatedNotifications);
+        provider.setUnreadNotifications(0, resetBadge: true);
+        
+        // DEPOIS: Recarregar do servidor para sincronizar (em background)
+        _loadNotifications();
         
         // Mostrar feedback de sucesso
         ScaffoldMessenger.of(context).showSnackBar(
