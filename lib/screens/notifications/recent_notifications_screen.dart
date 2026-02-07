@@ -120,8 +120,9 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
         provider.setNotifications(updatedNotifications);
         provider.setUnreadNotifications(0, resetBadge: true);
         
-        // DEPOIS: Recarregar do servidor para sincronizar (em background)
-        _loadNotifications();
+        // NÃO recarregar do servidor imediatamente!
+        // O servidor pode ter delay para atualizar, então mantemos o estado local
+        // A próxima vez que o usuário entrar na tela, as notificações serão sincronizadas
         
         // Mostrar feedback de sucesso
         ScaffoldMessenger.of(context).showSnackBar(
