@@ -990,6 +990,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (result['success'] == true) {
         final provider = Provider.of<NotificationProvider>(context, listen: false);
         final previousUnread = provider.unreadNotifications;
+        
+        // WORKAROUND: Se o usuário já marcou todas como lidas localmente (contador = 0),
+        // NÃO sobrescrever com dados do servidor que podem estar bugados
+        if (previousUnread == 0 && provider.notifications.isNotEmpty) {
+          // Usuário já marcou como lidas, manter estado local
+          print('🔒 Mantendo notificações locais (já marcadas como lidas)');
+          return;
+        }
+        
         provider.setNotificationsFromPayload(result['data']);
         final currentUnread = provider.unreadNotifications;
         
