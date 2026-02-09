@@ -444,11 +444,16 @@ class _BookingScreenState extends State<BookingScreen> {
         elevation: 0,
         centerTitle: true,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
+      body: GestureDetector(
+        onTap: () {
+          // Fechar teclado ao clicar fora
+          FocusScope.of(context).unfocus();
+        },
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Informações do Serviço
@@ -478,6 +483,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 ],
               ),
             ),
+      ),
     );
   }
 
@@ -631,6 +637,16 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildServiceSelectionCard(bool isDarkMode) {
+    // Ordenar para colocar "Mecânica Geral" no topo
+    final sortedServices = List<Map<String, dynamic>>.from(_workshopServices);
+    sortedServices.sort((a, b) {
+      final aName = (a['name'] ?? '').toString().toLowerCase();
+      final bName = (b['name'] ?? '').toString().toLowerCase();
+      if (aName.contains('mecânica geral')) return -1;
+      if (bName.contains('mecânica geral')) return 1;
+      return 0;
+    });
+    
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -670,27 +686,83 @@ class _BookingScreenState extends State<BookingScreen> {
             value: _selectedService,
             decoration: InputDecoration(
               hintText: 'Escolha um serviço',
+              hintStyle: TextStyle(color: Colors.grey[500]),
+              fillColor: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[50],
+              filled: true,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey[600]!),
+              ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
+            dropdownColor: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black87,
+              fontSize: 16,
+            ),
             isExpanded: true,
-            items: _workshopServices.map((service) {
+            selectedItemBuilder: (context) {
+              final textColor = isDarkMode ? Colors.white : Colors.black87;
+              return sortedServices.map((service) {
+                final name = service['name'] ?? 'Serviço';
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
+                );
+              }).toList();
+            },
+            items: sortedServices.map((service) {
+              final serviceName = service['name'] ?? 'Serviço';
+              final isMecanicaGeral = serviceName.toLowerCase().contains('mecânica geral');
+              final textColor = isDarkMode ? Colors.white : Colors.black87;
+              
               return DropdownMenuItem<Map<String, dynamic>>(
                 value: service,
-                child: Text(
-                  service['name'] ?? 'Serviço',
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    vertical: isMecanicaGeral ? 10 : 4,
+                  ),
+                  child: Text(
+                    serviceName,
+                    style: TextStyle(
+                      color: textColor,
+                      fontWeight: isMecanicaGeral ? FontWeight.w700 : FontWeight.w400,
+                      fontSize: isMecanicaGeral ? 17 : 16,
+                      height: 1.3,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
                 ),
               );
             }).toList(),
-            onChanged: (Map<String, dynamic>? service) {
+            onChanged: (value) {
               setState(() {
-                _selectedService = service;
+                _selectedService = value;
               });
             },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Se não souber o problema do carro, selecione Mecânica geral e descreva no campo Observações.',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[500],
+              height: 1.3,
+            ),
           ),
         ],
       ),

@@ -25,44 +25,43 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      Provider.of<NotificationProvider>(context, listen: false).markProfileBadgeSeen();
-      // Marcar todas as notificações como lidas automaticamente ao entrar na tela
-      _markAllAsReadSilently();
-    });
-    _loadNotifications();
-  }
-
-  // Marcar todas como lidas silenciosamente (sem mostrar mensagem)
-  Future<void> _markAllAsReadSilently() async {
-    try {
-      final result = await _apiService.markAllNotificationsRead();
-      if (mounted && result['success'] == true) {
-        final provider = Provider.of<NotificationProvider>(context, listen: false);
-        // Marcar todas as notificações no provider como lidas
-        final updatedNotifications = _notifications.map((n) {
-          return Map<String, dynamic>.from(n)
-            ..['is_read'] = true
-            ..['read'] = true;
-        }).toList();
-        provider.setNotifications(updatedNotifications);
-        provider.setUnreadNotifications(0, resetBadge: true);
-        // Recarregar notificações para garantir sincronização
+      final provider = Provider.of<NotificationProvider>(context, listen: false);
+      provider.markProfileBadgeSeen();
+      
+      // Se já tem notificações no provider, usar elas (evita recarregar)
+      if (provider.notifications.isNotEmpty) {
+        setState(() {
+          _notifications = provider.notifications;
+          _unreadCount = provider.unreadNotifications;
+          _isLoading = false;
+        });
+      } else {
+        // Primeira vez: carregar do servidor
         _loadNotifications();
       }
-    } catch (e) {
-      // Silenciar erros - não mostrar mensagem ao usuário
-      print('Erro ao marcar notificações como lidas: $e');
-    }
+    });
   }
 
   Future<void> _loadNotifications() async {
     setState(() => _isLoading = true);
 
     try {
+      final provider = Provider.of<NotificationProvider>(context, listen: false);
+      
+      // PROTEÇÃO: Se já marcou como lidas, NÃO recarregar
+      if (provider.unreadNotifications == 0 && provider.notifications.isNotEmpty) {
+        print('🔒 [Notifications] Mantendo notificações locais (já marcadas como lidas)');
+        setState(() {
+          _notifications = provider.notifications;
+          _unreadCount = 0;
+          _isLoading = false;
+        });
+        return;
+      }
+      
       final result = await _apiService.getNotifications();
 
       if (result['success'] == true) {
-        final provider = Provider.of<NotificationProvider>(context, listen: false);
         final payload = result['data'];
         final normalized = NotificationProvider.normalizeNotifications(payload);
         final unread = NotificationProvider.extractUnreadCount(payload);

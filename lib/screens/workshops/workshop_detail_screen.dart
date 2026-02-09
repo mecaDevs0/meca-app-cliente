@@ -144,6 +144,27 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
           : _error.isNotEmpty
               ? _buildErrorView()
               : _buildWorkshopDetails(),
+      bottomNavigationBar: _loading || _error.isNotEmpty
+          ? null
+          : Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 15,
+                    offset: const Offset(0, -3),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                child: SizedBox(
+                  height: 60,
+                  child: _buildBookingButton(),
+                ),
+              ),
+            ),
     );
   }
 
@@ -338,10 +359,6 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 _buildInfoCard(),
                 const SizedBox(height: 20),
                 
-                // Aviso sobre botão de agendar no final (movido para o topo)
-                _buildBookingHint(),
-                const SizedBox(height: 20),
-                
                 // Mapa e ações rápidas
                 _buildLocationMapCard(),
                 const SizedBox(height: 20),
@@ -352,10 +369,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 
                 // Serviços oferecidos melhorados
                 _buildServicesCard(),
-                const SizedBox(height: 20),
-                
-                // Botão de agendamento
-                _buildBookingButton(),
+                const SizedBox(height: 80), // Espaço para o botão fixo
               ],
             ),
           ),
@@ -1241,51 +1255,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               );
   }
   
-  Widget _buildBookingHint() {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF00C977).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF00C977).withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.info_outline,
-            color: const Color(0xFF00C977),
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'O botão para agendar serviço está no final da tela',
-              style: TextStyle(
-                color: isDarkMode ? Colors.white : Colors.black87,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Icon(
-            Icons.arrow_downward,
-            color: const Color(0xFF00C977),
-            size: 18,
-          ),
-        ],
-                ),
-              );
-  }
   
   Widget _buildBookingButton() {
     return Container(
       width: double.infinity,
-      height: 56,
+      height: 60,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF00C977), Color(0xFF00B369)],
@@ -1293,9 +1267,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF00C977).withOpacity(0.3),
-            blurRadius: 10,
-            spreadRadius: 2,
+            color: const Color(0xFF00C977).withOpacity(0.4),
+            blurRadius: 12,
+            spreadRadius: 1,
           ),
         ],
       ),
@@ -1327,15 +1301,16 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 Icon(
                   Icons.calendar_today,
                   color: Colors.white,
-                  size: 20,
+                  size: 24,
                 ),
-                SizedBox(width: 8),
+                SizedBox(width: 12),
                 Text(
-                  'Agendar Serviço',
+                  'AGENDAR SERVIÇO',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ],
