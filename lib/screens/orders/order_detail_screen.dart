@@ -30,6 +30,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Map<String, dynamic>? _bookingDetails;
   bool _paymentPromptDisplayed = false;
   bool _isLoadingDetails = false;
+  bool _shownInProgressPopup = false;
 
   List<Map<String, dynamic>> _coerceUploads(dynamic raw) {
     if (raw == null) return const [];
@@ -486,6 +487,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           _bookingDetails = details;
           widget.booking.addAll(details);
         });
+        // Popup quando serviço está em andamento (oficina iniciou; cliente só recebe notificação)
+        final status = (details['status'] ?? widget.booking['status'] ?? '').toString().toLowerCase().trim();
+        if ((status == 'em_andamento' || status == 'in_progress') && !_shownInProgressPopup && mounted) {
+          _shownInProgressPopup = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Início do serviço aprovado! Agora é só aguardar atualizações da oficina.'),
+                backgroundColor: Color(0xFF00C977),
+                duration: Duration(seconds: 4),
+              ),
+            );
+          });
+        }
       }
     } catch (e) {
       debugPrint('Erro ao carregar detalhes do agendamento: $e');
@@ -1273,12 +1289,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           normalizedStatus == 'pendente_cliente' ||
                           (merged['quote_status'] ?? widget.booking['quote_status']) == 'pending';
 
-    // Ajustar título e subtítulo se for orçamento editado
+    // Ajustar título e subtítulo: deixar evidente que pode modificar orçamento
     if (isQuotePending && isEditedQuote && title == 'Orçamento aprovado') {
-      title = '⚠️ Orçamento Atualizado Durante o Serviço';
+      title = 'Toque aqui para modificar itens do orçamento';
       subtitle = 'A oficina alterou o orçamento durante o serviço. Revise o novo valor e aprove ou rejeite.';
     } else if (isEditedQuote && normalizedStatus == 'em_andamento' && title == 'Orçamento aprovado') {
-      title = 'Orçamento atualizado e aprovado';
+      title = 'Toque aqui para modificar itens do orçamento';
       subtitle = 'Você aprovou o novo orçamento. O serviço continua com o valor atualizado.';
     }
     
@@ -2206,14 +2222,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       borderColor = Colors.blue.shade200;
       iconColor = Colors.blue.shade700;
     } else if (rawStatus == 'aguardando_autorizacao_inicio' || finalNormalizedStatus == 'awaiting_service_start') {
-      // Estado explícito: aguardando autorização de início de serviço
-      title = 'Serviço Iniciado - Aguardando sua confirmação';
-      description = 'A oficina iniciou o atendimento do seu veículo. Por favor, confirme para prosseguir.';
-      nextStep = 'Confirme o início do serviço usando o botão abaixo. Após confirmar, o serviço será iniciado oficialmente.';
-      icon = Icons.play_circle_outline;
-      cardColor = Colors.blue.shade50;
-      borderColor = Colors.blue.shade200;
-      iconColor = Colors.blue.shade700;
+      // Compatibilidade: se ainda existir esse status (fluxo antigo), tratar como em andamento
+      title = 'Serviço em andamento';
+      description = 'A oficina iniciou o atendimento do seu veículo.';
+      nextStep = 'Aguarde atualizações da oficina.';
+      icon = Icons.build_circle;
+      cardColor = Colors.green.shade50;
+      borderColor = Colors.green.shade200;
+      iconColor = Colors.green.shade700;
     } else if (rawStatus == 'aguardando_aprovacao_orcamento' || finalNormalizedStatus == 'awaiting_quote_approval') {
       // Estado explícito: aguardando aprovação de orçamento
       final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
@@ -2270,16 +2286,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       (merged['estimated_price'] != null && (merged['estimated_price'] is num ? merged['estimated_price'] > 0 : false)) ||
                       (merged['quote_items'] != null && merged['quote_items'] is List && (merged['quote_items'] as List).isNotEmpty);
       
-      // CRITICAL: Se service_start_pending = true E não há orçamento, mostrar card azul de início
+      // Se service_start_pending = true e não há orçamento, tratar como serviço em andamento (oficina inicia direto)
       if (serviceStartPending && !hasQuote) {
-        // É serviço iniciado pela oficina SEM orçamento, aguardando confirmação do cliente
-        title = 'Serviço Iniciado - Aguardando sua confirmação';
-        description = 'A oficina iniciou o atendimento do seu veículo. Por favor, confirme para prosseguir.';
-        nextStep = 'Confirme o início do serviço usando o botão abaixo. Após confirmar, o serviço será iniciado oficialmente.';
-        icon = Icons.play_circle_outline;
-        cardColor = Colors.blue.shade50;
-        borderColor = Colors.blue.shade200;
-        iconColor = Colors.blue.shade700;
+        title = 'Serviço em andamento';
+        description = 'A oficina iniciou o atendimento do seu veículo.';
+        nextStep = 'Aguarde atualizações da oficina.';
+        icon = Icons.build_circle;
+        cardColor = Colors.green.shade50;
+        borderColor = Colors.green.shade200;
+        iconColor = Colors.green.shade700;
       } else if (isTimeSuggestion) {
         // É sugestão de horário da oficina
         title = 'Nova sugestão de horário';
@@ -2472,13 +2487,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       }
     }
     
-    // 2. Botão de autorizar início do serviço
-    if (isAwaitingServiceStart) {
-      actionWidgets.add(_buildServiceStartAuthorizationButton());
-      actionWidgets.add(const SizedBox(height: 20));
-    }
-    
-    // 3. Botões de aprovação de orçamento
+    // 2. Botões de aprovação de orçamento
     if (hasQuoteApproval && hasQuote) {
       actionWidgets.add(_buildQuoteApprovalButtons());
       actionWidgets.add(const SizedBox(height: 20));
