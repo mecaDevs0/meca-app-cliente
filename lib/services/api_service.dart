@@ -5,11 +5,13 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
+import '../core/http_client_config.dart';
 import '../utils/logger.dart';
 
 class ApiService {
   late Dio _dio;
   final Map<String, _CacheEntry> _cache = {};
+  static const int _kMaxCacheEntries = 150;
 
   ApiService() {
     _dio = Dio(BaseOptions(
@@ -22,6 +24,8 @@ class ApiService {
         'x-publishable-api-key': 'pk_8913f91e8557d24f01440879c36cdb8c81e6ef346ec9a14dc6582ba87d06e9e9',
       },
     ));
+
+    configureDioForProduction(_dio);
 
     // Adicionar interceptor para incluir token automaticamente e cache
     _dio.interceptors.add(InterceptorsWrapper(
@@ -61,6 +65,7 @@ class ApiService {
             response.requestOptions.uri.toString(),
             response.requestOptions.queryParameters,
           );
+          _evictCacheIfNeeded();
           _cache[cacheKey] = _CacheEntry(response.data, DateTime.now());
           AppLogger.cache('SET', cacheKey);
         }
@@ -95,13 +100,22 @@ class ApiService {
   }
 
   String _getCacheKey(String url, Map<String, dynamic>? params) {
-    // Em Dio, `uri.toString()` já inclui querystring; evitar duplicar params (ex.: "...?a=1?a=1")
     if (url.contains('?')) return url;
     if (params == null || params.isEmpty) return url;
     final sortedParams = Map.fromEntries(
       params.entries.toList()..sort((a, b) => a.key.compareTo(b.key))
     );
     return '$url?${Uri(queryParameters: sortedParams.map((k, v) => MapEntry(k.toString(), v.toString()))).query}';
+  }
+
+  void _evictCacheIfNeeded() {
+    if (_cache.length < _kMaxCacheEntries) return;
+    final entries = _cache.entries.toList()
+      ..sort((a, b) => a.value.timestamp.compareTo(b.value.timestamp));
+    final toRemove = entries.length - (_kMaxCacheEntries ~/ 2).clamp(50, _kMaxCacheEntries - 20);
+    for (var i = 0; i < toRemove && i < entries.length; i++) {
+      _cache.remove(entries[i].key);
+    }
   }
 
   void clearCache() {

@@ -34,8 +34,8 @@ class AppConfig {
   /// Chave pública PagBank
   static const String pagBankPublicKey = 'YOUR_PUBLIC_KEY_HERE'; // TODO: Adicionar chave real
   
-  /// Taxa da plataforma MECA (7%)
-  static const double mecaPlatformFee = 0.07; // 7%
+  /// Uso interno (cálculo; cliente não vê taxa).
+  static const double mecaPlatformFee = 0.12;
   
   // ========================================
   // FIPE API (Consulta de Veículos)
@@ -101,7 +101,6 @@ class AppConfig {
     print('========================================');
     print('API Base URL: $apiBaseUrl');
     print('App Version: $appVersion ($buildNumber)');
-    print('MECA Platform Fee: ${mecaPlatformFee * 100}%');
     print('========================================');
   }
 }

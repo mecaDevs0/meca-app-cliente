@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/app_config.dart';
+import '../../core/http_client_config.dart';
 
 /// Resultado do upload
 class UploadResult {
@@ -48,6 +49,8 @@ class UploadService {
         'Content-Type': 'multipart/form-data',
       },
     ));
+
+    configureDioForProduction(_dio);
 
     // Interceptor para adicionar token automaticamente
     _dio.interceptors.add(InterceptorsWrapper(

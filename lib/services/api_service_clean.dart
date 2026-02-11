@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
+import '../core/http_client_config.dart';
 import 'plate_search_service.dart';
 
 class ApiService {
@@ -17,6 +18,7 @@ class ApiService {
         'x-publishable-api-key': 'pk_8913f91e8557d24f01440879c36cdb8c81e6ef346ec9a14dc6582ba87d06e9e9',
       },
     ));
+    configureDioForProduction(_dio);
   }
 
   // Login

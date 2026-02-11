@@ -70,7 +70,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
           message: 'Avaliação enviada com sucesso! Obrigado por compartilhar sua experiência.',
         );
         if (!mounted) return;
+        // Fechar avaliação e a tela abaixo (detalhe do pedido), indo para a lista de pedidos
         Navigator.of(context).pop(true);
+        if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
       } else {
         await AppAlerts.showError(
           context,

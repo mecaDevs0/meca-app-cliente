@@ -1,15 +1,23 @@
 import 'dart:convert';
+
 import 'package:dio/dio.dart';
+
 import '../config/app_config.dart';
+import '../core/http_client_config.dart';
 
 /// Serviço profissional para tokenização de cartões PagBank
 /// PRODUÇÃO REAL: Tokeniza cartões usando a API do PagBank antes de enviar ao backend
 class PagBankTokenizationService {
-  final Dio _dio = Dio(BaseOptions(
-    baseUrl: AppConfig.apiBaseUrl,
-    connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 30),
-  ));
+  late Dio _dio;
+
+  PagBankTokenizationService() {
+    _dio = Dio(BaseOptions(
+      baseUrl: AppConfig.apiBaseUrl,
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+    ));
+    configureDioForProduction(_dio);
+  }
 
   /// Obter chave pública do PagBank
   Future<String?> getPublicKey() async {

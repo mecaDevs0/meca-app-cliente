@@ -931,14 +931,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   }
 
   Widget _buildPaymentSummaryCard(ThemeData theme) {
-    // Evitar divergência de arredondamento na UI do split:
-    // Ex.: 1,50 * 7% = 0,105 -> 0,11 e 1,39 (centavos: 150 -> 11 + 139)
-    // Se fizer conta em double e arredondar no fim, pode aparecer 0,11 e 1,40 (soma 1,51).
+    // Cálculo interno para consistência com backend (cliente não vê detalhes de split).
     final totalCents = (widget.totalAmount * 100).round();
-    final mecaFeeCents = (totalCents * 0.07).round();
+    final mecaFeeCents = (totalCents * 0.12).round();
     final workshopCents = totalCents - mecaFeeCents;
-    final mecaFeeDisplay = mecaFeeCents / 100.0;
-    final workshopDisplay = workshopCents / 100.0;
 
     final surfaceColor = theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.9);
     final borderColor = theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15);
@@ -971,7 +967,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             'Valor do orçamento final',
             _currencyFormatter.format(widget.serviceAmount),
           ),
-          // Cliente não deve ver detalhes do split (taxa MECA/oficina)
+          // Resumo: apenas valor final (sem detalhes de split)
           const Divider(height: 24),
           _buildSummaryRow(
             theme,

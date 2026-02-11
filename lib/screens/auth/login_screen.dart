@@ -382,7 +382,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   fillColor: Colors.white,
                                 ),
                                 validator: (value) {
-                                  if (value == null || value.isEmpty) {
+                                  final nome = (value ?? _nameController.text).toString().trim();
+                                  if (nome.isEmpty) {
                                     return 'Por favor, insira seu nome';
                                   }
                                   return null;
