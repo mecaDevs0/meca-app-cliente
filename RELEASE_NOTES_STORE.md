@@ -3,7 +3,7 @@
 ## Notes for reviewers (English)
 
 - **App name:** Meca  
-- **Version:** 2.1.8 (218)  
+- **Version:** 2.1.9 (219)  
 - **Purpose:** Consumer app for booking automotive services at workshops: search workshops, book appointments, pay with card or installments.  
 - **Login:** Email/password and optional Apple Sign-In. Session tokens only; no card data stored on device.  
 - **Permissions:** Camera and photo library for service photos; location to find nearby workshops; Face ID for faster Apple login.  
@@ -16,8 +16,10 @@
 
 **Português (Brasil):**  
 - Melhorias de estabilidade.  
-- Parcelamento: escolha do número de parcelas no pagamento e exibição de oficinas que aceitam parcelamento.
+- Parcelamento: escolha do número de parcelas no pagamento e exibição de oficinas que aceitam parcelamento.  
+- Correção: horários de funcionamento das oficinas passam a ser exibidos corretamente (aberto/fechado por dia).
 
 **English:**  
 - Stability improvements.  
-- Installments: choose number of installments at checkout and see which workshops accept installments.
+- Installments: choose number of installments at checkout and see which workshops accept installments.  
+- Fix: workshop opening hours are now displayed correctly (open/closed per day).
