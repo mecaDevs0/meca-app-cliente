@@ -1,29 +1,28 @@
-# Meca (Cliente) – Release Notes (App Store / Play Store)
+# Meca – Release notes (App Store / Google Play)
 
-## Versão 2.1.7 (217) – Janeiro 2026
-
----
-
-### English
-
-**What’s New**
-- After a successful payment, you are taken to the review screen to rate the service; after submitting your review, you are returned to your orders list (no longer back to the payment screen).
-- Payment flow and platform fee (12% MECA) applied correctly; you only see the total to pay.
-- Stability and performance improvements.
-
-**Notes for Reviewers**
-- This update fixes post-payment navigation: after rating the service, the user returns to the orders list. No change to data collection or permissions.
-- Payments are processed via PagBank; the customer pays the total amount; the split (platform/workshop) is handled by the backend.
+**Version:** 2.1.8 (218)
 
 ---
 
-### Português (Brasil)
+## Notes for reviewers (English)
 
-**O que há de novo**
-- Após o pagamento com sucesso, você é levado à tela de avaliar o serviço; depois de enviar a avaliação, volta para a lista de pedidos (não volta mais para a tela de pagamento).
-- Fluxo de pagamento e taxa da plataforma (12% MECA) aplicados corretamente; você vê apenas o total a pagar.
-- Melhorias de estabilidade e desempenho.
+- This update adds installment payment support and clearer display of which workshops accept installments. No new permissions or sensitive data collection. All changes are backward compatible with our existing API.
+- **Testing:** You can browse workshops, create a booking, and use the payment flow. No special reviewer credentials are required beyond a normal user account.
 
-**Notas para revisores**
-- Esta atualização corrige a navegação após o pagamento: depois de avaliar o serviço, o usuário retorna à lista de pedidos. Não há alteração na coleta de dados ou permissões.
-- Os pagamentos são processados via PagBank; o cliente paga o valor total; o repasse (plataforma/oficina) é feito pelo backend.
+---
+
+## O que há de novo (Português – Brasil)
+
+- **Parcelamento:** Opção de pagar em parcelas no checkout; valor total e “até Nx” exibidos de forma clara.
+- **Oficinas que aceitam parcelas:** Indicação na lista e no detalhe da oficina quando ela aceita parcelamento.
+- Melhorias na tela de pagamento e atualização dos dados antes de confirmar o pagamento.
+- Ajustes de interface e estabilidade.
+
+---
+
+## What's new (English)
+
+- **Installments:** Option to pay in installments at checkout; total amount and “up to Nx” shown clearly.
+- **Workshops that accept installments:** Indication on the list and workshop detail when the workshop accepts installments.
+- Improvements on the payment screen and data refresh before confirming payment.
+- UI and stability improvements.
