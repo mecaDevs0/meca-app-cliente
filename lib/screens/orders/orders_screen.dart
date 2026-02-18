@@ -1169,13 +1169,21 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   },
                 ),
                 
-                // Seção de contato WhatsApp - APENAS quando status = em_andamento
+                // Seção de contato WhatsApp - quando status do agendamento for no mínimo confirmado
                 Builder(
                   builder: (context) {
-                    final normalizedStatus = status.toString().toLowerCase();
-                    final isInProgress = normalizedStatus == 'em_andamento' || normalizedStatus == 'in_progress';
+                    final normalizedStatus = status.toString().toLowerCase().trim();
+                    final canShowPhone = [
+                      'confirmado', 'confirmed',
+                      'em_andamento', 'in_progress',
+                      'aguardando_autorizacao_inicio',
+                      'aguardando_aprovacao_finalizacao',
+                      'aguardando_aprovacao_orcamento',
+                      'finalizado', 'finalizado_aguardando_pagamento', 'completed',
+                      'pago', 'paid',
+                    ].contains(normalizedStatus);
                     
-                    if (!isInProgress) return const SizedBox.shrink();
+                    if (!canShowPhone) return const SizedBox.shrink();
                     
                     // Obter telefone da oficina
                     final workshopPhone = booking['workshop_phone'] ?? 

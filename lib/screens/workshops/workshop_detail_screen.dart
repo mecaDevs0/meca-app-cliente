@@ -12,10 +12,13 @@ import '../booking/booking_screen.dart';
 
 class WorkshopDetailScreen extends StatefulWidget {
   final String workshopId;
+  /// Distância em km (opcional). Se > 50, exibe aviso de oficina longe.
+  final double? distanceKm;
 
   const WorkshopDetailScreen({
     Key? key,
     required this.workshopId,
+    this.distanceKm,
   }) : super(key: key);
 
   @override
@@ -43,7 +46,95 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   @override
   void initState() {
     super.initState();
+    debugPrint('📍 [WorkshopDetail] initState - workshopId: ${widget.workshopId}');
+    debugPrint('📍 [WorkshopDetail] distanceKm recebido: ${widget.distanceKm}');
+    debugPrint('📍 [WorkshopDetail] distanceKm > 50? ${widget.distanceKm != null && widget.distanceKm! > 50}');
     _loadWorkshopDetails();
+    if (widget.distanceKm != null && widget.distanceKm! > 50) {
+      debugPrint('⚠️ [WorkshopDetail] MOSTRANDO POPUP DE OFICINA DISTANTE!');
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showFarWorkshopDialog());
+    } else {
+      debugPrint('✅ [WorkshopDetail] Oficina próxima ou sem distância, sem popup');
+    }
+  }
+
+  void _showFarWorkshopDialog() {
+    if (!mounted) return;
+    showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange[700], size: 28),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('Oficina Distante', style: TextStyle(fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Esta oficina está a aproximadamente ${widget.distanceKm!.toStringAsFixed(0)} km de você.',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange[100],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[300]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.orange[800], size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Isso pode impactar em custos de deslocamento e tempo de atendimento.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange[900],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Tem certeza que deseja continuar?',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop(false);
+            },
+            child: const Text('Voltar', style: TextStyle(color: Colors.grey)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF00C977),
+            ),
+            onPressed: () {
+              Navigator.of(dialogContext).pop(true);
+            },
+            child: const Text('Sim, continuar'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed != true && mounted) {
+        Navigator.of(context).pop(); // Volta para a tela anterior
+      }
+    });
   }
 
   Future<void> _loadWorkshopDetails() async {
@@ -424,7 +515,13 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
             ),
             const SizedBox(height: 16),
             _buildInfoRow(Icons.location_on, 'Endereço', _workshop!['address']?.toString() ?? 'Não informado'),
-            _buildInfoRow(Icons.phone, 'Telefone', Formatters.formatPhone(_workshop!['phone']?.toString())),
+            _buildInfoRow(
+              Icons.phone,
+              'Telefone',
+              _workshop!['phone'] != null && _workshop!['phone'].toString().trim().isNotEmpty
+                  ? Formatters.formatPhone(_workshop!['phone']?.toString())
+                  : 'Disponível após confirmação do agendamento',
+            ),
             _buildInfoRow(
               Icons.star,
               'Avaliação',

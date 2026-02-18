@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
+import '../../utils/formatters.dart';
 import '../../utils/price_utils.dart';
 import '../../widgets/app_alerts.dart';
 import '../payment/payment_screen.dart';
@@ -260,6 +261,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         normalized == 'finalizado_aguardando_pagamento' ||
         normalized == 'aguardando_pagamento' ||
         normalized == 'awaiting_payment';
+  }
+
+  /// Cliente só pode ver telefone da oficina quando status do agendamento for no mínimo confirmado
+  /// NÃO permitidos: pendente_oficina, pendente_cliente, pendente, pending, suggested_time, cancelado
+  bool _canShowWorkshopPhone(String? status) {
+    if (status == null || status.isEmpty) return false;
+    final s = status.toLowerCase().trim();
+    const allowed = [
+      'confirmado', 'confirmed',
+      'em_andamento', 'in_progress',
+      'aguardando_autorizacao_inicio',
+      'aguardando_aprovacao_finalizacao',
+      'aguardando_aprovacao_orcamento',
+      'aguardando_pagamento',
+      'finalizado', 'finalizado_aguardando_pagamento', 'completed',
+      'pago', 'paid',
+    ];
+    return allowed.contains(s);
   }
 
   Future<void> _showPaymentPrompt(Map<String, dynamic> bookingData) async {
@@ -579,7 +598,34 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  /// Garante valor booleano para accepts_installment (API/DB podem retornar true/false, 1/0, "true"/"false").
+  static bool _parseAcceptsInstallment(dynamic value, {bool defaultValue = true}) {
+    if (value == null) return defaultValue;
+    if (value is bool) return value;
+    if (value is int) return value != 0;
+    if (value is String) {
+      final v = value.trim().toLowerCase();
+      if (v == 'true' || v == '1' || v == 'yes') return true;
+      if (v == 'false' || v == '0' || v == 'no') return false;
+    }
+    return defaultValue;
+  }
+
+  static int _parseMaxInstallments(dynamic value, int defaultValue) {
+    if (value == null) return defaultValue;
+    if (value is int) return value.clamp(1, 24);
+    final n = int.tryParse(value.toString());
+    return n != null ? n.clamp(1, 24) : defaultValue;
+  }
+
   Future<void> _redirectToPayment({Map<String, dynamic>? bookingData}) async {
+    // Garantir dados atualizados (incl. workshop_accepts_installment / workshop_max_installments) antes de abrir pagamento
+    final bookingId = widget.booking['id']?.toString();
+    if (bookingId != null && bookingId.isNotEmpty) {
+      _apiService.invalidateBookingCache(bookingId);
+      await _loadBookingDetails(forceRefresh: true);
+      if (!mounted) return;
+    }
     final mergedBooking = _mergeBookingData(bookingData);
     final double? finalQuote = _extractFinalPrice();
     final double? fallbackAmount = _resolveTotalAmount(mergedBooking) ?? _resolveServiceAmount(mergedBooking);
@@ -603,9 +649,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           },
     );
     workshopData['name'] = workshopData['name'] ?? mergedBooking['workshop_name'] ?? 'Oficina';
-    workshopData['accepts_installment'] = workshopData['accepts_installment'] ??
-        mergedBooking['workshop_accepts_installment'] ??
-        false;
+    workshopData['accepts_installment'] = _parseAcceptsInstallment(
+      workshopData['accepts_installment'] ?? mergedBooking['workshop_accepts_installment'],
+      defaultValue: true,
+    );
+    workshopData['max_installments'] = _parseMaxInstallments(
+      workshopData['max_installments'] ?? mergedBooking['workshop_max_installments'],
+      12,
+    );
 
     final serviceData = Map<String, dynamic>.from(
       (mergedBooking['service'] as Map?) ??
@@ -620,6 +671,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     updatedBooking['total'] = paymentAmount;
     updatedBooking['final_amount'] = paymentAmount;
     updatedBooking['final_price'] = (paymentAmount * 100).round();
+    updatedBooking['workshop_id'] = updatedBooking['workshop_id'] ?? updatedBooking['oficina_id'];
 
     final paid = await Navigator.push<bool>(
       context,
@@ -842,9 +894,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           '${_bookingDetails?['workshop_city'] ?? ''}, ${_bookingDetails?['workshop_state'] ?? ''}'
                               .replaceAll(RegExp(r'^,\s*|,\s*$'), ''),
                         ),
-                      _buildInfoRow(
-                        Icons.phone,
-                        (_bookingDetails?['workshop_phone'] ?? widget.booking['workshop_phone'] ?? 'Telefone não informado').toString(),
+                      Builder(
+                        builder: (context) {
+                          final merged = _mergeBookingData();
+                          final status = merged['status']?.toString() ?? '';
+                          final canShow = _canShowWorkshopPhone(status);
+                          final phone = (_bookingDetails?['workshop_phone'] ?? widget.booking['workshop_phone'] ?? '').toString().trim();
+                          if (canShow && phone.isNotEmpty)
+                            return _buildInfoRow(Icons.phone, Formatters.formatPhone(phone));
+                          return _buildInfoRow(
+                            Icons.phone,
+                            'Telefone disponível após a oficina confirmar o agendamento',
+                          );
+                        },
                       ),
                       if (_bookingDetails?['workshop_email'] != null)
                         _buildInfoRow(

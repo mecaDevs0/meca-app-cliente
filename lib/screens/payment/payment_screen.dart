@@ -16,20 +16,37 @@ class PaymentScreen extends StatelessWidget {
     required this.booking,
   }) : super(key: key);
 
+  static bool _parseAcceptsInstallment(dynamic value, {bool defaultValue = true}) {
+    if (value == null) return defaultValue;
+    if (value is bool) return value;
+    if (value is int) return value != 0;
+    if (value is String) {
+      final v = value.trim().toLowerCase();
+      if (v == 'true' || v == '1' || v == 'yes') return true;
+      if (v == 'false' || v == '0' || v == 'no') return false;
+    }
+    return defaultValue;
+  }
+
+  static int _parseMaxInstallments(dynamic value, int defaultValue) {
+    if (value == null) return defaultValue;
+    if (value is int) return value.clamp(1, 24);
+    final n = int.tryParse(value.toString());
+    return n != null ? n.clamp(1, 24) : defaultValue;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Converter para o formato esperado pelo MecaPaymentScreen
-    // Só usar valores válidos (maiores que 0)
     final quoteAmount = _extractQuoteAmount(booking, service) ?? 0.0;
     final mecaFee = quoteAmount > 0 ? quoteAmount * AppConfig.mecaPlatformFee : 0.0;
-    
     return MecaPaymentScreen(
       bookingData: booking,
       totalAmount: quoteAmount,
       mecaFee: mecaFee,
       serviceAmount: quoteAmount,
       installments: 1,
-      workshopAcceptsInstallment: workshop['accepts_installment'] ?? false,
+      workshopAcceptsInstallment: _parseAcceptsInstallment(workshop['accepts_installment'], defaultValue: true),
+      workshopMaxInstallments: _parseMaxInstallments(workshop['max_installments'], 12),
     );
   }
 

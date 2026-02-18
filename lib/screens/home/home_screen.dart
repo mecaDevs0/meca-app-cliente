@@ -1206,12 +1206,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         : (rawLogo.isNotEmpty && rawLogo.startsWith('http') && !isS3 ? rawLogo : null);
     final hasLogo = logoUrl != null;
 
+    final rawDist = _parseDistance(workshop['distance']);
+    final distanceKm = rawDist != null
+        ? (rawDist > 1000 ? rawDist / 1000.0 : rawDist)
+        : null;
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => WorkshopDetailScreen(workshopId: workshop['id'] ?? ''),
+            builder: (context) => WorkshopDetailScreen(
+              workshopId: workshop['id'] ?? '',
+              distanceKm: distanceKm,
+            ),
           ),
         );
       },

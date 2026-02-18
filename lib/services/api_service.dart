@@ -1851,6 +1851,34 @@ class ApiService {
     }
   }
 
+  /// GET /payments/installments?amount=X — opções de parcelamento (PagBank produção).
+  /// Se [bookingId] ou [workshopId] for passado, a API respeita a configuração da oficina (aceita parcelamento e máximo de parcelas).
+  Future<Map<String, dynamic>> getInstallments(double amount, {String? creditCardBin, String? bookingId, String? workshopId}) async {
+    try {
+      await loadToken();
+      final query = <String, dynamic>{'amount': amount};
+      if (creditCardBin != null && creditCardBin.trim().isNotEmpty) {
+        query['credit_card_bin'] = creditCardBin.trim().substring(0, creditCardBin.length.clamp(0, 6));
+      }
+      if (bookingId != null && bookingId.trim().isNotEmpty) query['booking_id'] = bookingId.trim();
+      if (workshopId != null && workshopId.trim().isNotEmpty) query['workshop_id'] = workshopId.trim();
+      final response = await _dio.get('/payments/installments', queryParameters: query);
+      if (response.data != null && response.data['success'] == true) {
+        final data = response.data as Map<String, dynamic>;
+        final plans = data['plans'] as List? ?? [];
+        final maxInstallments = data['max_installments'];
+        return {
+          'success': true,
+          'plans': plans,
+          if (maxInstallments != null) 'max_installments': maxInstallments is int ? maxInstallments : int.tryParse(maxInstallments.toString()),
+        };
+      }
+      return {'success': false, 'error': response.data?['error'] ?? 'Erro ao consultar parcelas', 'plans': <Map<String, dynamic>>[]};
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e), 'plans': <Map<String, dynamic>>[]};
+    }
+  }
+
   Future<Map<String, dynamic>> createBookingPayment(
     String bookingId, {
     required String paymentMethod,
@@ -1858,6 +1886,11 @@ class ApiService {
     String? cvv,
     String? holderName,
     int? installments,
+    double? totalWithInterest,
+    double? interestPaidByBuyer,
+    double? installmentValue,
+    /// Número de parcelas em que o comprador paga juros (vem do plano PagBank GET fees/calculate)
+    int? interestInstallments,
     int? pixExpirationInSeconds,
     bool? saveCard,
     String? lastDigits,
@@ -1888,6 +1921,21 @@ class ApiService {
 
       if (installments != null && installments > 0) {
         payload['installments'] = installments;
+      }
+      if (totalWithInterest != null && totalWithInterest > 0) {
+        payload['totalWithInterest'] = totalWithInterest;
+        payload['total_with_interest'] = totalWithInterest;
+      }
+      if (interestPaidByBuyer != null && interestPaidByBuyer >= 0) {
+        payload['interestPaidByBuyer'] = interestPaidByBuyer;
+        payload['interest_paid_by_buyer'] = interestPaidByBuyer;
+      }
+      if (installmentValue != null && installmentValue > 0) {
+        payload['installmentValue'] = installmentValue;
+        payload['installment_value'] = installmentValue;
+      }
+      if (interestInstallments != null && interestInstallments > 0) {
+        payload['interest_installments'] = interestInstallments;
       }
 
       if (pixExpirationInSeconds != null && pixExpirationInSeconds > 0) {

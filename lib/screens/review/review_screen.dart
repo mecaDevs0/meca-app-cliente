@@ -70,11 +70,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
           message: 'Avaliação enviada com sucesso! Obrigado por compartilhar sua experiência.',
         );
         if (!mounted) return;
-        // Fechar avaliação e a tela abaixo (detalhe do pedido), indo para a lista de pedidos
-        Navigator.of(context).pop(true);
-        if (mounted && Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
+        // Pequeno delay para o diálogo fechar antes de navegar
+        await Future.delayed(const Duration(milliseconds: 400));
+        if (!mounted) return;
+        // Ir para a Home e limpar a pilha (não voltar para detalhes/pagamento)
+        Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
       } else {
         await AppAlerts.showError(
           context,
@@ -89,7 +89,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         message: 'Não foi possível enviar sua avaliação agora. Tente novamente.',
       );
     } finally {
-      setState(() => _isSubmitting = false);
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 

@@ -177,9 +177,15 @@ class MecaClienteApp extends StatelessWidget {
                 case '/workshops':
                   return MaterialPageRoute(builder: (_) => const CoreScreen(initialIndex: 1));
                 case '/workshop-detail':
-                  final args = settings.arguments as Map<String, dynamic>;
+                  final args = settings.arguments as Map<String, dynamic>? ?? {};
+                  final distanceKm = args['distance_km'] is num
+                      ? (args['distance_km'] as num).toDouble()
+                      : null;
                   return MaterialPageRoute(
-                    builder: (_) => WorkshopDetailScreen(workshopId: args['id'] ?? args['workshop_id'] ?? ''),
+                    builder: (_) => WorkshopDetailScreen(
+                      workshopId: args['id'] ?? args['workshop_id'] ?? '',
+                      distanceKm: distanceKm,
+                    ),
                   );
                 case '/booking':
                   return MaterialPageRoute(builder: (_) => const CoreScreen(initialIndex: 1));

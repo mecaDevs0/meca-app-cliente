@@ -38,7 +38,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _cepController = TextEditingController();
   String _selectedService = 'Todos';
-  String _selectedDistance = 'Até 50km'; // Padrão: 50km conforme especificação
+  String _selectedDistance = 'Todas'; // Padrão: todas as distâncias
   String _selectedRating = 'Todos';
   String _selectedInstallment = 'Todos';
   String _sortBy = 'distancia';
@@ -84,7 +84,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
 
       // Converter filtro de distância para km (padrão 50km)
       double? radiusKm; // null = buscar todas
-      if (_selectedDistance != 'Todos') {
+      if (_selectedDistance != 'Todas') {
         switch (_selectedDistance) {
           case 'Até 50km':
             radiusKm = 50.0;
@@ -93,10 +93,10 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
             radiusKm = 200.0;
             break;
           default:
-            radiusKm = null; // Todos = buscar todas
+            radiusKm = null; // Todas = buscar todas
         }
       } else {
-        radiusKm = null; // Todos = buscar todas
+        radiusKm = null; // Todas = buscar todas
       }
       await _fetchWorkshops(targetLat, targetLng, radiusKm: radiusKm);
     } catch (e) {
@@ -142,6 +142,9 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                  final apiDistance = workshop['distance'];
                  double? finalDistance;
                  
+                 debugPrint('📏 [Distance] Workshop: ${workshop['name']}');
+                 debugPrint('📏 [Distance] apiDistance raw: $apiDistance (${apiDistance?.runtimeType})');
+                 
                  if (apiDistance != null) {
                    final parsed = apiDistance is num 
                        ? apiDistance.toDouble() 
@@ -150,26 +153,29 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                            : null;
                    if (parsed != null && parsed > 0) {
                      finalDistance = parsed;
+                     debugPrint('📏 [Distance] API distance parsed: $finalDistance');
                    }
                  }
                  
                  // Se não tiver distância da API, calcular se tiver coordenadas
                  if (finalDistance == null && workshopLat != null && workshopLng != null) {
                    try {
-                     final double distance = Geolocator.distanceBetween(
+                     // Geolocator retorna em metros, converter para km
+                     final double distanceMeters = Geolocator.distanceBetween(
                            userLat,
                            userLng,
                            workshopLat,
                            workshopLng,
-                         ) /
-                         1000;
-                     finalDistance = distance;
+                         );
+                     finalDistance = distanceMeters / 1000.0; // Converter para km
+                     debugPrint('📏 [Distance] Calculado localmente: ${distanceMeters}m = ${finalDistance}km');
                    } catch (e) {
                      print('Erro ao calcular distância: $e');
                      finalDistance = null;
                    }
                  }
                  
+                 debugPrint('📏 [Distance] FINAL distance em km: $finalDistance');
                  workshop['distance'] = finalDistance;
                  workshop['latitude'] = workshopLat; // Garantir que está disponível
                  workshop['longitude'] = workshopLng; // Garantir que está disponível
@@ -758,10 +764,20 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
+            // workshop['distance'] já está em km (calculado localmente dividido por 1000)
+            // NÃO dividir novamente
+            final double? distanceKm = distance;
+            debugPrint('🚗 [WorkshopCard] Navegando para oficina: ${workshop['name']}');
+            debugPrint('🚗 [WorkshopCard] distance (km): $distance');
+            debugPrint('🚗 [WorkshopCard] distanceKm passado: $distanceKm');
+            debugPrint('🚗 [WorkshopCard] Vai mostrar popup? ${distanceKm != null && distanceKm > 50}');
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => WorkshopDetailScreen(workshopId: workshop['id']),
+                builder: (context) => WorkshopDetailScreen(
+                  workshopId: workshop['id'],
+                  distanceKm: distanceKm,
+                ),
               ),
             );
           },
@@ -1042,7 +1058,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         }
         
         // Filtro por distância
-        if (_selectedDistance != 'Todos') {
+        if (_selectedDistance != 'Todas') {
           final distance = workshop['distance'] ?? 0.0;
           double distanceValue = 0.0;
           if (distance is num) {
@@ -1170,14 +1186,14 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                         onPressed: () {
                           setModalState(() {
                             _selectedService = 'Todos';
-                            _selectedDistance = 'Todos';
+                            _selectedDistance = 'Todas';
                             _selectedRating = 'Todos';
                             _selectedInstallment = 'Todos';
                             _sortBy = 'distancia';
                           });
                           setState(() {
                             _selectedService = 'Todos';
-                            _selectedDistance = 'Todos';
+                            _selectedDistance = 'Todas';
                             _selectedRating = 'Todos';
                             _selectedInstallment = 'Todos';
                             _sortBy = 'distancia';
@@ -1279,7 +1295,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                               _buildFilterSection(
                                 'Distância',
                                 _selectedDistance,
-                                ['Até 50km', 'Até 200km', 'Todos'],
+                                ['Até 50km', 'Até 200km', 'Todas'],
                                 isDarkMode,
                                 (value) {
                                   setModalState(() {
@@ -1474,7 +1490,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
               children: options.map((option) {
                 final isSelected = selectedValue == option;
                 // Capitalizar primeira letra de cada palavra do nome do serviço
-                final displayOption = option == 'Todos' 
+                final displayOption = (option == 'Todos' || option == 'Todas') 
                     ? option 
                     : option.split(' ').map((word) {
                         if (word.isEmpty) return word;

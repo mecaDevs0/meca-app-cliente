@@ -19,6 +19,7 @@ class MecaPaymentScreen extends StatefulWidget {
   final double serviceAmount;
   final int installments;
   final bool workshopAcceptsInstallment;
+  final int workshopMaxInstallments;
 
   const MecaPaymentScreen({
     Key? key,
@@ -28,6 +29,7 @@ class MecaPaymentScreen extends StatefulWidget {
     required this.serviceAmount,
     required this.installments,
     this.workshopAcceptsInstallment = true,
+    this.workshopMaxInstallments = 12,
   }) : super(key: key);
 
   @override
@@ -50,31 +52,22 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     final workshopId = widget.bookingData['workshop_id']?.toString() ?? widget.bookingData['oficina_id']?.toString();
     
     if (bookingId != null && workshopId != null && mounted) {
-      // Invalidar cache ANTES de fechar a tela para garantir que os dados sejam recarregados
       _apiService.invalidateBookingCache(bookingId);
-          _apiService.invalidateBookingsCache();
       _apiService.invalidateBookingsCache();
-      
-      // Retornar true para indicar que pagamento foi feito
-      Navigator.pop(context, true);
-      
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ReviewScreen(
-              bookingId: bookingId,
-              workshopId: workshopId,
-            ),
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      // Substituir tela de pagamento pela de avaliação (não voltar para detalhes do pedido)
+      await Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ReviewScreen(
+            bookingId: bookingId,
+            workshopId: workshopId,
           ),
-        );
-      }
+        ),
+      );
     } else {
-      if (mounted) {
-        // Mesmo sem workshopId, retornar true para indicar pagamento
-        Navigator.pop(context, true);
-      }
+      if (mounted) Navigator.pop(context, true);
     }
   }
 
@@ -84,6 +77,14 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   final TextEditingController _cvvController = TextEditingController();
 
   List<Map<String, dynamic>> _savedCards = [];
+
+  /// Planos de parcelamento da API (GET /payments/installments). Null = ainda não carregou ou oficina não aceita.
+  List<Map<String, dynamic>>? _installmentPlans;
+  bool _loadingInstallmentPlans = false;
+  /// Máximo de parcelas retornado pela API (oficina). Usado no label "até Nx".
+  int? _maxInstallmentsFromApi;
+  /// Plano selecionado (mesmo que _selectedInstallments) para enviar total_with_interest, interest_paid_by_buyer, installment_value.
+  Map<String, dynamic>? _selectedInstallmentPlan;
 
   Map<String, dynamic>? _paymentRecord;
   String? _pixCode;
@@ -129,6 +130,12 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     super.initState();
     _selectedInstallments = widget.installments > 0 ? widget.installments : 1;
     _loadSavedCards();
+    if (widget.workshopAcceptsInstallment && widget.totalAmount > 0) {
+      _loadInstallmentPlans();
+    } else {
+      // Oficina não aceita parcelamento: usar só 1x à vista
+      _installmentPlans = _fallbackInstallmentPlan();
+    }
   }
 
   @override
@@ -192,6 +199,74 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         });
       }
     }
+  }
+
+  /// Carrega opções de parcelamento da API (GET /payments/installments). Passa booking_id para respeitar configuração da oficina.
+  Future<void> _loadInstallmentPlans() async {
+    if (widget.totalAmount <= 0) return;
+    setState(() {
+      _loadingInstallmentPlans = true;
+      _installmentPlans = null;
+    });
+    final bookingId = widget.bookingData['id']?.toString() ?? widget.bookingData['booking_id']?.toString();
+    final workshopId = widget.bookingData['workshop_id']?.toString() ?? widget.bookingData['oficina_id']?.toString();
+    try {
+      final result = await _apiService.getInstallments(
+        widget.totalAmount,
+        bookingId: bookingId,
+        workshopId: workshopId,
+      );
+      if (!mounted) return;
+      if (result['success'] == true && result['plans'] != null) {
+        final plans = List<Map<String, dynamic>>.from(result['plans'] as List);
+        final maxFromApi = result['max_installments'] is int
+            ? result['max_installments'] as int?
+            : int.tryParse(result['max_installments']?.toString() ?? '');
+        setState(() {
+          _installmentPlans = plans.isNotEmpty ? plans : _fallbackInstallmentPlan();
+          _maxInstallmentsFromApi = maxFromApi;
+          _loadingInstallmentPlans = false;
+          _syncSelectedPlanFromInstallments();
+        });
+      } else {
+        setState(() {
+          _installmentPlans = _fallbackInstallmentPlan();
+          _maxInstallmentsFromApi = null;
+          _loadingInstallmentPlans = false;
+          _syncSelectedPlanFromInstallments();
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _installmentPlans = _fallbackInstallmentPlan();
+          _maxInstallmentsFromApi = null;
+          _loadingInstallmentPlans = false;
+          _syncSelectedPlanFromInstallments();
+        });
+      }
+    }
+  }
+
+  List<Map<String, dynamic>> _fallbackInstallmentPlan() {
+    return [
+      {
+        'installments': 1,
+        'installment_value_cents': (widget.totalAmount * 100).round(),
+        'total_cents': (widget.totalAmount * 100).round(),
+        'interest_cents': 0,
+        'interest_free': true,
+      },
+    ];
+  }
+
+  void _syncSelectedPlanFromInstallments() {
+    if (_installmentPlans == null || _installmentPlans!.isEmpty) return;
+    final plan = _installmentPlans!.firstWhere(
+      (p) => (p['installments'] as int?) == _selectedInstallments,
+      orElse: () => _installmentPlans!.first,
+    );
+    _selectedInstallmentPlan = plan;
   }
 
   Future<void> _handlePay() async {
@@ -264,6 +339,11 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       }
 
       final workshopAccountId = (widget.bookingData['workshop_pagbank_account_id'] ?? widget.bookingData['workshopPagbankAccountId'])?.toString().trim();
+      final plan = _selectedMethod == 'credit_card' ? _selectedInstallmentPlan : null;
+      final totalWithInterest = plan != null && (plan['total_cents'] as int?) != null ? (plan['total_cents'] as int) / 100.0 : null;
+      final interestPaidByBuyer = plan != null && (plan['interest_cents'] as int?) != null ? (plan['interest_cents'] as int) / 100.0 : null;
+      final installmentValue = plan != null && (plan['installment_value_cents'] as int?) != null ? (plan['installment_value_cents'] as int) / 100.0 : null;
+      final interestInstallments = plan != null ? (plan['interest_installments'] as int?) : null;
       // Usar createBookingPayment que valida o status do booking antes de criar pagamento
       final paymentResult = await _apiService.createBookingPayment(
         bookingId,
@@ -272,6 +352,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         cvv: cvv,
         holderName: _selectedMethod == 'credit_card' ? _extractCardHolderName(_selectedCardId) : null,
         installments: _selectedMethod == 'credit_card' ? _selectedInstallments : null,
+        totalWithInterest: totalWithInterest,
+        interestPaidByBuyer: interestPaidByBuyer,
+        installmentValue: installmentValue,
+        interestInstallments: interestInstallments,
         pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
         workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
       );
@@ -619,6 +703,11 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       }
 
       final workshopAccountId = (widget.bookingData['workshop_pagbank_account_id'] ?? widget.bookingData['workshopPagbankAccountId'])?.toString().trim();
+      final plan = _selectedInstallmentPlan;
+      final totalWithInterest = plan != null && (plan['total_cents'] as int?) != null ? (plan['total_cents'] as int) / 100.0 : null;
+      final interestPaidByBuyer = plan != null && (plan['interest_cents'] as int?) != null ? (plan['interest_cents'] as int) / 100.0 : null;
+      final installmentValue = plan != null && (plan['installment_value_cents'] as int?) != null ? (plan['installment_value_cents'] as int) / 100.0 : null;
+      final interestInstallments = plan != null ? (plan['interest_installments'] as int?) : null;
       final paymentResult = await _apiService.createBookingPayment(
         bookingId,
         paymentMethod: 'CREDIT_CARD',
@@ -626,6 +715,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         cvv: cvv,
         holderName: holderName,
         installments: _selectedInstallments,
+        totalWithInterest: totalWithInterest,
+        interestPaidByBuyer: interestPaidByBuyer,
+        installmentValue: installmentValue,
+        interestInstallments: interestInstallments,
         saveCard: saveCard,
         lastDigits: lastDigits,
         brand: brand,
@@ -921,7 +1014,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                         )
                       : Text(
                           _selectedMethod == 'credit_card'
-                              ? 'Pagar ${_currencyFormatter.format(widget.totalAmount)}'
+                              ? 'Pagar ${_displayTotalToPay(theme)}'
                               : 'Gerar PIX de ${_currencyFormatter.format(widget.totalAmount)}',
                         ),
                 ),
@@ -967,18 +1060,17 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             'Valor do orçamento final',
             _currencyFormatter.format(widget.serviceAmount),
           ),
-          // Resumo: apenas valor final (sem detalhes de split)
           const Divider(height: 24),
           _buildSummaryRow(
             theme,
             '= Total a pagar',
-            _currencyFormatter.format(widget.totalAmount),
+            _displayTotalToPay(theme),
             isTotal: true,
           ),
           if (_selectedMethod == 'credit_card' && widget.workshopAcceptsInstallment && _selectedInstallments > 1) ...[
             const SizedBox(height: 12),
             Text(
-              '${_selectedInstallments}x de ${_currencyFormatter.format(widget.totalAmount / _selectedInstallments)}',
+              _displayInstallmentLine(),
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w600,
@@ -988,6 +1080,33 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         ],
       ),
     );
+  }
+
+  /// Total a exibir no resumo: com juros do plano selecionado (cartão) ou valor do orçamento.
+  String _displayTotalToPay(ThemeData theme) {
+    if (_selectedMethod == 'credit_card' && _selectedInstallmentPlan != null) {
+      final totalCents = _selectedInstallmentPlan!['total_cents'] as int?;
+      if (totalCents != null && totalCents > 0) {
+        return _currencyFormatter.format(totalCents / 100.0);
+      }
+    }
+    return _currencyFormatter.format(widget.totalAmount);
+  }
+
+  /// Linha de parcelas: valor da parcela e, se houver juros, total com juros.
+  String _displayInstallmentLine() {
+    if (_selectedInstallmentPlan == null) {
+      return '${_selectedInstallments}x de ${_currencyFormatter.format(widget.totalAmount / _selectedInstallments)}';
+    }
+    final parcelCents = (_selectedInstallmentPlan!['installment_value_cents'] as int?) ?? 0;
+    final totalCents = (_selectedInstallmentPlan!['total_cents'] as int?) ?? 0;
+    final interestFree = _selectedInstallmentPlan!['interest_free'] == true;
+    final parcel = parcelCents / 100.0;
+    final total = totalCents / 100.0;
+    if (interestFree) {
+      return '${_selectedInstallments}x de ${_currencyFormatter.format(parcel)} sem juros';
+    }
+    return '${_selectedInstallments}x de ${_currencyFormatter.format(parcel)} (total ${_currencyFormatter.format(total)} com juros)';
   }
 
   Widget _buildSummaryRow(ThemeData theme, String label, String value, {bool isTotal = false, bool secondary = false}) {
@@ -1030,7 +1149,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         'value': 'credit_card',
         'title': 'Cartão de Crédito',
         'subtitle': widget.workshopAcceptsInstallment
-            ? 'Parcelamento disponível (até 12x)'
+            ? 'Parcelamento disponível (até ${widget.workshopMaxInstallments}x)'
             : 'Pagamento à vista',
         'icon': Icons.credit_card,
       },
@@ -1220,8 +1339,6 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   }
 
   Widget _buildInstallmentsSection(ThemeData theme) {
-    final installmentsOptions = List<int>.generate(12, (index) => index + 1);
-
     if (!widget.workshopAcceptsInstallment) {
       return Container(
         padding: const EdgeInsets.all(16),
@@ -1245,6 +1362,25 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       );
     }
 
+    if (_loadingInstallmentPlans) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
+        ),
+        child: Row(
+          children: [
+            Text('Parcelamento', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(width: 12),
+            const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+          ],
+        ),
+      );
+    }
+
+    final plans = _installmentPlans ?? _fallbackInstallmentPlan();
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1255,36 +1391,79 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Parcelamento',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          Row(
+            children: [
+              Text(
+                'Parcelamento',
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'até ${_maxInstallmentsFromApi ?? widget.workshopMaxInstallments}x',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
+          Text(
+            'Valores e juros dinâmicos (PagBank)',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+            ),
+          ),
+          if (plans.isNotEmpty && plans.length < (_maxInstallmentsFromApi ?? widget.workshopMaxInstallments))
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Para este valor, até ${plans.length}x disponíveis (mín. R\$ 5,00 por parcela).',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.65),
+                  fontSize: 12,
+                ),
+              ),
+            ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            value: _selectedInstallments,
-            items: installmentsOptions
+          DropdownButtonFormField<Map<String, dynamic>>(
+            value: plans.firstWhere(
+              (p) => (p['installments'] as int?) == _selectedInstallments,
+              orElse: () => plans.first,
+            ),
+            items: plans
                 .map(
-                  (installment) => DropdownMenuItem<int>(
-                    value: installment,
-                  child: Text(
-                      installment == 1
-                          ? 'À vista (${_currencyFormatter.format(widget.totalAmount)})'
-                          : '${installment}x de ${_currencyFormatter.format(widget.totalAmount / installment)}',
-                    ),
-                  ),
+                  (plan) {
+                    final n = (plan['installments'] as int?) ?? 1;
+                    final installmentCents = (plan['installment_value_cents'] as int?) ?? 0;
+                    final totalCents = (plan['total_cents'] as int?) ?? 0;
+                    final interestFree = plan['interest_free'] == true;
+                    final parcelValue = installmentCents / 100.0;
+                    final totalValue = totalCents / 100.0;
+                    final label = n == 1
+                        ? 'À vista (${_currencyFormatter.format(totalValue)})'
+                        : interestFree
+                            ? '${n}x de ${_currencyFormatter.format(parcelValue)} sem juros'
+                            : '${n}x de ${_currencyFormatter.format(parcelValue)} (total ${_currencyFormatter.format(totalValue)} com juros)';
+                    return DropdownMenuItem<Map<String, dynamic>>(
+                      value: plan,
+                      child: Text(label),
+                    );
+                  },
                 )
                 .toList(),
-            onChanged: (value) {
-              if (value != null) {
+            onChanged: (plan) {
+              if (plan != null) {
+                final n = (plan['installments'] as int?) ?? 1;
                 setState(() {
-                  _selectedInstallments = value;
+                  _selectedInstallments = n;
+                  _selectedInstallmentPlan = plan;
                 });
               }
             },
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
+            ),
           ),
         ],
       ),
