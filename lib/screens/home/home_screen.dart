@@ -1,16 +1,21 @@
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../services/location_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/meca_loading_widget.dart';
+import '../mia/mia_chat_screen.dart';
+import '../mia/mia_onboarding_sheet.dart';
 import '../services/services_screen.dart';
 import '../workshops/workshop_detail_screen.dart';
 import '../workshops/workshops_screen.dart';
@@ -195,6 +200,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.all(16),
             child: _buildHeader(),
           ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildMiaCard(),
+          ),
           const SizedBox(height: 24),
           // Card SOS Guincho (apenas para São Paulo Capital)
           Builder(
@@ -262,6 +272,202 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           textAlign: TextAlign.right,
         ),
       ],
+    );
+  }
+
+  Widget _buildMiaCard() {
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        final isDark = themeService.isDarkMode;
+        return GestureDetector(
+          onTap: () async {
+            final prefs = await SharedPreferences.getInstance();
+            final seen = prefs.getBool('mia_onboarding_seen') ?? false;
+            if (!seen && mounted) {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => MiaOnboardingSheet(
+                  onStart: () async {
+                    final p = await SharedPreferences.getInstance();
+                    await p.setBool('mia_onboarding_seen', true);
+                  },
+                ),
+              ).then((_) {
+                if (mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MiaChatScreen(),
+                    ),
+                  );
+                }
+              });
+            } else if (mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MiaChatScreen()),
+              );
+            }
+          },
+          child: AnimatedScale(
+            scale: 1.0,
+            duration: const Duration(milliseconds: 150),
+            child: Builder(
+              builder: (context) {
+                const cardHeight = 168.0;
+                const miaHeight = 340.0;
+                final screenWidth = MediaQuery.of(context).size.width;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // 1. Background do Card (glassmorphism profundo)
+                    Container(
+                      height: cardHeight,
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        gradient: const LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            Color(0xFF121212),
+                            Color(0xFF0A2415),
+                          ],
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.1),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF00C977).withOpacity(0.04),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                          BoxShadow(
+                            color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
+                            blurRadius: 16,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          // 2. Lado Esquerdo (Blindado – nunca invade a MIA)
+                          SizedBox(
+                            width: screenWidth * 0.5,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: BackdropFilter(
+                                    filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: Colors.greenAccent.withOpacity(0.6),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'IA',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF00C977),
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                const Text(
+                                  'Diagnóstico Inteligente',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    height: 1.1,
+                                    letterSpacing: -0.8,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Descubra o problema do seu carro com IA',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white70,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 70),
+                        ],
+                      ),
+                    ),
+                    // 3. Halo de IA – luz volumétrica difusa (sem bordas duras)
+                    Positioned(
+                      bottom: -60,
+                      right: -80,
+                      child: IgnorePointer(
+                        child: Container(
+                          width: 300,
+                          height: 300,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              center: Alignment.center,
+                              radius: 0.5,
+                              colors: [
+                                Colors.greenAccent.withOpacity(0.35),
+                                Colors.greenAccent.withOpacity(0.08),
+                                Colors.transparent,
+                              ],
+                              stops: const [0.0, 0.25, 0.6],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 4. MIA – base ancorada no fundo, vazando agressivamente pelo topo
+                    Positioned(
+                      bottom: 0,
+                      right: -48,
+                      child: SizedBox(
+                        width: miaHeight * 0.92,
+                        height: miaHeight,
+                        child: SvgPicture.asset(
+                          'assets/images/MIA.svg',
+                          fit: BoxFit.contain,
+                          alignment: Alignment.bottomCenter,
+                          placeholderBuilder: (_) => const Icon(
+                            Icons.smart_toy_rounded,
+                            size: 100,
+                            color: Color(0xFF00C977),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 

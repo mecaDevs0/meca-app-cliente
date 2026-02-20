@@ -509,6 +509,40 @@ class ApiService {
         return {'success': false, 'error': 'Erro ao buscar serviços'};
       }
     } catch (e) {
+        return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  /// MIA - Diagnóstico inteligente via OpenAI
+  Future<Map<String, dynamic>> getAIDiagnostics({
+    required String vehicleModel,
+    required String vehicleYear,
+    required String vehicleKm,
+    required String problemDescription,
+  }) async {
+    try {
+      await loadToken();
+      final response = await _dio.post(
+        '/services/ai-diagnostics',
+        data: {
+          'vehicleModel': vehicleModel,
+          'vehicleYear': vehicleYear,
+          'vehicleKm': vehicleKm,
+          'problemDescription': problemDescription,
+        },
+        options: Options(
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+      );
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'data': response.data['data']};
+      }
+      return {
+        'success': false,
+        'error': response.data?['error'] ?? 'Erro ao gerar diagnóstico',
+      };
+    } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
     }
   }

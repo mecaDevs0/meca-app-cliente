@@ -13,7 +13,15 @@ import '../../widgets/meca_loading_widget.dart';
 import 'workshop_detail_screen.dart';
 
 class WorkshopsScreen extends StatefulWidget {
-  const WorkshopsScreen({Key? key}) : super(key: key);
+  /// Quando vindo da MIA, pré-filtra oficinas por este serviço
+  final String? initialServiceId;
+  final String? initialServiceName;
+
+  const WorkshopsScreen({
+    Key? key,
+    this.initialServiceId,
+    this.initialServiceName,
+  }) : super(key: key);
 
   @override
   State<WorkshopsScreen> createState() => _WorkshopsScreenState();
@@ -46,7 +54,11 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadNearbyWorkshops();
+    if (widget.initialServiceId != null && widget.initialServiceId!.isNotEmpty) {
+      _loadWorkshopsByService();
+    } else {
+      _loadNearbyWorkshops();
+    }
   }
 
   Future<void> _loadNearbyWorkshops() async {
@@ -115,6 +127,64 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     }
   }
 
+  /// Carrega oficinas que oferecem o serviço sugerido pela MIA
+  Future<void> _loadWorkshopsByService() async {
+    if (!mounted) return;
+    final serviceId = widget.initialServiceId;
+    if (serviceId == null || serviceId.isEmpty) return;
+
+    setState(() {
+      _loading = true;
+      _error = '';
+      _locationWarning = null;
+      _manualCepError = null;
+    });
+
+    try {
+      double targetLat = _fallbackLatitude;
+      double targetLng = _fallbackLongitude;
+      final status = await _locationService.ensurePermissions();
+      if (status.canRequestPosition) {
+        final position = await _locationService.getCurrentPosition(forceFresh: true);
+        if (position != null) {
+          targetLat = position.latitude;
+          targetLng = position.longitude;
+        }
+      }
+
+      final result = await _apiService.getWorkshopsByService(
+        serviceId,
+        lat: targetLat,
+        lng: targetLng,
+        radiusKm: 200.0,
+      );
+
+      if (!mounted) return;
+      if (result['success'] == true && result['data'] != null) {
+        List<dynamic> workshops = result['data'] is List ? result['data']! : [];
+        _normalizeWorkshopList(workshops, targetLat, targetLng);
+        setState(() {
+          _workshops = workshops;
+          _filteredWorkshops = List.from(_workshops);
+          _loading = false;
+          _error = '';
+        });
+        _applyFilters();
+      } else {
+        setState(() {
+          _error = result['error'] ?? 'Erro ao buscar oficinas para este serviço';
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Erro ao carregar oficinas: $e';
+        _loading = false;
+      });
+    }
+  }
+
   Future<void> _fetchWorkshops(double userLat, double userLng, {double? radiusKm}) async {
     // Se tiver busca por nome, passar o texto de busca (busca independente de distância)
     final searchQuery = _searchController.text.trim().isNotEmpty ? _searchController.text.trim() : null;
@@ -133,63 +203,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                  workshops = data;
                }
                
-               for (var workshop in workshops) {
-                 // Extrair latitude e longitude de múltiplas fontes
-                 double? workshopLat = _extractLatitude(workshop);
-                 double? workshopLng = _extractLongitude(workshop);
-                 
-                 // Se a API já retornou distância válida, usar ela
-                 final apiDistance = workshop['distance'];
-                 double? finalDistance;
-                 
-                 debugPrint('📏 [Distance] Workshop: ${workshop['name']}');
-                 debugPrint('📏 [Distance] apiDistance raw: $apiDistance (${apiDistance?.runtimeType})');
-                 
-                 if (apiDistance != null) {
-                   final parsed = apiDistance is num 
-                       ? apiDistance.toDouble() 
-                       : apiDistance is String 
-                           ? double.tryParse(apiDistance.replaceAll(',', '.'))
-                           : null;
-                   if (parsed != null && parsed > 0) {
-                     finalDistance = parsed;
-                     debugPrint('📏 [Distance] API distance parsed: $finalDistance');
-                   }
-                 }
-                 
-                 // Se não tiver distância da API, calcular se tiver coordenadas
-                 if (finalDistance == null && workshopLat != null && workshopLng != null) {
-                   try {
-                     // Geolocator retorna em metros, converter para km
-                     final double distanceMeters = Geolocator.distanceBetween(
-                           userLat,
-                           userLng,
-                           workshopLat,
-                           workshopLng,
-                         );
-                     finalDistance = distanceMeters / 1000.0; // Converter para km
-                     debugPrint('📏 [Distance] Calculado localmente: ${distanceMeters}m = ${finalDistance}km');
-                   } catch (e) {
-                     print('Erro ao calcular distância: $e');
-                     finalDistance = null;
-                   }
-                 }
-                 
-                 debugPrint('📏 [Distance] FINAL distance em km: $finalDistance');
-                 workshop['distance'] = finalDistance;
-                 workshop['latitude'] = workshopLat; // Garantir que está disponível
-                 workshop['longitude'] = workshopLng; // Garantir que está disponível
-
-                 final addressDetails = _extractAddressDetails(workshop['address']);
-                 if (addressDetails != null) {
-                   workshop['address_details'] = addressDetails;
-                   workshop['address'] = _formatAddress(addressDetails);
-                 } else {
-                   workshop['address'] = _formatAddress(workshop['address']);
-                 }
-                 workshop['logo_url'] = workshop['logo_url'] ?? workshop['logo'];
-                 workshop['rating'] = _parseDouble(workshop['rating']);
-               }
+               _normalizeWorkshopList(workshops, userLat, userLng);
                
                setState(() {
                  _workshops = workshops;
@@ -204,6 +218,41 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
           _loading = false;
         });
       }
+  }
+
+  /// Normaliza lista de workshops: distância, endereço, logo, rating (evita duplicação)
+  void _normalizeWorkshopList(List<dynamic> workshops, double userLat, double userLng) {
+    for (var workshop in workshops) {
+      final workshopLat = _extractLatitude(workshop);
+      final workshopLng = _extractLongitude(workshop);
+      final rawDistance = workshop['distance'];
+      double? distance;
+      if (rawDistance != null) {
+        if (rawDistance is num) {
+          distance = rawDistance.toDouble();
+        } else if (rawDistance is String) {
+          distance = double.tryParse(rawDistance.replaceAll(',', '.'));
+        }
+        if (distance != null && distance <= 0) distance = null;
+      }
+      if (distance == null && workshopLat != null && workshopLng != null) {
+        try {
+          distance = Geolocator.distanceBetween(userLat, userLng, workshopLat, workshopLng) / 1000.0;
+        } catch (_) {}
+      }
+      workshop['distance'] = distance;
+      workshop['latitude'] = workshopLat;
+      workshop['longitude'] = workshopLng;
+      final addressDetails = _extractAddressDetails(workshop['address']);
+      if (addressDetails != null) {
+        workshop['address_details'] = addressDetails;
+        workshop['address'] = _formatAddress(addressDetails);
+      } else {
+        workshop['address'] = _formatAddress(workshop['address']);
+      }
+      workshop['logo_url'] = workshop['logo_url'] ?? workshop['logo'];
+      workshop['rating'] = _parseDouble(workshop['rating']);
+    }
   }
 
   String _buildLocationWarning(LocationStatus status) {
@@ -390,6 +439,65 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
               ),
             ),
           ),
+          // Banner MIA - quando veio do diagnóstico inteligente
+          if (widget.initialServiceName != null && widget.initialServiceName!.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF00C977).withOpacity(0.15),
+                      const Color(0xFF00B369).withOpacity(0.08),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF00C977).withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00C977).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.smart_toy_rounded, color: Color(0xFF00C977), size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Recomendado pela MIA',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Oficinas para: ${widget.initialServiceName}',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // Barra de pesquisa
           SliverToBoxAdapter(
             child: Container(
@@ -1044,8 +1152,8 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
           }
         }
         
-        // Filtro por serviço
-        if (_selectedService != 'Todos') {
+        // Filtro por serviço (pular se veio da MIA - já estão filtradas)
+        if (widget.initialServiceId == null && _selectedService != 'Todos') {
           final services = workshop['services'] ?? [];
           bool hasService = false;
           for (var service in services) {
