@@ -57,7 +57,7 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
       return;
     }
     
-    final result = await _apiService.getMyVehicles(customerId);
+    final result = await _apiService.getMyVehicles(customerId, skipCache: forceRefresh);
     
     if (result['success']) {
       final vehiclesList = (result['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
@@ -134,13 +134,19 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
   Future<void> _deleteVehicle(String vehicleId) async {
     try {
       final result = await _apiService.deleteVehicle(vehicleId);
-      
+
       if (result['success']) {
         AppAlerts.showSuccess(
           context,
           message: result['message'] ?? 'Veículo removido com sucesso.',
         );
-        _loadVehicles(forceRefresh: true); // Recarrega a lista forçando refresh
+        // Atualização otimista: remove o veículo da lista imediatamente e recarrega da API
+        if (mounted) {
+          setState(() {
+            _vehicles.removeWhere((v) => v['id']?.toString() == vehicleId);
+          });
+        }
+        _loadVehicles(forceRefresh: true);
       } else {
         AppAlerts.showError(
           context,

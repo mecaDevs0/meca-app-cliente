@@ -27,18 +27,8 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
       if (!mounted) return;
       final provider = Provider.of<NotificationProvider>(context, listen: false);
       provider.markProfileBadgeSeen();
-      
-      // Se já tem notificações no provider, usar elas (evita recarregar)
-      if (provider.notifications.isNotEmpty) {
-        setState(() {
-          _notifications = provider.notifications;
-          _unreadCount = provider.unreadNotifications;
-          _isLoading = false;
-        });
-      } else {
-        // Primeira vez: carregar do servidor
-        _loadNotifications();
-      }
+      // Sempre carregar do servidor para garantir estado persistido (is_read) ao reabrir o app
+      _loadNotifications();
     });
   }
 
@@ -47,18 +37,6 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
 
     try {
       final provider = Provider.of<NotificationProvider>(context, listen: false);
-      
-      // PROTEÇÃO: Se já marcou como lidas, NÃO recarregar
-      if (provider.unreadNotifications == 0 && provider.notifications.isNotEmpty) {
-        print('🔒 [Notifications] Mantendo notificações locais (já marcadas como lidas)');
-        setState(() {
-          _notifications = provider.notifications;
-          _unreadCount = 0;
-          _isLoading = false;
-        });
-        return;
-      }
-      
       final result = await _apiService.getNotifications();
 
       if (result['success'] == true) {

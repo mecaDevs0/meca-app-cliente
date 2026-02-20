@@ -769,10 +769,14 @@ class ApiService {
   }
 
   // Obter veículos do cliente específico
-  Future<Map<String, dynamic>> getMyVehicles(String customerId) async {
+  Future<Map<String, dynamic>> getMyVehicles(String customerId, {bool skipCache = false}) async {
     try {
       await loadToken();
-      final response = await _dio.get('/vehicles', queryParameters: {'customer_id': customerId});
+      final response = await _dio.get(
+        '/vehicles',
+        queryParameters: {'customer_id': customerId},
+        options: Options(extra: skipCache ? {'skipCache': true} : {}),
+      );
       
       if (response.data != null && response.data['success'] == true) {
         final vehicles = _normalizeToListOfMaps(response.data['data']).where((vehicle) {

@@ -219,7 +219,12 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       final today = DateTime.now();
       for (final booking in _bookings) {
         if (_isBookingExpired(booking, today)) {
-          pendingExpired.add(booking);
+          // Agendamentos com valor a pagar ficam em pendentes (não expirados) para cliente ver e pagar
+          if (!_hasAmountToPay(booking)) {
+            pendingExpired.add(booking);
+          } else {
+            pendingUpcoming.add(booking);
+          }
         } else {
           pendingUpcoming.add(booking);
         }
@@ -1429,6 +1434,18 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     final dayStart = DateTime(reference.year, reference.month, reference.day);
     final bookingDay = DateTime(bookingDate.year, bookingDate.month, bookingDate.day);
     return bookingDay.isBefore(dayStart);
+  }
+
+  /// Agendamentos com valor a pagar NUNCA devem ir para pendentes expirados (cliente precisa ver para pagar)
+  bool _hasAmountToPay(Map<String, dynamic> booking) {
+    final normalized = _normalizeStatusKeyForList((booking['status'] ?? '').toString());
+    if (normalized != 'awaiting_payment') return false;
+    final price = PriceUtils.extractPrice(
+      booking['final_price'] ?? booking['finalPrice'] ??
+      booking['approved_amount'] ?? booking['approvedAmount'] ??
+      booking['final_amount'] ?? booking['finalAmount']
+    );
+    return price != null && price > 0;
   }
 
   DateTime? _parseBookingDate(Map<String, dynamic> booking) {
