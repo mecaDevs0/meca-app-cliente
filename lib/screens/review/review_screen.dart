@@ -65,6 +65,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
       );
 
       if (result['success']) {
+        _apiService.invalidateBookingCache(widget.bookingId);
+        _apiService.invalidateBookingsCache();
         await AppAlerts.showSuccess(
           context,
           message: 'Avaliação enviada com sucesso! Obrigado por compartilhar sua experiência.',

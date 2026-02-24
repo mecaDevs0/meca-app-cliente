@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,6 +24,12 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
   final ApiService _apiService = ApiService();
   bool _loading = false;
   String? _selectedFuel;
+  String _lastSearchedPlate = '';
+  bool _plateAlreadySearched = false;
+  Timer? _plateDebounceTimer;
+  bool _isSearchingPlate = false;
+  bool _plateNotFound = false;
+  bool _allowManualInput = false;
 
   static const List<String> _fuelOptions = [
     'Gasolina',
@@ -71,6 +79,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
 
   @override
   void dispose() {
+    _plateDebounceTimer?.cancel();
     _plateController.dispose();
     _brandController.dispose();
     _modelController.dispose();
@@ -80,57 +89,163 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
     super.dispose();
   }
 
-  // Busca por placa - API REAL na EC2
-  Future<void> _searchVehicleByPlate() async {
-    final plate = _plateController.text.trim().toUpperCase();
-    
-    if (plate.length < 7) {
-      AppAlerts.showWarning(
-        context,
-        message: 'Digite uma placa válida com 7 ou 8 caracteres (ex.: ABC1234 ou ABC1D23).',
-      );
+  void _onPlateChanged(String value) {
+    _plateDebounceTimer?.cancel();
+
+    final normalized = value.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase().trim();
+
+    if (normalized.length < 7) {
+      if (_brandController.text.isNotEmpty) {
+        setState(() {
+          _brandController.clear();
+          _modelController.clear();
+          _yearController.clear();
+          _colorController.clear();
+          _plateNotFound = false;
+          _allowManualInput = false;
+          _lastSearchedPlate = '';
+          _plateAlreadySearched = false;
+        });
+      }
       return;
     }
-    
-    setState(() => _loading = true);
-    
+
+    if (normalized == _lastSearchedPlate && _plateAlreadySearched) {
+      debugPrint('🛡️ [AddCar] Placa já buscada anteriormente: $normalized — SKIP');
+      return;
+    }
+
+    if (normalized.length == 7) {
+      _plateDebounceTimer = Timer(const Duration(milliseconds: 800), () {
+        if (!_isSearchingPlate) {
+          _lastSearchedPlate = normalized;
+          _fetchVehicleByPlate(normalized);
+        }
+      });
+    }
+  }
+
+  Future<void> _fetchVehicleByPlate(String plate) async {
+    if (_isSearchingPlate) return;
+
+    if (_plateAlreadySearched && _lastSearchedPlate == plate && _brandController.text.isNotEmpty) {
+      debugPrint('🛡️ [AddCar] Dados já carregados para $plate — SKIP');
+      return;
+    }
+
+    setState(() {
+      _isSearchingPlate = true;
+      _plateNotFound = false;
+      _allowManualInput = false;
+    });
+
     try {
       final result = await _apiService.searchVehicleByPlate(plate);
-      
+
+      if (!mounted) return;
+
       if (result['success'] == true && result['data'] != null) {
         final data = result['data'] as Map<String, dynamic>;
-        
-        setState(() {
-          _brandController.text = data['brand'] ?? '';
-          _modelController.text = data['model'] ?? '';
-          _yearController.text = data['year']?.toString() ?? '';
-          _colorController.text = data['color'] ?? '';
-          final normalizedFuel = _normalizeFuelValue(data['fuel']?.toString());
-          _selectedFuel = normalizedFuel;
-          _fuelController.text = normalizedFuel ?? '';
-        });
-        
-        AppAlerts.showSuccess(
-          context,
-          message: 'Encontramos os dados do veículo e preenchermos automaticamente.',
-          title: 'Placa localizada',
-        );
+        setState(() => _plateAlreadySearched = true);
+        _fillFormWithVehicleData(data);
       } else {
-        AppAlerts.showWarning(
-          context,
-          message: result['error'] ??
-              'Não encontramos dados para esta placa. Preencha as informações manualmente.',
-          title: 'Placa não encontrada',
-        );
+        final allowManual = result['allowManualInput'] != false;
+        final errMsg = result['error']?.toString() ?? result['message']?.toString() ?? 'Placa não encontrada. Preencha manualmente.';
+        print('ℹ️ [AddCar] Não encontrado — allowManualInput: $allowManual');
+        setState(() {
+          _plateNotFound = true;
+          _allowManualInput = allowManual;
+          _plateAlreadySearched = true;
+        });
+        AppAlerts.showWarning(context, message: errMsg, title: 'Placa não encontrada');
+        if (allowManual && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(child: Text('Placa não encontrada. Preencha os dados manualmente.', style: TextStyle(color: Colors.white))),
+                ],
+              ),
+              backgroundColor: Colors.orange.shade700,
+              duration: const Duration(seconds: 4),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     } catch (e) {
-      AppAlerts.showError(
-        context,
-        message: 'Não foi possível consultar a placa agora. Tente novamente em instantes.',
-      );
+      print('❌ [AddCar] Erro: $e');
+      if (mounted) {
+        setState(() {
+          _plateNotFound = true;
+          _allowManualInput = true;
+        });
+        AppAlerts.showError(context, message: 'Não foi possível consultar a placa. Tente novamente.');
+      }
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _isSearchingPlate = false);
     }
+  }
+
+  void _fillFormWithVehicleData(Map<String, dynamic> data) {
+    setState(() {
+      _brandController.text = _capitalize(data['brand']?.toString() ?? '');
+      _modelController.text = _capitalize(data['model']?.toString() ?? '');
+      _yearController.text = data['year']?.toString() ?? '';
+      _colorController.text = _capitalize(data['color']?.toString() ?? '');
+      final normalizedFuel = _normalizeFuelValue(data['fuel']?.toString());
+      _selectedFuel = normalizedFuel;
+      _fuelController.text = normalizedFuel ?? '';
+      _plateNotFound = false;
+      _allowManualInput = false;
+      _plateAlreadySearched = true;
+    });
+
+    final source = data['source'] ?? '';
+    final label = source == 'rds_cache' ? 'cache interno'
+        : source == 'apiplacas' ? '🚗 API Placas'
+        : source == 'placa_fipe' ? 'Placa FIPE'
+        : source == 'apibrasil' ? 'API Brasil'
+        : source == 'sinesp' ? 'SINESP'
+        : source;
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Dados encontrados via $label', style: const TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green.shade700,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  String _capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text.toLowerCase().split(' ').map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w).join(' ');
+  }
+
+  Future<void> _searchVehicleByPlate() async {
+    final plate = _plateController.text.trim().replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
+    if (plate.length < 7) {
+      AppAlerts.showWarning(context, message: 'Digite uma placa válida com 7 caracteres.', title: 'Placa incompleta');
+      return;
+    }
+    if (_plateAlreadySearched && _lastSearchedPlate == plate && _brandController.text.isNotEmpty) return;
+    if (_isSearchingPlate) return;
+    _lastSearchedPlate = plate;
+    await _fetchVehicleByPlate(plate);
   }
 
   Future<void> _saveVehicle() async {
@@ -210,26 +325,31 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
               // Placa
               TextFormField(
                 controller: _plateController,
+                onChanged: _onPlateChanged,
+                textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
                   labelText: 'Placa do Veículo',
-                  hintText: 'Ex: ABC1234',
+                  hintText: 'Ex: ABC1234 ou ABC1D23',
                   prefixIcon: const Icon(Icons.directions_car),
                   border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.search),
-                    onPressed: _searchVehicleByPlate,
-                  ),
+                  suffixIcon: _isSearchingPlate
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                        )
+                      : IconButton(
+                          icon: _plateNotFound
+                              ? const Icon(Icons.search_off, color: Colors.orange)
+                              : _brandController.text.isNotEmpty
+                                  ? const Icon(Icons.check_circle, color: Colors.green)
+                                  : const Icon(Icons.search),
+                          onPressed: _isSearchingPlate ? null : _searchVehicleByPlate,
+                        ),
                 ),
-                textCapitalization: TextCapitalization.characters,
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9]')),
                   LengthLimitingTextInputFormatter(7),
                 ],
-                onChanged: (value) {
-                  if (value.length == 7) {
-                    _searchVehicleByPlate();
-                  }
-                },
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Por favor, insira a placa do veículo';
@@ -240,6 +360,14 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                   return null;
                 },
               ),
+              if (_plateNotFound && _allowManualInput)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    'Dados não encontrados. Preencha manualmente abaixo.',
+                    style: TextStyle(color: Colors.orange.shade700, fontSize: 13),
+                  ),
+                ),
               const SizedBox(height: 20),
               
               // Marca

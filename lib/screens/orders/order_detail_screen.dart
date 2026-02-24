@@ -2388,7 +2388,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final hasQuoteApproval = (rawStatusForActions == 'aguardando_aprovacao_orcamento' || _normalizeStatusKey(merged['status'] ?? status) == 'awaiting_quote_approval' ||
         (rawStatusForActions == 'pendente_cliente' && !isTimeSuggestion && hasQuote)) ||
         (rawStatusForActions == 'aguardando_aprovacao_finalizacao' || _normalizeStatusKey(merged['status'] ?? status) == 'awaiting_finalization_approval');
-    final hasRateButton = _normalizeStatusKey(merged['status'] ?? status) == 'completed' || _normalizeStatusKey(merged['status'] ?? status) == 'paid';
+    final hasReview = merged['has_review'] == true || merged['has_review'] == 'true';
+    final statusAllowsRate = _normalizeStatusKey(merged['status'] ?? status) == 'completed' || _normalizeStatusKey(merged['status'] ?? status) == 'paid';
+    final hasRateButton = statusAllowsRate && !hasReview;
     final hasPaymentButton = rawStatusForActions == 'aguardando_pagamento' || _normalizeStatusKey(merged['status'] ?? status) == 'awaiting_payment';
     final hasServiceStartConfirm = rawStatusForActions == 'aguardando_autorizacao_inicio' || _normalizeStatusKey(merged['status'] ?? status) == 'awaiting_service_start';
     

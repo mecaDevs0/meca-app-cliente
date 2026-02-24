@@ -337,32 +337,39 @@ class ApiService {
       }
       
       print('🔍 Buscando veículo pela placa na API: $cleanPlate');
-      // Timeout específico para busca de placas: 90s (API externa pode ser lenta)
+      // skipCache: sempre consultar API real (api.mecabr.com → RDS/API Brasil/SINESP)
+      // validateStatus: aceitar 2xx, 4xx, 5xx - sempre parsear body (API retorna 200 com success:false)
       final response = await _dio.get(
         '/vehicles/plate/$cleanPlate',
         options: Options(
-          receiveTimeout: const Duration(seconds: 90), // 90s para busca de placas
+          receiveTimeout: const Duration(seconds: 90),
           sendTimeout: const Duration(seconds: 90),
+          validateStatus: (status) => status != null && status < 600,
+          extra: {'skipCache': true},
         ),
       );
-      
+
       if (response.data != null && response.data['success'] == true) {
-        return {
-          'success': true,
-          'data': response.data['data']
-        };
-      } else {
-        return {
-          'success': false,
-          'error': response.data['error'] ?? 'Veículo não encontrado'
-        };
+        final data = response.data['data'];
+        if (data != null && data is Map) {
+          print('📦 [API] vehicles/plate: success=true, data recebido');
+          return {'success': true, 'data': data};
+        }
+        print('⚠️ [API] vehicles/plate: success=true mas data null ou inválido');
+        return {'success': false, 'error': 'Dados do veículo não disponíveis.'};
       }
-    } catch (e) {
-      print('❌ Erro ao buscar placa: $e');
+      final errMsg = response.data is Map
+          ? (response.data['error'] ?? response.data['message'] ?? 'Veículo não encontrado')
+          : 'Veículo não encontrado';
+      print('⚠️ [API] vehicles/plate: success=false, error=$errMsg');
       return {
         'success': false,
-        'error': _getErrorMessage(e)
+        'allowManualInput': response.data is Map && (response.data['allowManualInput'] != false),
+        'error': errMsg.toString(),
       };
+    } catch (e) {
+      print('❌ Erro ao buscar placa: $e');
+      return {'success': false, 'error': _getErrorMessage(e)};
     }
   }
 
@@ -513,6 +520,26 @@ class ApiService {
     }
   }
 
+  /// MIA - Consulta quantos diagnósticos o cliente ainda pode fazer (limite 5)
+  Future<Map<String, dynamic>> getMIAUsage() async {
+    try {
+      await loadToken();
+      final response = await _dio.get('/services/ai-diagnostics/usage');
+      if (response.data != null && response.data['success'] == true) {
+        final data = response.data['data'];
+        return {
+          'success': true,
+          'remaining': data['remaining'] ?? 5,
+          'used': data['used'] ?? 0,
+          'limit': data['limit'] ?? 5,
+        };
+      }
+      return {'success': false, 'remaining': 5, 'limit': 5};
+    } catch (e) {
+      return {'success': false, 'remaining': 5, 'limit': 5};
+    }
+  }
+
   /// MIA - Diagnóstico inteligente via OpenAI
   Future<Map<String, dynamic>> getAIDiagnostics({
     required String vehicleModel,
@@ -541,8 +568,19 @@ class ApiService {
       return {
         'success': false,
         'error': response.data?['error'] ?? 'Erro ao gerar diagnóstico',
+        if (response.data?['remaining'] != null) 'remaining': response.data!['remaining'],
+        if (response.data?['limit'] != null) 'limit': response.data!['limit'],
       };
     } catch (e) {
+      if (e is DioException && e.response?.statusCode == 429) {
+        final data = e.response?.data;
+        return {
+          'success': false,
+          'error': data?['error'] ?? 'Limite de diagnósticos atingido.',
+          'remaining': data?['remaining'] ?? 0,
+          'limit': data?['limit'] ?? 5,
+        };
+      }
       return {'success': false, 'error': _getErrorMessage(e)};
     }
   }
@@ -1577,7 +1615,7 @@ class ApiService {
     }
   }
 
-  // Avaliar serviço
+  /// Avaliar serviço via POST /reviews (vinculado ao booking, evita duplicatas).
   Future<Map<String, dynamic>> submitRating({
     required String bookingId,
     required String workshopId,
@@ -1586,30 +1624,18 @@ class ApiService {
   }) async {
     try {
       await loadToken();
-      // Obter customerId do perfil primeiro
-      final profileResult = await getProfile();
-      String? customerId;
-      
-      if (profileResult['success'] && profileResult['data'] != null) {
-        customerId = profileResult['data']['id'] ?? profileResult['data']['customer_id'];
-      }
-
-      if (customerId == null || customerId.isEmpty) {
-        return {'success': false, 'error': 'Não foi possível identificar o usuário'};
-      }
-
-      final response = await _dio.post('/ratings', data: {
-        'customerId': customerId,
-        'workshopId': workshopId,
+      final response = await _dio.post('/reviews', data: {
+        'booking_id': bookingId,
         'rating': rating,
         'comment': comment ?? '',
       });
-      
       if (response.data != null && response.data['success'] == true) {
         return {'success': true, 'data': response.data['data']};
-      } else {
-        return {'success': false, 'error': response.data['error'] ?? 'Erro ao avaliar'};
       }
+      return {
+        'success': false,
+        'error': response.data?['error']?.toString() ?? 'Erro ao avaliar',
+      };
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
     }

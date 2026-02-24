@@ -1,4 +1,7 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -7,16 +10,468 @@ import '../../services/theme_service.dart';
 import '../services/services_screen.dart';
 import '../workshops/workshops_screen.dart';
 
+/// Wrapper para animação de entrada com delay (slide up + fade in)
+class _DelayedSlideIn extends StatefulWidget {
+  final int delayMs;
+  final Widget child;
+
+  const _DelayedSlideIn({required this.delayMs, required this.child});
+
+  @override
+  State<_DelayedSlideIn> createState() => _DelayedSlideInState();
+}
+
+class _DelayedSlideInState extends State<_DelayedSlideIn> {
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(Duration(milliseconds: widget.delayMs), () {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_visible) {
+      return const SizedBox.shrink();
+    }
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 12 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+/// Balão de chat premium (MIA ou usuário) – design Apple/C6 Bank
+class MiaChatBubble extends StatelessWidget {
+  final String text;
+  final bool isBot;
+  final int index;
+  final bool showAvatar;
+  /// Delay em ms antes da animação de entrada (200-400ms para efeito conversacional)
+  final int animationDelayMs;
+
+  const MiaChatBubble({
+    super.key,
+    required this.text,
+    required this.isBot,
+    this.index = 0,
+    this.showAvatar = true,
+    this.animationDelayMs = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bubbleContent = _buildBubbleInner();
+    if (animationDelayMs > 0) {
+      return _DelayedSlideIn(
+        delayMs: animationDelayMs,
+        child: bubbleContent,
+      );
+    }
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 12 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: bubbleContent,
+    );
+  }
+
+  Widget _buildBubbleInner() {
+    return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          mainAxisAlignment: isBot ? MainAxisAlignment.start : MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isBot && showAvatar) buildBotAvatar(),
+            if (isBot && showAvatar) const SizedBox(width: 8),
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isBot ? const Color(0xFF1A1F1C) : const Color(0xFF1B4D30),
+                  borderRadius: BorderRadius.only(
+                    topLeft: const Radius.circular(20),
+                    topRight: const Radius.circular(20),
+                    bottomLeft: Radius.circular(isBot ? 4 : 20),
+                    bottomRight: Radius.circular(isBot ? 20 : 4),
+                  ),
+                  boxShadow: isBot
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFF00C977).withOpacity(0.06),
+                            blurRadius: 16,
+                            spreadRadius: 0,
+                          ),
+                        ]
+                      : null,
+                  border: isBot ? null : Border.all(color: Colors.greenAccent.withOpacity(0.3), width: 1),
+                ),
+                child: Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 16,
+                    height: 1.4,
+                    color: isBot ? Colors.white.withOpacity(0.9) : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            if (!isBot) const SizedBox(width: 40),
+          ],
+        ),
+      );
+  }
+
+  static Widget buildBotAvatar() {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.greenAccent.withOpacity(0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.greenAccent.withOpacity(0.1),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: CircleAvatar(
+        radius: 18,
+        backgroundColor: Colors.transparent,
+        child: ClipOval(
+          child: SizedBox(
+            width: 36,
+            height: 36,
+            child: SvgPicture.asset(
+              'assets/images/MIA.svg',
+              fit: BoxFit.cover,
+              placeholderBuilder: (_) => Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.greenAccent.withOpacity(0.95),
+                      const Color(0xFF00B369),
+                    ],
+                  ),
+                ),
+                child: const Icon(Icons.directions_car_rounded, color: Colors.white, size: 18),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Botão de ação abaixo da bolha MIA: "Buscar oficinas para [categoria]"
+class _MiaActionButton extends StatelessWidget {
+  final String category;
+  final String? serviceId;
+  final VoidCallback onPressed;
+
+  const _MiaActionButton({
+    required this.category,
+    this.serviceId,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 46, bottom: 8),
+      child: Material(
+        color: const Color(0xFF00C977),
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                Icon(Icons.build_circle, size: 20, color: const Color(0xFF0D0F0E)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Buscar oficinas para $category',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0D0F0E),
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Card de veículo em estilo glassmorphism premium
+class VehicleSelectorCard extends StatelessWidget {
+  final Map<String, dynamic> vehicle;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final int animationIndex;
+
+  const VehicleSelectorCard({
+    super.key,
+    required this.vehicle,
+    required this.isSelected,
+    required this.onTap,
+    this.animationIndex = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final model = '${vehicle['model'] ?? vehicle['name'] ?? 'Veículo'}';
+    final year = '${vehicle['year'] ?? vehicle['ano'] ?? ''}'.trim();
+    final km = '${vehicle['mileage'] ?? vehicle['km'] ?? vehicle['odometer'] ?? ''}'.trim();
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 280 + (80 * (animationIndex % 4).clamp(0, 3))),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 16 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(right: 12),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(20),
+            splashColor: Colors.greenAccent.withOpacity(0.1),
+            highlightColor: Colors.greenAccent.withOpacity(0.05),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.all(16),
+              width: 180,
+              height: 120,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected
+                      ? Colors.greenAccent.withOpacity(0.5)
+                      : Colors.greenAccent.withOpacity(0.2),
+                  width: 1,
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF00C977).withOpacity(0.15),
+                          blurRadius: 12,
+                          spreadRadius: 0,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.directions_car_rounded, color: Colors.greenAccent.withOpacity(0.9), size: 20),
+                  const SizedBox(height: 12),
+                  Text(
+                    model,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (year.isNotEmpty || km.isNotEmpty)
+                    Text(
+                      [if (year.isNotEmpty) year, if (km.isNotEmpty) '$km km'].join(' • '),
+                      style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6)),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Header compacto estilo iMessage/Telegram – Row horizontal, frosted glass
+const double _kMiaHeaderHeight = 56;
+
+class _MiaPremiumHeader extends StatelessWidget {
+  const _MiaPremiumHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D0F0E).withOpacity(0.6),
+            border: Border(
+              bottom: BorderSide(
+                color: Colors.white.withOpacity(0.1),
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: SizedBox(
+              height: _kMiaHeaderHeight,
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                    onPressed: () => Navigator.maybePop(context),
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(44, 44),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ),
+                  _buildAvatarWithOnlineStatus(),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'MIA',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 17,
+                            color: Color(0xFF00C977),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'Online agora',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.greenAccent.withOpacity(0.9),
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatarWithOnlineStatus() {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: Colors.transparent,
+          child: ClipOval(
+            child: SizedBox(
+              width: 36,
+              height: 36,
+              child: SvgPicture.asset(
+                'assets/images/MIA.svg',
+                fit: BoxFit.cover,
+                placeholderBuilder: (_) => Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.greenAccent.withOpacity(0.95),
+                        const Color(0xFF00B369),
+                      ],
+                    ),
+                  ),
+                  child: const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: Colors.greenAccent,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF0D0F0E), width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Mensagem no chat
 class _ChatMessage {
   final String text;
   final bool isBot;
   final DateTime time;
+  final String? suggestedCategory;
+  final String? suggestedServiceId;
 
   _ChatMessage({
     required this.text,
     required this.isBot,
     DateTime? time,
+    this.suggestedCategory,
+    this.suggestedServiceId,
   }) : time = time ?? DateTime.now();
 }
 
@@ -37,9 +492,8 @@ class _MiaChatScreenState extends State<MiaChatScreen>
   final List<_ChatMessage> _messages = [];
   List<Map<String, dynamic>> _vehicles = [];
   Map<String, dynamic>? _selectedVehicle;
-  String _flowState = 'vehicle_selection'; // vehicle_selection | vehicle_selected | await_problem | loading | done
+  String _flowState = 'vehicle_selection';
   bool _isTypingIndicator = false;
-  bool _hasUsedPrompt = false; // Limite: 1 prompt por cliente
   String? _suggestedServiceId;
   String? _suggestedServiceName;
   bool _vehiclesLoading = true;
@@ -90,9 +544,14 @@ class _MiaChatScreenState extends State<MiaChatScreen>
     });
   }
 
-  void _addBotMessage(String text, {VoidCallback? onComplete}) {
+  void _addBotMessage(String text, {VoidCallback? onComplete, String? suggestedCategory, String? suggestedServiceId}) {
     setState(() {
-      _messages.add(_ChatMessage(text: text, isBot: true));
+      _messages.add(_ChatMessage(
+        text: text,
+        isBot: true,
+        suggestedCategory: suggestedCategory,
+        suggestedServiceId: suggestedServiceId,
+      ));
       _scrollToBottom();
     });
     if (onComplete != null) {
@@ -129,7 +588,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
 
   Future<void> _sendProblem() async {
     final text = _inputController.text.trim();
-    if (text.isEmpty || _flowState != 'await_problem' || _hasUsedPrompt) return;
+    if (text.isEmpty || _flowState != 'await_problem') return;
 
     setState(() {
       _messages.add(_ChatMessage(text: text, isBot: false));
@@ -144,12 +603,24 @@ class _MiaChatScreenState extends State<MiaChatScreen>
     final vehicleYear = (v['year'] ?? v['ano'] ?? '').toString();
     final vehicleKm = (v['mileage'] ?? v['km'] ?? v['odometer'] ?? '').toString();
 
-    final result = await _apiService.getAIDiagnostics(
-      vehicleModel: vehicleModel,
-      vehicleYear: vehicleYear,
-      vehicleKm: vehicleKm,
-      problemDescription: text,
-    );
+    Map<String, dynamic> result;
+    try {
+      final resultFuture = _apiService.getAIDiagnostics(
+        vehicleModel: vehicleModel,
+        vehicleYear: vehicleYear,
+        vehicleKm: vehicleKm,
+        problemDescription: text,
+      );
+      const minTypingDuration = Duration(milliseconds: 1500);
+      final stopwatch = Stopwatch()..start();
+      result = await resultFuture;
+      final elapsed = stopwatch.elapsed;
+      if (elapsed < minTypingDuration && mounted) {
+        await Future.delayed(minTypingDuration - elapsed);
+      }
+    } catch (e) {
+      result = {'success': false, 'error': 'Ops, tive um problema de conexão. Pode tentar novamente?'};
+    }
 
     if (!mounted) return;
     setState(() => _isTypingIndicator = false);
@@ -158,34 +629,39 @@ class _MiaChatScreenState extends State<MiaChatScreen>
       final data = result['data'] as Map<String, dynamic>;
       final diagnosis = data['diagnosis'] ?? 'Diagnóstico não disponível.';
       final serviceId = data['suggestedServiceId']?.toString();
-      final serviceName = data['suggestedServiceName']?.toString() ?? 'Manutenção';
+      final serviceName = data['suggestedCategory']?.toString() ?? data['suggestedServiceName']?.toString() ?? 'Manutenção';
       setState(() {
         _suggestedServiceId = serviceId;
         _suggestedServiceName = serviceName;
         _flowState = 'done';
-        _hasUsedPrompt = true;
-      });
-      _addBotMessage(diagnosis, onComplete: () => _scrollToBottom());
-    } else {
-      setState(() {
-        _flowState = 'await_problem';
-        _hasUsedPrompt = true; // 1 prompt max - mesmo em erro (429, 503, etc.)
       });
       _addBotMessage(
-        result['error'] ?? 'Não foi possível gerar o diagnóstico. Tente novamente.',
+        diagnosis,
+        suggestedCategory: serviceName,
+        suggestedServiceId: serviceId,
+        onComplete: () => _scrollToBottom(),
+      );
+    } else {
+      setState(() => _flowState = 'await_problem');
+      _addBotMessage(
+        result['error'] ?? 'Ops, tive um problema de conexão. Pode tentar novamente?',
         onComplete: () => _scrollToBottom(),
       );
     }
   }
 
   void _goToWorkshops() {
-    if (_suggestedServiceId != null && _suggestedServiceId!.isNotEmpty) {
+    _goToWorkshopsWithParams(_suggestedServiceId, _suggestedServiceName ?? 'Manutenção');
+  }
+
+  void _goToWorkshopsWithParams(String? serviceId, String categoryName) {
+    if (serviceId != null && serviceId.isNotEmpty) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => WorkshopsScreen(
-            initialServiceId: _suggestedServiceId,
-            initialServiceName: _suggestedServiceName,
+            initialServiceId: serviceId,
+            initialServiceName: categoryName,
           ),
         ),
       );
@@ -203,58 +679,30 @@ class _MiaChatScreenState extends State<MiaChatScreen>
       builder: (context, themeService, child) {
         final isDark = themeService.isDarkMode;
         return Scaffold(
-          backgroundColor: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF8F9FA),
-          appBar: AppBar(
-            backgroundColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-            elevation: 0,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : Colors.black87),
-              onPressed: () => Navigator.maybePop(context),
-            ),
-            title: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF00C977), Color(0xFF00B369)],
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'MIA',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: Color(0xFF00C977),
-                  ),
-                ),
-                Text(
-                  ' • Diagnóstico Inteligente',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          backgroundColor: const Color(0xFF0D0F0E),
           body: Column(
             children: [
               Expanded(
-                child: _vehiclesLoading && _flowState == 'vehicle_selection'
-                    ? _buildLoadingState()
-                    : (_flowState == 'vehicle_selection' || _flowState == 'vehicle_selected')
-                        ? _buildVehicleSelection(isDark)
-                        : _buildChatArea(isDark),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: _vehiclesLoading && _flowState == 'vehicle_selection'
+                              ? _buildLoadingState(context)
+                              : (_flowState == 'vehicle_selection' || _flowState == 'vehicle_selected')
+                                  ? _buildVehicleSelection(context, isDark)
+                                  : _buildChatArea(context, isDark),
+                    ),
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: const _MiaPremiumHeader(),
+                    ),
+                  ],
+                ),
               ),
-              (_flowState == 'vehicle_selected' || _flowState == 'await_problem' || _flowState == 'loading' || _flowState == 'done')
-                  ? _buildInputArea(isDark)
-                  : const SizedBox.shrink(),
+              if (_flowState == 'vehicle_selected' || _flowState == 'await_problem' || _flowState == 'loading' || _flowState == 'done')
+                _buildInputArea(isDark),
             ],
           ),
         );
@@ -262,134 +710,221 @@ class _MiaChatScreenState extends State<MiaChatScreen>
     );
   }
 
-  Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircularProgressIndicator(color: Color(0xFF00C977)),
-          const SizedBox(height: 16),
-          Text(
-            'Carregando seus veículos...',
-            style: TextStyle(color: Colors.grey[600]),
+  double get _contentTopPadding =>
+      _kMiaHeaderHeight + MediaQuery.of(context).padding.top;
+
+  Widget _buildLoadingState(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(top: _contentTopPadding),
+      child: Center(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
+          builder: (context, value, child) => Opacity(
+            opacity: value,
+            child: child,
           ),
-        ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.greenAccent.withOpacity(0.2)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(color: Color(0xFF00C977), strokeWidth: 2.5),
+                const SizedBox(height: 20),
+                Text(
+                  'Carregando seus veículos...',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.white.withOpacity(0.8),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildVehicleSelection(bool isDark) {
+  Widget _buildVehicleSelection(BuildContext context, bool isDark) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.only(
+        top: _contentTopPadding + 20,
+        left: 20,
+        right: 20,
+        bottom: 20,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildBotBubble(
-            'Olá! Sou a MIA, sua assistente automotiva. Para começar o diagnóstico, selecione o veículo que vamos analisar.',
-            isDark,
+          MiaChatBubble(
+            text: 'Olá! Sou a MIA, sua assistente automotiva. Para começar o diagnóstico, selecione o veículo que vamos analisar.',
+            isBot: true,
+            index: 0,
+            animationDelayMs: 280,
           ),
           const SizedBox(height: 24),
-          Text(
-            'Seus veículos',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-              color: isDark ? Colors.white : Colors.black87,
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, 12 * (1 - value)),
+                  child: child,
+                ),
+              );
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Selecione:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (_vehicles.isEmpty)
+                  _buildEmptyVehicles(isDark)
+                else
+                  SizedBox(
+                    height: 142,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _vehicles.length,
+                      itemBuilder: (context, i) {
+                        final v = _vehicles[i];
+                        return VehicleSelectorCard(
+                          vehicle: v,
+                          isSelected: _selectedVehicle == v,
+                          onTap: () => _selectVehicle(v),
+                          animationIndex: i,
+                        );
+                      },
+                    ),
+                  ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          if (_vehicles.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white10 : Colors.grey[200],
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  Icon(Icons.directions_car_outlined, size: 48, color: Colors.grey[400]),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Nenhum veículo cadastrado',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Cadastre um veículo no seu perfil para usar o diagnóstico.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-                  ),
-                ],
-              ),
-            )
-          else
-            SizedBox(
-              height: 140,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _vehicles.length,
-                itemBuilder: (context, i) {
-                  final v = _vehicles[i];
-                  final model = '${v['model'] ?? v['name'] ?? 'Veículo'}';
-                  final year = '${v['year'] ?? v['ano'] ?? ''}'.trim();
-                  final km = '${v['mileage'] ?? v['km'] ?? v['odometer'] ?? ''}'.trim();
-                  final isSelected = _selectedVehicle == v;
-                  return GestureDetector(
-                    onTap: () => _selectVehicle(v),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.only(right: 12),
-                      padding: const EdgeInsets.all(16),
-                      width: 180,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF00C977).withOpacity(0.15)
-                            : (isDark ? Colors.white10 : Colors.white),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isSelected
-                              ? const Color(0xFF00C977)
-                              : (isDark ? Colors.white24 : Colors.grey[300]!),
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.directions_car, color: const Color(0xFF00C977), size: 28),
-                          const SizedBox(height: 8),
-                          Text(
-                            model,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (year.isNotEmpty || km.isNotEmpty)
-                            Text(
-                              [if (year.isNotEmpty) year, if (km.isNotEmpty) '$km km'].join(' • '),
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
         ],
       ),
     );
   }
 
-  Widget _buildChatArea(bool isDark) {
+  Widget _buildEmptyVehicles(bool isDark) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - value)),
+          child: child,
+        ),
+      ),
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.greenAccent.withOpacity(0.25),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00C977).withOpacity(0.04),
+                  blurRadius: 16,
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.directions_car,
+                  size: 64,
+                  color: Colors.white.withOpacity(0.35),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Nenhum veículo encontrado',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Cadastre um veículo para iniciar o diagnóstico',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.65),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Material(
+                  color: const Color(0xFF00C977),
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    onTap: () => Navigator.pushNamed(context, '/my-vehicles'),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add_circle_outline, size: 20, color: const Color(0xFF0D0F0E)),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Cadastrar Novo Veículo',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF0D0F0E),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatArea(BuildContext context, bool isDark) {
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      padding: EdgeInsets.only(
+        top: _contentTopPadding + 20,
+        left: 16,
+        right: 16,
+        bottom: 20,
+      ),
       itemCount: _messages.length + (_isTypingIndicator ? 1 : 0),
       itemBuilder: (context, i) {
         if (_isTypingIndicator && i == _messages.length) {
@@ -402,15 +937,42 @@ class _MiaChatScreenState extends State<MiaChatScreen>
   }
 
   Widget _buildMessageBubble(_ChatMessage msg, bool isDark, int index) {
+    final category = msg.suggestedCategory;
+    final serviceId = msg.suggestedServiceId;
+    final showActionButton = msg.isBot && (category != null && category.isNotEmpty);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        MiaChatBubble(
+          text: msg.text,
+          isBot: msg.isBot,
+          index: index,
+          animationDelayMs: (index == 0 && _messages.length == 1) ? 150 : 0,
+        ),
+        if (showActionButton) ...[
+          const SizedBox(height: 12),
+          _MiaActionButton(
+            category: category!,
+            serviceId: serviceId,
+            onPressed: () => _goToWorkshopsWithParams(serviceId, category),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTypingIndicator(bool isDark) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeOut,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
       builder: (context, value, child) {
         return Opacity(
           opacity: value,
           child: Transform.translate(
-            offset: Offset(0, 20 * (1 - value)),
+            offset: Offset(0, 12 * (1 - value)),
             child: child,
           ),
         );
@@ -418,166 +980,84 @@ class _MiaChatScreenState extends State<MiaChatScreen>
       child: Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Row(
-          mainAxisAlignment: msg.isBot ? MainAxisAlignment.start : MainAxisAlignment.end,
-          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (msg.isBot)
-              Container(
-                width: 32,
-                height: 32,
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF00C977), Color(0xFF00B369)],
-                  ),
-                  borderRadius: BorderRadius.circular(10),
+            MiaChatBubble.buildBotAvatar(),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1F1C),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(20),
                 ),
-                child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 18),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF00C977).withOpacity(0.06),
+                    blurRadius: 16,
+                    spreadRadius: 0,
+                  ),
+                ],
               ),
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: msg.isBot
-                      ? (isDark ? Colors.white12 : Colors.white)
-                      : const Color(0xFF00C977).withOpacity(0.15),
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(18),
-                    topRight: const Radius.circular(18),
-                    bottomLeft: Radius.circular(msg.isBot ? 4 : 18),
-                    bottomRight: Radius.circular(msg.isBot ? 18 : 4),
-                  ),
-                  border: Border.all(
-                    color: msg.isBot
-                        ? (isDark ? Colors.white24 : Colors.grey[200]!)
-                        : const Color(0xFF00C977).withOpacity(0.3),
-                  ),
-                ),
-                child: Text(
-                  msg.text,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: isDark ? Colors.white : Colors.black87,
-                    height: 1.4,
-                  ),
-                ),
-              ),
+              child: const _TypingDots(),
             ),
-            if (!msg.isBot) const SizedBox(width: 40),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTypingIndicator(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF00C977), Color(0xFF00B369)],
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 18),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white12 : Colors.white,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(18),
-                topRight: Radius.circular(18),
-                bottomLeft: Radius.circular(4),
-                bottomRight: Radius.circular(18),
-              ),
-              border: Border.all(
-                color: isDark ? Colors.white24 : Colors.grey[200]!,
-              ),
-            ),
-            child: const _TypingDots(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBotBubble(String text, bool isDark) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          margin: const EdgeInsets.only(right: 8),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF00C977), Color(0xFF00B369)],
-            ),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 18),
-        ),
-        Flexible(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white12 : Colors.white,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(18),
-                topRight: Radius.circular(18),
-                bottomLeft: Radius.circular(4),
-                bottomRight: Radius.circular(18),
-              ),
-              border: Border.all(
-                color: isDark ? Colors.white24 : Colors.grey[200]!,
-              ),
-            ),
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 15, color: isDark ? Colors.white : Colors.black87, height: 1.4),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildInputArea(bool isDark) {
     // Spec: botão "Confiar" ou "Avançar" após seleção do veículo
     if (_flowState == 'vehicle_selected') {
-      return Container(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 12,
-          bottom: 12 + MediaQuery.of(context).padding.bottom,
-        ),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-          border: Border(top: BorderSide(color: isDark ? Colors.white12 : Colors.grey[200]!)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _confirmVehicle,
-              icon: const Icon(Icons.check_circle_outline, size: 22),
-              label: const Text('Confiar'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C977),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      return ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 12,
+              bottom: 12 + MediaQuery.of(context).padding.bottom,
+            ),
+            decoration: BoxDecoration(
+              color: (isDark ? const Color(0xFF0D0D0D) : Colors.white).withOpacity(0.85),
+              border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+            ),
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                width: double.infinity,
+                child: Material(
+                  color: const Color(0xFF00C977),
+                  borderRadius: BorderRadius.circular(30),
+                  child: InkWell(
+                    onTap: _confirmVehicle,
+                    borderRadius: BorderRadius.circular(30),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle_outline, size: 22, color: const Color(0xFF0D0F0E)),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Confirmar Veículo',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF0D0F0E),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -585,35 +1065,42 @@ class _MiaChatScreenState extends State<MiaChatScreen>
       );
     }
 
-    return Container(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 12,
-        bottom: 12 + MediaQuery.of(context).padding.bottom,
-      ),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-        border: Border(top: BorderSide(color: isDark ? Colors.white12 : Colors.grey[200]!)),
-      ),
-      child: SafeArea(
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 12,
+            bottom: 12 + MediaQuery.of(context).padding.bottom,
+          ),
+          decoration: BoxDecoration(
+            color: (isDark ? const Color(0xFF0D0D0D) : Colors.white).withOpacity(0.88),
+            border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+          ),
+          child: SafeArea(
         top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_flowState == 'done' && _suggestedServiceId != null) ...[
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _goToWorkshops,
-                  icon: const Icon(Icons.build_circle, size: 20),
-                  label: Text('Buscar oficinas para ${_suggestedServiceName ?? 'este serviço'}'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C977),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
+            if (_flowState == 'done') ...[
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _flowState = 'await_problem';
+                    _inputController.clear();
+                    _messages.add(_ChatMessage(
+                      text: 'Descreva o próximo problema para analisarmos.',
+                      isBot: true,
+                    ));
+                    _scrollToBottom();
+                  });
+                },
+                icon: const Icon(Icons.refresh, size: 18),
+                label: Text(
+                  'Fazer outro diagnóstico',
+                  style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w600),
                 ),
               ),
               const SizedBox(height: 12),
@@ -624,13 +1111,21 @@ class _MiaChatScreenState extends State<MiaChatScreen>
                   child: TextField(
                     controller: _inputController,
                     focusNode: _inputFocusNode,
-                    enabled: _flowState == 'await_problem' && !_isTypingIndicator && !_hasUsedPrompt,
+                    enabled: _flowState == 'await_problem' && !_isTypingIndicator,
                     decoration: InputDecoration(
-                      hintText: _hasUsedPrompt ? 'Diagnóstico concluído' : 'Descreva o problema...',
+                      hintText: 'Descreva o problema...',
                       filled: true,
-                      fillColor: isDark ? Colors.white10 : Colors.grey[100],
+                      fillColor: Colors.white.withOpacity(0.04),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -642,15 +1137,15 @@ class _MiaChatScreenState extends State<MiaChatScreen>
                 ),
                 const SizedBox(width: 12),
                 Material(
-                  color: (_flowState == 'await_problem' && !_isTypingIndicator && !_hasUsedPrompt)
+                  color: (_flowState == 'await_problem' && !_isTypingIndicator)
                       ? const Color(0xFF00C977)
                       : Colors.grey[400],
-                  borderRadius: BorderRadius.circular(24),
+                  shape: const CircleBorder(),
                   child: InkWell(
-                    onTap: (_flowState == 'await_problem' && !_isTypingIndicator && !_hasUsedPrompt)
+                    onTap: (_flowState == 'await_problem' && !_isTypingIndicator)
                         ? _sendProblem
                         : null,
-                    borderRadius: BorderRadius.circular(24),
+                    customBorder: const CircleBorder(),
                     child: const Padding(
                       padding: EdgeInsets.all(14),
                       child: Icon(Icons.send_rounded, color: Colors.white, size: 24),
@@ -662,6 +1157,8 @@ class _MiaChatScreenState extends State<MiaChatScreen>
           ],
         ),
       ),
+    ),
+    ),
     );
   }
 }
@@ -701,14 +1198,26 @@ class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderState
           children: List.generate(3, (i) {
             final delay = i * 0.2;
             final progress = ((_controller.value - delay) % 1.0).clamp(0.0, 1.0);
-            final scale = 0.6 + 0.4 * (1 - (progress - 0.5).abs() * 2).clamp(0.0, 1.0);
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: const Color(0xFF00C977).withOpacity(0.6 + 0.4 * scale),
-                shape: BoxShape.circle,
+            final peak = (1 - (progress - 0.5).abs() * 2).clamp(0.0, 1.0);
+            final scale = 0.75 + 0.35 * peak;
+            final opacity = 0.6 + 0.4 * peak;
+            return Transform.scale(
+              scale: scale,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C977).withOpacity(opacity),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00C977).withOpacity(0.3),
+                      blurRadius: 4,
+                      spreadRadius: 0,
+                    ),
+                  ],
+                ),
               ),
             );
           }),
