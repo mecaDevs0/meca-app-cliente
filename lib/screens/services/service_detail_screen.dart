@@ -9,6 +9,7 @@ import '../../services/location_service.dart';
 import '../../utils/price_utils.dart';
 import '../../widgets/meca_loading_widget.dart';
 import '../booking/booking_screen.dart';
+import '../pre_compra/pre_compra_booking_screen.dart';
 
 class ServiceDetailScreen extends StatefulWidget {
   final String serviceId;
@@ -713,7 +714,24 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
   }
 
   void _navigateToWorkshop(Map<String, dynamic> workshop) {
-    // Navegar direto para agendamento ao selecionar oficina
+    final serviceName = (_service?['name'] ?? '').toString().toLowerCase();
+    final isPreCompra = serviceName.contains('pré-compra') ||
+        serviceName.contains('pre-compra') ||
+        widget.serviceId == 'srv_pre_compra_veicular';
+
+    if (isPreCompra) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PreCompraBookingScreen(
+            workshopId: workshop['id']?.toString() ?? '',
+            workshopName: workshop['name']?.toString() ?? 'Oficina',
+          ),
+        ),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(

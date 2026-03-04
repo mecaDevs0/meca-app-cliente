@@ -20,6 +20,8 @@ class MecaPaymentScreen extends StatefulWidget {
   final int installments;
   final bool workshopAcceptsInstallment;
   final int workshopMaxInstallments;
+  /// true quando o pagamento é de uma pré-compra (usa endpoint /pre-compra/:id/pay)
+  final bool isPreCompra;
 
   const MecaPaymentScreen({
     Key? key,
@@ -30,6 +32,7 @@ class MecaPaymentScreen extends StatefulWidget {
     required this.installments,
     this.workshopAcceptsInstallment = true,
     this.workshopMaxInstallments = 12,
+    this.isPreCompra = false,
   }) : super(key: key);
 
   @override
@@ -48,9 +51,16 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   bool _showResult = false;
 
   Future<void> _navigateToReviewScreen() async {
+    // Pré-compra: sem tela de avaliação — apenas fecha e retorna sucesso
+    if (widget.isPreCompra) {
+      _apiService.invalidateBookingsCache();
+      if (mounted) Navigator.pop(context, true);
+      return;
+    }
+
     final bookingId = widget.bookingData['id']?.toString() ?? widget.bookingData['booking_id']?.toString();
     final workshopId = widget.bookingData['workshop_id']?.toString() ?? widget.bookingData['oficina_id']?.toString();
-    
+
     if (bookingId != null && workshopId != null && mounted) {
       _apiService.invalidateBookingCache(bookingId);
       _apiService.invalidateBookingsCache();
@@ -344,21 +354,36 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       final interestPaidByBuyer = plan != null && (plan['interest_cents'] as int?) != null ? (plan['interest_cents'] as int) / 100.0 : null;
       final installmentValue = plan != null && (plan['installment_value_cents'] as int?) != null ? (plan['installment_value_cents'] as int) / 100.0 : null;
       final interestInstallments = plan != null ? (plan['interest_installments'] as int?) : null;
-      // Usar createBookingPayment que valida o status do booking antes de criar pagamento
-      final paymentResult = await _apiService.createBookingPayment(
-        bookingId,
-        paymentMethod: _selectedMethod == 'credit_card' ? 'CREDIT_CARD' : 'PIX',
-        cardToken: cardToken,
-        cvv: cvv,
-        holderName: _selectedMethod == 'credit_card' ? _extractCardHolderName(_selectedCardId) : null,
-        installments: _selectedMethod == 'credit_card' ? _selectedInstallments : null,
-        totalWithInterest: totalWithInterest,
-        interestPaidByBuyer: interestPaidByBuyer,
-        installmentValue: installmentValue,
-        interestInstallments: interestInstallments,
-        pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
-        workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
-      );
+      // Escolher endpoint correto (booking normal vs pré-compra)
+      final paymentResult = widget.isPreCompra
+          ? await _apiService.createPreCompraPayment(
+              bookingId,
+              paymentMethod: _selectedMethod == 'credit_card' ? 'CREDIT_CARD' : 'PIX',
+              cardToken: cardToken,
+              cvv: cvv,
+              holderName: _selectedMethod == 'credit_card' ? _extractCardHolderName(_selectedCardId) : null,
+              installments: _selectedMethod == 'credit_card' ? _selectedInstallments : null,
+              totalWithInterest: totalWithInterest,
+              interestPaidByBuyer: interestPaidByBuyer,
+              installmentValue: installmentValue,
+              interestInstallments: interestInstallments,
+              pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
+              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
+            )
+          : await _apiService.createBookingPayment(
+              bookingId,
+              paymentMethod: _selectedMethod == 'credit_card' ? 'CREDIT_CARD' : 'PIX',
+              cardToken: cardToken,
+              cvv: cvv,
+              holderName: _selectedMethod == 'credit_card' ? _extractCardHolderName(_selectedCardId) : null,
+              installments: _selectedMethod == 'credit_card' ? _selectedInstallments : null,
+              totalWithInterest: totalWithInterest,
+              interestPaidByBuyer: interestPaidByBuyer,
+              installmentValue: installmentValue,
+              interestInstallments: interestInstallments,
+              pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
+              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
+            );
 
       if (!mounted) return;
 
@@ -453,9 +478,11 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           _apiService.invalidateBookingCache(bookingId);
           _apiService.invalidateBookingsCache();
         }
-        // Aguardar um pouco para garantir que o cache foi invalidado
+        // Aguardar para o cache ser invalidado, depois dismiss do Flushbar antes de navegar.
+        // O Flushbar (another_flushbar) empurra um FlushbarRoute na pilha — se não
+        // dismissar antes, Navigator.pop poparia o FlushbarRoute em vez da tela de pagamento.
         await Future.delayed(const Duration(milliseconds: 500));
-        // Redirecionar imediatamente
+        await AppAlerts.dismissCurrent();
         await _navigateToReviewScreen();
         return;
       }
@@ -708,24 +735,43 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       final interestPaidByBuyer = plan != null && (plan['interest_cents'] as int?) != null ? (plan['interest_cents'] as int) / 100.0 : null;
       final installmentValue = plan != null && (plan['installment_value_cents'] as int?) != null ? (plan['installment_value_cents'] as int) / 100.0 : null;
       final interestInstallments = plan != null ? (plan['interest_installments'] as int?) : null;
-      final paymentResult = await _apiService.createBookingPayment(
-        bookingId,
-        paymentMethod: 'CREDIT_CARD',
-        cardToken: encryptedCard,
-        cvv: cvv,
-        holderName: holderName,
-        installments: _selectedInstallments,
-        totalWithInterest: totalWithInterest,
-        interestPaidByBuyer: interestPaidByBuyer,
-        installmentValue: installmentValue,
-        interestInstallments: interestInstallments,
-        saveCard: saveCard,
-        lastDigits: lastDigits,
-        brand: brand,
-        expiryMonth: expMonth,
-        expiryYear: expYear,
-        workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
-      );
+      final paymentResult = widget.isPreCompra
+          ? await _apiService.createPreCompraPayment(
+              bookingId,
+              paymentMethod: 'CREDIT_CARD',
+              cardToken: encryptedCard,
+              cvv: cvv,
+              holderName: holderName,
+              installments: _selectedInstallments,
+              totalWithInterest: totalWithInterest,
+              interestPaidByBuyer: interestPaidByBuyer,
+              installmentValue: installmentValue,
+              interestInstallments: interestInstallments,
+              saveCard: saveCard,
+              lastDigits: lastDigits,
+              brand: brand,
+              expiryMonth: expMonth,
+              expiryYear: expYear,
+              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
+            )
+          : await _apiService.createBookingPayment(
+              bookingId,
+              paymentMethod: 'CREDIT_CARD',
+              cardToken: encryptedCard,
+              cvv: cvv,
+              holderName: holderName,
+              installments: _selectedInstallments,
+              totalWithInterest: totalWithInterest,
+              interestPaidByBuyer: interestPaidByBuyer,
+              installmentValue: installmentValue,
+              interestInstallments: interestInstallments,
+              saveCard: saveCard,
+              lastDigits: lastDigits,
+              brand: brand,
+              expiryMonth: expMonth,
+              expiryYear: expYear,
+              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
+            );
 
       if (!mounted) return;
       if (paymentResult['success'] != true) {
@@ -749,6 +795,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           _apiService.invalidateBookingsCache();
         }
         await Future.delayed(const Duration(milliseconds: 500));
+        await AppAlerts.dismissCurrent();
         await _navigateToReviewScreen();
         return;
       }
@@ -836,6 +883,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           );
         }
         if (mounted) {
+          await AppAlerts.dismissCurrent();
           // Redirecionar para tela de avaliação após pagamento confirmado
           await _navigateToReviewScreen();
         }
@@ -1015,7 +1063,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                       : Text(
                           _selectedMethod == 'credit_card'
                               ? 'Pagar ${_displayTotalToPay(theme)}'
-                              : 'Gerar PIX de ${_currencyFormatter.format(widget.totalAmount)}',
+                              : 'Gerar PIX de ${_displayTotalToPay(theme)}',
                         ),
                 ),
               ),
@@ -1057,13 +1105,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           const SizedBox(height: 12),
           _buildSummaryRow(
             theme,
-            'Valor do orçamento final',
-            _currencyFormatter.format(widget.serviceAmount),
-          ),
-          const Divider(height: 24),
-          _buildSummaryRow(
-            theme,
-            '= Total a pagar',
+            'Total a pagar',
             _displayTotalToPay(theme),
             isTotal: true,
           ),
@@ -1082,10 +1124,25 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     );
   }
 
-  /// Total a exibir no resumo: com juros do plano selecionado (cartão) ou valor do orçamento.
+  /// Total a exibir no resumo: com juros do plano (cartão) ou valor do orçamento (PIX).
+  /// Usa total_cents do plano de parcelamento (1x) para PIX e cartão, garantindo consistência.
   String _displayTotalToPay(ThemeData theme) {
+    // Cartão: usa total do plano selecionado (pode ter juros)
     if (_selectedMethod == 'credit_card' && _selectedInstallmentPlan != null) {
-      final totalCents = _selectedInstallmentPlan!['total_cents'] as int?;
+      final raw = _selectedInstallmentPlan!['total_cents'];
+      final totalCents = raw is int ? raw : (raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '0'));
+      if (totalCents != null && totalCents > 0) {
+        return _currencyFormatter.format(totalCents / 100.0);
+      }
+    }
+    // PIX: usa o plano de 1x para ter o mesmo valor que o backend considera
+    if (_installmentPlans != null && _installmentPlans!.isNotEmpty) {
+      final plan1 = _installmentPlans!.firstWhere(
+        (p) => (p['installments'] as int?) == 1,
+        orElse: () => _installmentPlans!.first,
+      );
+      final raw = plan1['total_cents'];
+      final totalCents = raw is int ? raw : (raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '0'));
       if (totalCents != null && totalCents > 0) {
         return _currencyFormatter.format(totalCents / 100.0);
       }

@@ -66,6 +66,19 @@ class AppAlerts {
     );
   }
 
+  /// Dismisses the current Flushbar (if any) immediately.
+  /// Call this before Navigator.pop/pushReplacement to avoid popping the
+  /// FlushbarRoute instead of the intended screen.
+  static Future<void> dismissCurrent() async {
+    final f = _currentFlushbar;
+    if (f != null) {
+      _currentFlushbar = null;
+      try {
+        await f.dismiss();
+      } catch (_) {}
+    }
+  }
+
   static Future<void> _show(
     BuildContext context, {
     required String message,

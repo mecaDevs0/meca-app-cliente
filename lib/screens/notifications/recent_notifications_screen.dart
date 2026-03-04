@@ -356,86 +356,92 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
   }
 
   Color _getNotificationColor(String? type) {
+    final t = type?.toLowerCase() ?? '';
+    if (t.contains('pre_compra') || t.contains('laudo')) return Colors.amber.shade700;
     switch (type) {
-      case 'booking':
-        return Colors.blue;
-      case 'reminder':
-        return Colors.orange;
-      case 'promotion':
-        return Colors.purple;
-      case 'system':
-        return Colors.grey;
-      default:
-        return const Color(0xFF00C977);
+      case 'booking': return Colors.blue;
+      case 'reminder': return Colors.orange;
+      case 'promotion': return Colors.purple;
+      case 'system': return Colors.grey;
+      default: return const Color(0xFF00C977);
     }
   }
 
   IconData _getNotificationIcon(String? type) {
+    final t = type?.toLowerCase() ?? '';
+    if (t.contains('pre_compra') || t.contains('laudo')) return Icons.car_repair;
     switch (type) {
-      case 'booking':
-        return Icons.calendar_today;
-      case 'reminder':
-        return Icons.notifications;
-      case 'promotion':
-        return Icons.local_offer;
-      case 'system':
-        return Icons.info;
-      default:
-        return Icons.notifications;
+      case 'booking': return Icons.calendar_today;
+      case 'reminder': return Icons.notifications;
+      case 'promotion': return Icons.local_offer;
+      case 'system': return Icons.info;
+      default: return Icons.notifications;
     }
   }
 
   void _handleNotificationTap(Map<String, dynamic> notification) {
     final data = notification['data'] as Map<String, dynamic>?;
+    final type = notification['type']?.toString() ?? '';
+
+    // Pre-compra: verificar por tipo, pre_compra_id ou id genérico
+    final preCompraId = notification['pre_compra_id'] ??
+        data?['pre_compra_id'] ??
+        (type == 'pre_compra' ? (notification['id'] ?? data?['id']) : null);
+
+    if (preCompraId != null) {
+      Navigator.pushNamed(
+        context,
+        '/pre-compra-detail',
+        arguments: {'id': preCompraId.toString()},
+      );
+      return;
+    }
+
+    // Detectar por tipo pre_compra mesmo sem ID armazenado
+    final typeLower = type.toLowerCase();
+    final title = notification['title']?.toString().toLowerCase() ?? '';
+    final message = notification['message']?.toString().toLowerCase() ?? '';
+    final isPreCompra = typeLower.contains('pre_compra') ||
+        typeLower.contains('laudo') ||
+        title.contains('pré-compra') ||
+        title.contains('laudo') ||
+        message.contains('pré-compra') ||
+        message.contains('laudo');
+
+    if (isPreCompra) {
+      // Sem ID: ir para a lista de agendamentos (aba Meus Agendamentos)
+      Navigator.pushNamed(context, '/orders');
+      return;
+    }
+
     final bookingId = data?['booking_id'] ?? notification['booking_id'];
     final vehicleId = data?['vehicle_id'] ?? notification['vehicle_id'];
     final serviceId = data?['service_id'] ?? notification['service_id'];
     final workshopId = data?['workshop_id'] ?? notification['workshop_id'];
 
     if (bookingId != null) {
-      Navigator.pushNamed(
-        context,
-        '/order-detail',
-        arguments: {'id': bookingId},
-      );
+      Navigator.pushNamed(context, '/order-detail', arguments: {'id': bookingId});
       return;
     }
 
     if (vehicleId != null) {
-      Navigator.pushNamed(
-        context,
-        '/vehicle-detail',
-        arguments: {'id': vehicleId},
-      );
+      Navigator.pushNamed(context, '/vehicle-detail', arguments: {'id': vehicleId});
       return;
     }
 
     if (serviceId != null) {
-      Navigator.pushNamed(
-        context,
-        '/service-detail',
-        arguments: {'id': serviceId},
-      );
+      Navigator.pushNamed(context, '/service-detail', arguments: {'id': serviceId});
       return;
     }
 
     if (workshopId != null) {
-      Navigator.pushNamed(
-        context,
-        '/workshop-detail',
-        arguments: {'id': workshopId},
-      );
+      Navigator.pushNamed(context, '/workshop-detail', arguments: {'id': workshopId});
       return;
     }
 
-    final type = notification['type']?.toString() ?? '';
-    if (type.contains('booking') || type.contains('agendamento')) {
-      final title = notification['title']?.toString() ?? '';
-      final message = notification['message']?.toString() ?? '';
-      if (title.toLowerCase().contains('agendamento') || message.toLowerCase().contains('agendamento')) {
-        Navigator.pushNamed(context, '/orders');
-        return;
-      }
+    if (typeLower.contains('booking') || typeLower.contains('agendamento')) {
+      Navigator.pushNamed(context, '/orders');
+      return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(

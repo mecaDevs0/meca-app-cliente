@@ -11,6 +11,7 @@ import '../../utils/price_utils.dart';
 import '../../widgets/app_alerts.dart';
 import '../../widgets/meca_loading_widget.dart';
 import 'expired_bookings_screen.dart';
+import '../pre_compra/pre_compra_detail_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({Key? key}) : super(key: key);
@@ -26,11 +27,16 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   bool _loading = true;
   String _currentStatus = 'pendente_oficina';
   Map<String, Map<String, dynamic>> _vehicleData = {};
+  final TextEditingController _pendingSearchController = TextEditingController();
+  String _pendingSearchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _pendingSearchController.addListener(() {
+      if (mounted) setState(() => _pendingSearchQuery = _pendingSearchController.text);
+    });
     _tabController.addListener(() {
       final statuses = ['pendente_oficina', 'confirmado', 'finalizado_cliente'];
       setState(() {
@@ -76,93 +82,82 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
 
   Future<void> _loadBookings({bool forceRefresh = false}) async {
     if (!mounted) return;
-    
+
     // IMPORTANTE: Invalidar cache se forçar refresh
     if (forceRefresh) {
       _apiService.invalidateBookingsCache();
     }
-    
+
     setState(() => _loading = true);
-    
-    final result = await _apiService.getBookings();
-    
+
+    // Buscar bookings normais e pré-compras em paralelo
+    final results = await Future.wait([
+      _apiService.getBookings(),
+      _apiService.getPreCompras(forceRefresh: forceRefresh),
+    ]);
+
     if (!mounted) return;
-    
-    if (result['success']) {
-      // IMPORTANTE: Normalizar resposta (pode vir como array direto ou objeto com bookings)
-      final data = result['data'];
-      List<Map<String, dynamic>> bookings = [];
+
+    final bookingResult = results[0];
+    final preCompraResult = results[1];
+
+    // Normalizar resposta de bookings
+    List<Map<String, dynamic>> bookings = [];
+    if (bookingResult['success'] == true) {
+      final data = bookingResult['data'];
       if (data is List) {
         bookings = data.cast<Map<String, dynamic>>();
       } else if (data is Map && data['bookings'] != null) {
         bookings = (data['bookings'] as List).cast<Map<String, dynamic>>();
-      } else if (data is Map) {
-        // Se data for um objeto vazio ou com outras propriedades, tentar extrair bookings
-        bookings = [];
       }
-      
-      // Filtrar por status - regras de "Pendentes / Confirmados / Concluídos"
-      // Pendentes: existe alguma pendência (da oficina OU sua), incluindo pagamento pendente.
-      // Confirmados: sem ação no momento (ex: confirmado, em andamento).
-      // Concluídos: somente pagos.
-      bookings = bookings.where((b) {
-        final bookingStatus = b['status'] ?? '';
-        final bucket = _bucketForStatus(bookingStatus.toString());
-        
-        if (_currentStatus == 'pendente_oficina') {
-          return bucket == 'pending';
-        } else if (_currentStatus == 'confirmado') {
-          return bucket == 'confirmed';
-        } else if (_currentStatus == 'finalizado_cliente') {
-          return bucket == 'completed';
+    }
+
+    // Mesclar pré-compras na lista
+    if (preCompraResult['success'] == true) {
+      final preCompras = (preCompraResult['data'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
+      bookings = [...bookings, ...preCompras];
+    }
+
+    // Filtrar por status — pré-compras têm mapeamento diferente
+    bookings = bookings.where((b) {
+      final isPreCompra = b['booking_type'] == 'pre_compra';
+      final rawStatus = (b['status'] ?? '').toString();
+      final paymentStatus = isPreCompra ? (b['payment_status']?.toString() ?? '') : null;
+      final bucket = isPreCompra
+          ? _bucketForPreCompraStatus(rawStatus, paymentStatus: paymentStatus)
+          : _bucketForStatus(rawStatus);
+
+      if (_currentStatus == 'pendente_oficina') return bucket == 'pending';
+      if (_currentStatus == 'confirmado') return bucket == 'confirmed';
+      if (_currentStatus == 'finalizado_cliente') return bucket == 'completed';
+      return b['status'] == _currentStatus;
+    }).toList().cast<Map<String, dynamic>>();
+
+    // Ordenar pendentes por data mais próxima
+    if (_currentStatus == 'pendente_oficina') {
+      bookings.sort((a, b) {
+        final dateA = a['appointment_date'] ?? a['scheduled_date'] ?? a['inspection_date'];
+        final dateB = b['appointment_date'] ?? b['scheduled_date'] ?? b['inspection_date'];
+        if (dateA != null && dateB != null) {
+          try {
+            return DateTime.parse(dateA).compareTo(DateTime.parse(dateB));
+          } catch (e) { return 0; }
         }
-        
-        return b['status'] == _currentStatus;
-      }).toList().cast<Map<String, dynamic>>();
-      
-      // Ordenar agendamentos pendentes por data mais próxima da atual
-      if (_currentStatus == 'pendente_oficina') {
-        bookings.sort((a, b) {
-          // Tentar ambos os campos possíveis de data
-          final dateA = a['appointment_date'] ?? a['scheduled_date'];
-          final dateB = b['appointment_date'] ?? b['scheduled_date'];
-          
-          // Se ambos têm data, ordenar por data crescente (mais próximo primeiro)
-          if (dateA != null && dateB != null) {
-            try {
-              final dateAObj = DateTime.parse(dateA);
-              final dateBObj = DateTime.parse(dateB);
-              return dateAObj.compareTo(dateBObj);
-            } catch (e) {
-              // Se houver erro ao parsear, manter ordem original
-              return 0;
-            }
-          }
-          
-          // Se apenas A tem data, A vem primeiro
-          if (dateA != null && dateB == null) return -1;
-          
-          // Se apenas B tem data, B vem primeiro
-          if (dateA == null && dateB != null) return 1;
-          
-          // Se nenhum tem data, manter ordem original
-          return 0;
-        });
-      }
-      
-      // Carregar dados dos veículos
-      await _loadVehicleData(bookings);
-      
-      if (mounted) {
-        setState(() {
-          _bookings = bookings;
-          _loading = false;
-        });
-      }
-    } else {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+        if (dateA != null && dateB == null) return -1;
+        if (dateA == null && dateB != null) return 1;
+        return 0;
+      });
+    }
+
+    // Carregar dados dos veículos (apenas para bookings normais)
+    await _loadVehicleData(bookings);
+
+    if (mounted) {
+      setState(() {
+        _bookings = bookings;
+        _loading = false;
+      });
     }
   }
 
@@ -217,18 +212,21 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
 
     if (isPendingTab && _bookings.isNotEmpty) {
       final today = DateTime.now();
+      final rawUpcoming = <Map<String, dynamic>>[];
+      final rawExpired = <Map<String, dynamic>>[];
       for (final booking in _bookings) {
         if (_isBookingExpired(booking, today)) {
-          // Agendamentos com valor a pagar ficam em pendentes (não expirados) para cliente ver e pagar
           if (!_hasAmountToPay(booking)) {
-            pendingExpired.add(booking);
+            rawExpired.add(booking);
           } else {
-            pendingUpcoming.add(booking);
+            rawUpcoming.add(booking);
           }
         } else {
-          pendingUpcoming.add(booking);
+          rawUpcoming.add(booking);
         }
       }
+      pendingUpcoming.addAll(_filterPendingBySearch(rawUpcoming));
+      pendingExpired.addAll(_filterPendingBySearch(rawExpired));
     }
 
     final hasExpiredSection = isPendingTab && pendingExpired.isNotEmpty;
@@ -386,38 +384,86 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                         : ListView.builder(
                             padding: const EdgeInsets.all(15),
                             itemCount: isPendingTab
-                                ? (pendingUpcoming.isNotEmpty ? 1 : 0) +
+                                ? 1 + // Ajuste 3: barra de pesquisa
+                                    (pendingUpcoming.isEmpty && pendingExpired.isEmpty && _pendingSearchQuery.trim().isNotEmpty ? 1 : 0) +
+                                    (pendingUpcoming.isNotEmpty ? 1 : 0) +
                                     pendingUpcoming.length +
                                     (hasExpiredSection ? 1 : 0)
                                 : _bookings.length,
                             itemBuilder: (context, index) {
                               if (!isPendingTab) {
                                 final booking = _bookings[index];
-                                return _buildBookingCard(booking);
+                                return booking['booking_type'] == 'pre_compra'
+                                    ? _buildPreCompraCard(booking)
+                                    : _buildBookingCard(booking);
                               }
 
+                              // Ajuste 3: barra de pesquisa (primeiro item na aba Pendentes)
+                              if (index == 0) {
+                                return _buildPendingSearchBar(isDarkMode);
+                              }
+
+                              final noResults = pendingUpcoming.isEmpty && pendingExpired.isEmpty && _pendingSearchQuery.trim().isNotEmpty;
+                              if (noResults && index == 1) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 24),
+                                  child: Center(
+                                    child: Text(
+                                      'Nenhum resultado para sua pesquisa.',
+                                      style: TextStyle(fontSize: 14, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              final offset = noResults ? 2 : 1;
                               final showBanner = pendingUpcoming.isNotEmpty;
-                              if (showBanner && index == 0) {
+                              final adjustedForSearch = index - offset;
+                              if (showBanner && adjustedForSearch == 0) {
                                 return _buildPendingInfoBanner(pendingUpcoming);
                               }
 
-                              final adjustedIndex = showBanner ? index - 1 : index;
+                              final adjustedIndex = showBanner ? adjustedForSearch - 1 : adjustedForSearch;
 
                               if (adjustedIndex < pendingUpcoming.length) {
-                                return _buildBookingCard(pendingUpcoming[adjustedIndex]);
+                                final item = pendingUpcoming[adjustedIndex];
+                                return item['booking_type'] == 'pre_compra'
+                                    ? _buildPreCompraCard(item)
+                                    : _buildBookingCard(item);
                               }
 
                               if (hasExpiredSection && adjustedIndex == pendingUpcoming.length) {
                                 return _buildExpiredDivider(pendingExpired.length, pendingExpired);
                               }
 
-                              // Agendamentos expirados não aparecem mais aqui, apenas na tela dedicada
                               return const SizedBox.shrink();
                             },
                           ),
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPendingSearchBar(bool isDarkMode) {
+    final bg = isDarkMode ? const Color(0xFF1A1A1A) : Colors.grey.shade100;
+    final borderColor = isDarkMode ? Colors.grey.shade700 : Colors.grey.shade400;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: _pendingSearchController,
+        decoration: InputDecoration(
+          hintText: 'Buscar por oficina, serviço ou observação...',
+          hintStyle: TextStyle(fontSize: 13, color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade600),
+          prefixIcon: Icon(Icons.search, size: 20, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
+          filled: true,
+          fillColor: bg,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderColor, width: 1)),
+        ),
+        style: TextStyle(fontSize: 14, color: isDarkMode ? Colors.white : Colors.black87),
       ),
     );
   }
@@ -678,6 +724,237 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     if (normalized == 'paid') return 'completed';
     if (normalized == 'confirmed' || normalized == 'in_progress') return 'confirmed';
     return 'pending';
+  }
+
+  /// Status de pré-compra → tab (mapeamento diferente do booking normal)
+  String _bucketForPreCompraStatus(String rawStatus, {String? paymentStatus}) {
+    final s = rawStatus.toLowerCase().trim();
+    // Backward compat: concluido sem pagamento = aguardando_pagamento (tab Confirmados)
+    if (s == 'concluido' || s == 'concluído') {
+      return (paymentStatus == 'pago') ? 'completed' : 'confirmed';
+    }
+    if (s == 'confirmado' || s == 'em_andamento' || s == 'aguardando_pagamento') return 'confirmed';
+    if (s == 'cancelado') return 'completed';
+    return 'pending'; // 'pendente'
+  }
+
+  Widget _buildPreCompraCard(Map<String, dynamic> item) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final status = (item['status'] ?? 'pendente').toString();
+    final paymentStatus = item['payment_status']?.toString() ?? '';
+    // Backward compat: concluido+unpaid exibir como aguardando_pagamento
+    final effectiveStatus = (status == 'concluido' && paymentStatus != 'pago') ? 'aguardando_pagamento' : status;
+    final statusConfig = _getPreCompraStatusConfig(effectiveStatus, isDarkMode: isDarkMode);
+    final brand = (item['vehicle_brand'] ?? '').toString();
+    final model = (item['vehicle_model'] ?? '').toString();
+    final year = (item['vehicle_year'] ?? '').toString();
+    final vehicleDesc = [brand, model, year].where((s) => s.isNotEmpty).join(' ');
+    final workshopName = (item['workshop_name'] ?? 'Oficina').toString();
+    final bool hasLaudo = item['laudo_pdf_key'] != null && paymentStatus == 'pago';
+
+    String dateStr = 'Data não definida';
+    final rawDate = item['inspection_date'] ?? item['created_at'];
+    if (rawDate != null) {
+      try {
+        final parsed = DateTime.parse(rawDate.toString()).toLocal();
+        final prefix = item['inspection_date'] != null ? '' : 'Solicitado em ';
+        dateStr = '$prefix${DateFormat('dd/MM/yyyy').format(parsed)}';
+      } catch (_) {}
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 15),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDarkMode
+              ? [const Color(0xFF1A1A1A), const Color(0xFF2A2A2A)]
+              : [Colors.white, Colors.grey.shade50],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF00C977).withOpacity(0.3), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00C977).withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            final id = item['id']?.toString() ?? '';
+            if (id.isNotEmpty) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PreCompraDetailScreen(preCompraId: id),
+                ),
+              ).then((_) {
+                if (mounted) _loadBookings(forceRefresh: true);
+              });
+            }
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          workshopName,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isDarkMode ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00C977).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF00C977).withOpacity(0.4)),
+                          ),
+                          child: const Text(
+                            'Pré-Compra',
+                            style: TextStyle(
+                              color: Color(0xFF00C977),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: statusConfig['color'],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            statusConfig['label'],
+                            style: TextStyle(
+                              color: statusConfig['textColor'],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 15),
+                // Date
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today, size: 16,
+                        color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
+                    const SizedBox(width: 8),
+                    Text(
+                      dateStr,
+                      style: TextStyle(
+                          color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Vehicle
+                Row(
+                  children: [
+                    Icon(Icons.directions_car, size: 16,
+                        color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        vehicleDesc.isNotEmpty ? vehicleDesc : 'Veículo a inspecionar',
+                        style: TextStyle(
+                            color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+                      ),
+                    ),
+                  ],
+                ),
+                // PDF indicator
+                if (hasLaudo) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(Icons.picture_as_pdf, size: 16, color: Colors.red.shade400),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Laudo disponível para download',
+                        style: TextStyle(
+                          color: Colors.red.shade400,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Map<String, dynamic> _getPreCompraStatusConfig(String status, {bool isDarkMode = false}) {
+    switch (status.toLowerCase().trim()) {
+      case 'confirmado':
+        return {
+          'label': 'Confirmado',
+          'color': isDarkMode ? const Color(0xFF1A2332) : const Color(0xFFE3EDFA),
+          'textColor': isDarkMode ? const Color(0xFF6BA3FF) : const Color(0xFF7896D8),
+        };
+      case 'em_andamento':
+        return {
+          'label': 'Em Andamento',
+          'color': isDarkMode ? const Color(0xFF1A2E1F) : const Color(0xFFE8FFEE),
+          'textColor': isDarkMode ? const Color(0xFF4ADE80) : const Color(0xFF2FD65C),
+        };
+      case 'aguardando_pagamento':
+        return {
+          'label': 'Aguardando Pagamento',
+          'color': isDarkMode ? const Color(0xFF3D2F1A) : const Color(0xFFFCF4E5),
+          'textColor': isDarkMode ? const Color(0xFFFFC94A) : const Color(0xFFDBA800),
+        };
+      case 'concluido':
+      case 'concluído':
+        return {
+          'label': 'Concluído',
+          'color': isDarkMode ? const Color(0xFF1A2E1F) : const Color(0xFFE8FFEE),
+          'textColor': isDarkMode ? const Color(0xFF4ADE80) : const Color(0xFF2FD65C),
+        };
+      case 'cancelado':
+        return {
+          'label': 'Cancelado',
+          'color': isDarkMode ? const Color(0xFF3D1F1F) : const Color(0xFFFEE2E2),
+          'textColor': isDarkMode ? const Color(0xFFFF6B6B) : const Color(0xFFE8867C),
+        };
+      default:
+        return {
+          'label': 'Pendente',
+          'color': isDarkMode ? const Color(0xFF3D2F1A) : const Color(0xFFFCF4E5),
+          'textColor': isDarkMode ? const Color(0xFFFFC94A) : const Color(0xFFDBA800),
+        };
+    }
   }
 
   Widget _buildBookingCard(Map<String, dynamic> booking, {bool isExpired = false}) {
@@ -1755,8 +2032,22 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
 
   @override
   void dispose() {
+    _pendingSearchController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Ajuste 3: Filtra agendamentos pendentes por workshop, serviço ou observação (like)
+  List<Map<String, dynamic>> _filterPendingBySearch(List<Map<String, dynamic>> list) {
+    if (_pendingSearchQuery.trim().isEmpty) return list;
+    final q = _pendingSearchQuery.trim().toLowerCase();
+    return list.where((b) {
+      final workshop = (b['workshop_name'] ?? b['workshop']?['name'] ?? '').toString().toLowerCase();
+      final service = (b['service_name'] ?? b['service']?['name'] ?? b['product_name'] ?? '').toString().toLowerCase();
+      final notes = (b['customer_notes'] ?? b['observations'] ?? b['notes'] ?? '').toString().toLowerCase();
+      final vehicle = '${b['vehicle_brand'] ?? ''} ${b['vehicle_model'] ?? ''}'.toLowerCase();
+      return workshop.contains(q) || service.contains(q) || notes.contains(q) || vehicle.contains(q);
+    }).toList();
   }
 }
 

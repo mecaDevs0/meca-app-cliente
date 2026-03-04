@@ -46,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _checkingLocation = false;
   /// True quando a lista de oficinas próximas foi obtida com coordenadas de fallback (ex.: São Paulo) por falta de permissão/posição.
   bool _usedFallbackLocationForNearby = false;
-  static const double _nearbyWorkshopsRadiusKm = 25.0;
+  static const double _nearbyWorkshopsRadiusKm = 30.0; // Ajuste 4: raio 30km na home
 
   @override
   void initState() {

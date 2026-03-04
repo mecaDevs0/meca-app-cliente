@@ -212,7 +212,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     
     final specializedServices = filteredServices.where((service) {
       final name = (service['name'] ?? '').toString();
-      return !generalServicesNames.any((generalName) => 
+      return !generalServicesNames.any((generalName) =>
         name.toLowerCase().contains(generalName.toLowerCase()) ||
         generalName.toLowerCase().contains(name.toLowerCase())
       );
@@ -221,6 +221,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
       final nameB = (b['name'] ?? '').toString().toLowerCase();
       return nameA.compareTo(nameB);
     });
+
+    final allSpecialized = [...specializedServices];
 
     final bool hasOriginalServices = _services.isNotEmpty;
     final bool noResults = hasOriginalServices ? filteredServices.isEmpty : _searchQuery.isNotEmpty;
@@ -350,11 +352,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   }),
                   const SizedBox(height: 24),
                 ],
-                // Seção de Serviços Especializados
-                if (specializedServices.isNotEmpty) ...[
+                // Seção de Serviços Especializados (inclui Pré-Compra)
+                if (allSpecialized.isNotEmpty) ...[
                   _buildSectionHeader('Serviços Especializados'),
                   const SizedBox(height: 12),
-                  ...specializedServices.map((service) => _buildServiceCard(service, isGeneral: false)),
+                  ...allSpecialized.map((service) => _buildServiceCard(service, isGeneral: false)),
                 ],
               ],
             ),
@@ -655,7 +657,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
   void _navigateToServiceDetail(Map<String, dynamic> service) {
     final serviceId = (service['id'] ?? service['service_id'] ?? '').toString();
     final workshopId = service['workshop_id']?.toString() ?? '';
-
     Navigator.push(
       context,
       MaterialPageRoute(

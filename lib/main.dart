@@ -16,6 +16,7 @@ import 'screens/vehicles/edit_vehicle_screen.dart';
 import 'screens/vehicles/my_vehicles_screen.dart';
 import 'screens/workshops/workshop_detail_screen.dart';
 import 'screens/mia/mia_chat_screen.dart';
+import 'screens/pre_compra/pre_compra_detail_screen.dart';
 import 'services/theme_service.dart';
 import 'services/notification_service.dart';
 import 'services/onesignal_service.dart';
@@ -51,38 +52,84 @@ void main() async {
       await notificationService.initialize();
       await notificationService.requestPermissions();
       
-      // Configurar handler de navegação de notificações
+      // Helper de navegação por dados de notificação (OneSignal ou local)
+      void navigateFromNotificationData(Map<String, dynamic> data) {
+        final type = data['type']?.toString() ?? '';
+        final id = data['id']?.toString() ?? data['pre_compra_id']?.toString();
+        final bookingId = data['booking_id']?.toString();
+        final workshopId = data['workshop_id']?.toString();
+
+        if (type == 'pre_compra' || type.contains('pre_compra') || type.contains('laudo')) {
+          if (id != null && id.isNotEmpty) {
+            navigatorKey.currentState?.pushNamed('/pre-compra-detail', arguments: {'id': id});
+            return;
+          }
+        }
+
+        if (bookingId != null && bookingId.isNotEmpty) {
+          navigatorKey.currentState?.pushNamed('/order-detail', arguments: {'id': bookingId});
+          return;
+        }
+
+        switch (type) {
+          case 'booking':
+          case 'booking_created':
+          case 'booking_confirmed':
+          case 'booking_cancelled':
+          case 'new_booking':
+            final bId = id ?? bookingId;
+            if (bId != null && bId.isNotEmpty) {
+              navigatorKey.currentState?.pushNamed('/order-detail', arguments: {'id': bId});
+            } else {
+              navigatorKey.currentState?.pushNamed('/orders');
+            }
+            break;
+          case 'workshop':
+            if (workshopId != null && workshopId.isNotEmpty) {
+              navigatorKey.currentState?.pushNamed('/workshop-detail', arguments: {'id': workshopId});
+            }
+            break;
+          case 'orders':
+            navigatorKey.currentState?.pushNamed('/orders');
+            break;
+          default:
+            break;
+        }
+      }
+
+      // Handler para toque em push notification via OneSignal
+      OneSignalService.onNotificationOpened = (Map<String, dynamic> data) {
+        try {
+          navigateFromNotificationData(data);
+        } catch (e) {
+          if (kDebugMode) print('Erro ao navegar por OneSignal: $e');
+        }
+      };
+
+      // Configurar handler de navegação de notificações locais (flutter_local_notifications)
       NotificationService.onNotificationClick = (String? payload) {
         if (payload == null) return;
-        
+
         try {
-          final data = payload.split('|');
-          if (data.length >= 2) {
-            final type = data[0];
-            final id = data[1];
-            
-            switch (type) {
-              case 'booking':
-              case 'order':
-                navigatorKey.currentState?.pushNamed('/order-detail', arguments: {'id': id});
-                break;
-              case 'workshop':
-                navigatorKey.currentState?.pushNamed('/workshop-detail', arguments: {'id': id});
-                break;
-              case 'notifications':
-                navigatorKey.currentState?.pushNamed('/notifications');
-                break;
-              case 'orders':
-                navigatorKey.currentState?.pushNamed('/orders');
-                break;
-              default:
-                break;
-            }
+          // Tentar parsear como JSON primeiro
+          Map<String, dynamic>? jsonData;
+          try {
+            jsonData = Map<String, dynamic>.from(
+              (payload.startsWith('{'))
+                  ? (Map<String, dynamic>.from({})) // placeholder
+                  : {},
+            );
+          } catch (_) {}
+
+          // Fallback: formato legado type|id
+          final parts = payload.split('|');
+          if (parts.length >= 2) {
+            final type = parts[0];
+            final id = parts[1];
+            navigateFromNotificationData({'type': type, 'id': id});
           }
         } catch (e) {
-          if (kDebugMode) {
-            print('Erro ao navegar a partir de notificação: $e');
-          }
+          if (kDebugMode) print('Erro ao navegar a partir de notificação local: $e');
         }
       };
       
@@ -222,6 +269,13 @@ class MecaClienteApp extends StatelessWidget {
                   return MaterialPageRoute(builder: (_) => const EditProfileScreen());
                 case '/notifications':
                   return MaterialPageRoute(builder: (_) => const NotificationsScreen());
+                case '/pre-compra-detail':
+                  final args = settings.arguments as Map<String, dynamic>? ?? {};
+                  return MaterialPageRoute(
+                    builder: (_) => PreCompraDetailScreen(
+                      preCompraId: args['id']?.toString() ?? '',
+                    ),
+                  );
                 case '/help':
                   return MaterialPageRoute(builder: (_) => const HelpCenterScreen());
                 case '/mia-chat':

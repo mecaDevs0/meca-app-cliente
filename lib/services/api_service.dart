@@ -445,24 +445,34 @@ class ApiService {
   Future<Map<String, dynamic>> getWorkshopDetails(String workshopId) async {
     try {
       final response = await _dio.get('/workshop/$workshopId');
-      
+
       if (response.data != null && response.data['success'] == true) {
         // Adaptar resposta para diferentes formatos
         final data = response.data['data'];
         Map<String, dynamic> workshop;
-        
+
         if (data is Map) {
-          // Se data já é um Map, usar diretamente ou buscar 'workshop'
-          // IMPORTANTE: Preservar 'schedule' que vem do banco RDS AWS
-          workshop = data['workshop'] ?? data;
-          // Garantir que 'schedule' está presente (vem do banco via WorkshopRepository.getSchedule)
-          if (data['schedule'] != null && workshop['schedule'] == null) {
-            workshop['schedule'] = data['schedule'];
-          }
+          workshop = Map<String, dynamic>.from(data['workshop'] ?? data);
+          // Preservar schedule e working_hours (dados reais RDS, sem mock)
+          if (data['schedule'] != null && workshop['schedule'] == null) workshop['schedule'] = data['schedule'];
+          if (data['working_hours'] != null && workshop['working_hours'] == null) workshop['working_hours'] = data['working_hours'];
         } else {
           workshop = {'id': workshopId};
         }
-        
+
+        // Se schedule ainda é null, buscar endpoint dedicado /workshop/:id/schedule
+        if (workshop['schedule'] == null && workshop['working_hours'] == null) {
+          try {
+            final schedResp = await _dio.get('/workshop/$workshopId/schedule');
+            if (schedResp.data != null && schedResp.data['success'] == true) {
+              final schedData = schedResp.data['data'];
+              if (schedData != null && schedData is Map && schedData.isNotEmpty) {
+                workshop['schedule'] = schedData;
+              }
+            }
+          } catch (_) {}
+        }
+
         return {'success': true, 'data': workshop};
       } else {
         return {'success': false, 'error': response.data['error'] ?? 'Erro ao buscar detalhes da oficina'};
@@ -2042,6 +2052,146 @@ class ApiService {
         'success': false,
         'error': response.data?['error'] ?? 'Não foi possível iniciar o pagamento.',
       };
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  // ============================================================
+  // Pré-Compra Veicular
+  // ============================================================
+
+  /// POST /pre-compra/:id/pay — pagamento de pré-compra via PagBank (PIX ou Cartão)
+  Future<Map<String, dynamic>> createPreCompraPayment(
+    String preCompraId, {
+    required String paymentMethod,
+    String? cardToken,
+    String? cvv,
+    String? holderName,
+    int? installments,
+    double? totalWithInterest,
+    double? interestPaidByBuyer,
+    double? installmentValue,
+    int? interestInstallments,
+    int? pixExpirationInSeconds,
+    bool? saveCard,
+    String? lastDigits,
+    String? brand,
+    String? expiryMonth,
+    String? expiryYear,
+    String? workshopPagbankAccountId,
+  }) async {
+    try {
+      await loadToken();
+      final payload = <String, dynamic>{
+        'paymentMethod': paymentMethod.toUpperCase(),
+      };
+      if (cardToken != null && cardToken.isNotEmpty) payload['cardToken'] = cardToken;
+      if (cvv != null && cvv.isNotEmpty) payload['cvv'] = cvv;
+      if (holderName != null && holderName.trim().isNotEmpty) payload['holderName'] = holderName.trim();
+      if (installments != null && installments > 0) payload['installments'] = installments;
+      if (totalWithInterest != null && totalWithInterest > 0) {
+        payload['totalWithInterest'] = totalWithInterest;
+        payload['total_with_interest'] = totalWithInterest;
+      }
+      if (interestPaidByBuyer != null && interestPaidByBuyer >= 0) {
+        payload['interestPaidByBuyer'] = interestPaidByBuyer;
+        payload['interest_paid_by_buyer'] = interestPaidByBuyer;
+      }
+      if (installmentValue != null && installmentValue > 0) {
+        payload['installmentValue'] = installmentValue;
+        payload['installment_value'] = installmentValue;
+      }
+      if (interestInstallments != null && interestInstallments > 0) {
+        payload['interest_installments'] = interestInstallments;
+      }
+      if (pixExpirationInSeconds != null && pixExpirationInSeconds > 0) {
+        payload['pixExpiration'] = pixExpirationInSeconds;
+      }
+      if (saveCard == true) payload['saveCard'] = true;
+      if (lastDigits != null && lastDigits.trim().isNotEmpty) payload['lastDigits'] = lastDigits.trim();
+      if (brand != null && brand.trim().isNotEmpty) payload['brand'] = brand.trim();
+      if (expiryMonth != null && expiryMonth.trim().isNotEmpty) payload['expiryMonth'] = expiryMonth.trim();
+      if (expiryYear != null && expiryYear.trim().isNotEmpty) payload['expiryYear'] = expiryYear.trim();
+      if (workshopPagbankAccountId != null && workshopPagbankAccountId.trim().isNotEmpty) {
+        payload['workshopAccountId'] = workshopPagbankAccountId.trim();
+        payload['pagbankAccountId'] = workshopPagbankAccountId.trim();
+      }
+
+      final response = await _dio.post('/pre-compra/$preCompraId/pay', data: payload);
+      if (response.data != null && response.data['success'] == true) {
+        return {'success': true, 'data': response.data['data']};
+      }
+      return {
+        'success': false,
+        'error': response.data?['error'] ?? 'Não foi possível processar o pagamento.',
+      };
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  Future<Map<String, dynamic>> getPreCompras({bool forceRefresh = false}) async {
+    try {
+      await loadToken();
+      final response = await _dio.get(
+        '/pre-compra',
+        options: Options(extra: forceRefresh ? {'skipCache': true} : {}),
+      );
+      final data = response.data;
+      if (data is Map && data['success'] == true) {
+        return {'success': true, 'data': data['data']};
+      }
+      return {'success': false, 'error': data?['error'] ?? 'Erro ao buscar pré-compras', 'data': []};
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e), 'data': []};
+    }
+  }
+
+  // ============================================================
+  // Métodos genéricos para endpoints não mapeados (ex: pre-compra)
+  // ============================================================
+
+  Future<Map<String, dynamic>> get(String path, {bool skipCache = false}) async {
+    try {
+      await loadToken();
+      final response = await _dio.get(
+        path,
+        options: Options(extra: skipCache ? {'skipCache': true} : {}),
+      );
+      final data = response.data;
+      if (data is Map && data['success'] == true) {
+        return {'success': true, 'data': data['data']};
+      }
+      return {'success': false, 'error': data?['error'] ?? 'Erro ao buscar dados'};
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
+    try {
+      await loadToken();
+      final response = await _dio.post(path, data: body);
+      final data = response.data;
+      if (data is Map && data['success'] == true) {
+        return {'success': true, 'data': data['data']};
+      }
+      return {'success': false, 'error': data?['error'] ?? 'Erro'};
+    } catch (e) {
+      return {'success': false, 'error': _getErrorMessage(e)};
+    }
+  }
+
+  Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) async {
+    try {
+      await loadToken();
+      final response = await _dio.put(path, data: body);
+      final data = response.data;
+      if (data is Map && data['success'] == true) {
+        return {'success': true, 'data': data['data']};
+      }
+      return {'success': false, 'error': data?['error'] ?? 'Erro'};
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
     }

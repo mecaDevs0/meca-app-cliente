@@ -6,7 +6,10 @@ import '../config/app_config.dart';
 
 class OneSignalService {
   static String get _appId => AppConfig.oneSignalAppId;
-  
+
+  // Callback invocado quando o usuário toca numa push notification
+  static Function(Map<String, dynamic> data)? onNotificationOpened;
+
   static Future<void> initialize() async {
     if (_appId == 'YOUR_ONESIGNAL_APP_ID_CLIENTE_HERE' || _appId.isEmpty) {
       return;
@@ -57,9 +60,10 @@ class OneSignalService {
   }
   
   static void _handleNotificationOpened(OSNotificationClickEvent event) {
-    // Navegação será tratada pelo NotificationService.onNotificationClick
-    // O OneSignal já exibe a notificação automaticamente
-    // Não precisa de logs aqui
+    final additionalData = event.notification.additionalData;
+    if (additionalData != null && onNotificationOpened != null) {
+      onNotificationOpened!(Map<String, dynamic>.from(additionalData));
+    }
   }
   
   static Future<void> setExternalUserId(String userId) async {

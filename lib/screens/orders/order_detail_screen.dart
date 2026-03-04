@@ -3945,18 +3945,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (raw is num) {
       final value = raw.toDouble();
       if (value == 0) return null;
-      
-      // IMPORTANTE: A API sempre salva valores em centavos (inteiros)
-      // Se o valor é um inteiro, SEMPRE assumir que está em centavos e converter para reais
-      // A API nunca retorna valores em reais como inteiros, sempre em centavos
+      // API RDS usa centavos (int). 100=R$1, 125=R$1,25.
       if (value % 1 == 0) {
-        // DEBUG: Log para verificar conversão
         final converted = value / 100;
-        debugPrint('💰 [OrderDetail] _parseBackendPrice: integer $value (centavos) -> $converted (reais)');
+        debugPrint('💰 [OrderDetail] _parseBackendPrice: $value centavos -> $converted reais');
         return converted;
       }
-      // Se já tem decimais, assumir que já está em reais (caso raro, mas possível)
-      debugPrint('💰 [OrderDetail] _parseBackendPrice: decimal $value (já em reais)');
+      debugPrint('💰 [OrderDetail] _parseBackendPrice: $value (decimal, reais)');
       return value;
     }
 

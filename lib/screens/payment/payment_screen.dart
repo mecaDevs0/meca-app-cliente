@@ -97,15 +97,13 @@ class PaymentScreen extends StatelessWidget {
       final value = raw.toDouble();
       print('💰 [PaymentScreen] parseBackendPrice: num value=$value');
       if (value == 0) return null;
-      // CRITICAL: no MECA o backend usa CENTAVOS (int) para preços (mesmo < 100).
-      // Se vier "inteiro", tratar como centavos sempre.
+      // API RDS usa centavos (int). 100=R$1, 125=R$1,25. Inteiro => centavos.
       if (value % 1 == 0) {
         final converted = value / 100;
-        print('💰 [PaymentScreen] parseBackendPrice: convertendo $value centavos -> R\$ $converted');
+        print('💰 [PaymentScreen] parseBackendPrice: $value centavos -> R\$ $converted');
         return converted;
       }
-      // Se veio com decimal, já é reais.
-      print('💰 [PaymentScreen] parseBackendPrice: usando valor direto (reais) R\$ $value');
+      print('💰 [PaymentScreen] parseBackendPrice: R\$ $value (decimal)');
       return value;
     }
 

@@ -8,6 +8,7 @@ import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../utils/formatters.dart';
 import '../booking/booking_screen.dart';
+import '../pre_compra/pre_compra_booking_screen.dart';
 
 
 class WorkshopDetailScreen extends StatefulWidget {
@@ -154,6 +155,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
       if (result['success']) {
         final rawWorkshop = Map<String, dynamic>.from(result['data'] ?? {});
+        // Schedule vem direto da API EC2 (dados reais: schedule ou working_hours do RDS)
         final normalizedWorkshop = _normalizeWorkshop(rawWorkshop);
         List<Map<String, dynamic>> servicesList = [];
         if (servicesResult['success']) {
@@ -960,16 +962,17 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   Widget _buildWorkingHoursCard() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
-    // CRITICAL: Buscar horários REAIS do campo 'schedule' retornado pela API
-    // A API retorna schedule no formato: { monday: { is_open: true, start_time: '08:00', end_time: '18:00' }, ... }
-    final scheduleRaw = _workshop!['schedule'];
+    // CRITICAL: Horários REAIS da API EC2 (schedule ou working_hours do RDS - dados reais, sem mock)
+    // A API retorna schedule: { monday: { is_open: true, start_time: '08:00', end_time: '18:00' }, ... }
+    final scheduleRaw = _workshop!['schedule'] ?? _workshop!['working_hours'];
     Map<String, dynamic> scheduleData = {};
     
     if (scheduleRaw != null) {
       if (scheduleRaw is String) {
         try {
-          scheduleData = jsonDecode(scheduleRaw);
-        } catch (e) {
+          final decoded = jsonDecode(scheduleRaw);
+          scheduleData = decoded is Map ? Map<String, dynamic>.from(decoded) : {};
+        } catch (_) {
           scheduleData = {};
         }
       } else if (scheduleRaw is Map) {
@@ -977,27 +980,44 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       }
     }
     
-    // Converter formato da API (is_open, start_time, end_time) para formato do app (start, end)
+    // Fallback: is_open_now e today_hours da API (America/Sao_Paulo)
+    final isOpenNow = _workshop!['is_open_now'] == true;
+    final todayHours = _workshop!['today_hours']?.toString();
+    
+    // Mapeamento: inglês -> português (setup pode salvar com chaves em português)
+    const enToPt = {
+      'monday': 'segunda', 'tuesday': 'terca', 'wednesday': 'quarta',
+      'thursday': 'quinta', 'friday': 'sexta', 'saturday': 'sabado', 'sunday': 'domingo',
+    };
+    // Converter formato da API (is_open/enabled, start_time/start/inicio, end_time/end/fim) para formato do app
     final hours = <String, Map<String, String>?>{};
     final dayKeys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-    
+    bool hasAnySchedule = false;
+
     for (final dayKey in dayKeys) {
-      final dayData = scheduleData[dayKey];
+      final dayData = scheduleData[dayKey] ?? scheduleData[enToPt[dayKey] ?? ''];
       if (dayData != null && dayData is Map) {
-        final isOpen = dayData['is_open'] == true;
-        if (isOpen && dayData['start_time'] != null && dayData['end_time'] != null) {
+        final isOpen = dayData['is_open'] == true || dayData['enabled'] == true || dayData['ativo'] == 'true';
+        final start = dayData['start_time'] ?? dayData['start'] ?? dayData['inicio'];
+        final end = dayData['end_time'] ?? dayData['end'] ?? dayData['fim'];
+        if (isOpen && start != null && start.toString().trim().isNotEmpty && end != null && end.toString().trim().isNotEmpty) {
           hours[dayKey] = {
-            'start': dayData['start_time'].toString(),
-            'end': dayData['end_time'].toString(),
+            'start': start.toString().trim(),
+            'end': end.toString().trim(),
           };
+          hasAnySchedule = true;
         } else {
-          hours[dayKey] = null; // Fechado
+          hours[dayKey] = null;
         }
       } else {
-        hours[dayKey] = null; // Sem dados = fechado
+        hours[dayKey] = null;
       }
     }
     
+    // Quando não há schedule cadastrado: mostrar "Horário não informado" ou fallback today_hours
+    final noSchedule = !hasAnySchedule;
+    final closedLabel = noSchedule ? 'Não informado' : 'Fechado';
+
     return Container(
       decoration: BoxDecoration(
         color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
@@ -1037,6 +1057,26 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                if (todayHours != null && todayHours.isNotEmpty && todayHours != 'Fechado') ...[
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isOpenNow
+                          ? const Color(0xFF00C977).withOpacity(0.2)
+                          : Colors.orange.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      isOpenNow ? 'Aberto agora' : 'Hoje: $todayHours',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isOpenNow ? const Color(0xFF00C977) : Colors.orange[800],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 16),
@@ -1051,12 +1091,12 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 decoration: BoxDecoration(
                   color: isOpen 
                       ? const Color(0xFF00C977).withOpacity(0.1)
-                      : Colors.red.withOpacity(0.1),
+                      : (noSchedule ? Colors.grey.withOpacity(0.1) : Colors.red.withOpacity(0.1)),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isOpen 
                         ? const Color(0xFF00C977).withOpacity(0.3)
-                        : Colors.red.withOpacity(0.3),
+                        : (noSchedule ? Colors.grey.withOpacity(0.3) : Colors.red.withOpacity(0.3)),
                   ),
                 ),
                 child: Row(
@@ -1065,8 +1105,8 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                     Row(
                       children: [
                         Icon(
-                          isOpen ? Icons.check_circle : Icons.cancel,
-                          color: isOpen ? const Color(0xFF00C977) : Colors.red,
+                          isOpen ? Icons.check_circle : (noSchedule ? Icons.help_outline : Icons.cancel),
+                          color: isOpen ? const Color(0xFF00C977) : (noSchedule ? Colors.grey : Colors.red),
                           size: 16,
                         ),
                         const SizedBox(width: 8),
@@ -1080,9 +1120,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                       ],
                     ),
                     Text(
-                      isOpen ? '${dayHours['start']} - ${dayHours['end']}' : 'Fechado',
+                      isOpen ? '${dayHours!['start']} - ${dayHours['end']}' : closedLabel,
                       style: TextStyle(
-                        color: isOpen ? const Color(0xFF00C977) : Colors.red,
+                        color: isOpen ? const Color(0xFF00C977) : (noSchedule ? Colors.grey : Colors.red),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1242,7 +1282,24 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            // Navegar direto para agendamento ao selecionar serviço
+            final serviceNameLower = serviceName.toLowerCase();
+            final isPreCompra = serviceNameLower.contains('pré-compra') ||
+                serviceNameLower.contains('pre-compra') ||
+                serviceId == 'srv_pre_compra_veicular';
+
+            if (isPreCompra) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PreCompraBookingScreen(
+                    workshopId: widget.workshopId,
+                    workshopName: workshopName,
+                  ),
+                ),
+              );
+              return;
+            }
+
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -1438,6 +1495,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     normalized['address'] = _formatAddress(addressDetails ?? normalized['address']);
     normalized['address_text'] = normalized['address'];
     normalized['rating'] = _parseDouble(normalized['rating']);
+    // Preservar schedule, working_hours, is_open_now, today_hours da API (dados reais RDS, sem mock)
+    if (workshop['schedule'] != null) normalized['schedule'] = workshop['schedule'];
+    if (workshop['working_hours'] != null) normalized['working_hours'] = workshop['working_hours'];
+    if (workshop['is_open_now'] != null) normalized['is_open_now'] = workshop['is_open_now'];
+    if (workshop['today_hours'] != null) normalized['today_hours'] = workshop['today_hours'];
     
     // Garantir que phone seja preservado (pode vir como string, number ou null)
     if (normalized['phone'] != null) {
