@@ -134,19 +134,30 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       return b['status'] == _currentStatus;
     }).toList().cast<Map<String, dynamic>>();
 
-    // Ordenar pendentes por data mais próxima
+    // Ordenar pendentes: futuros primeiro (mais próximo do hoje no topo), passados por último
     if (_currentStatus == 'pendente_oficina') {
+      final now = DateTime.now();
       bookings.sort((a, b) {
-        final dateA = a['appointment_date'] ?? a['scheduled_date'] ?? a['inspection_date'];
-        final dateB = b['appointment_date'] ?? b['scheduled_date'] ?? b['inspection_date'];
-        if (dateA != null && dateB != null) {
-          try {
-            return DateTime.parse(dateA).compareTo(DateTime.parse(dateB));
-          } catch (e) { return 0; }
+        final dateAStr = a['appointment_date'] ?? a['scheduled_date'] ?? a['inspection_date'];
+        final dateBStr = b['appointment_date'] ?? b['scheduled_date'] ?? b['inspection_date'];
+        if (dateAStr == null && dateBStr == null) return 0;
+        if (dateAStr == null) return 1;
+        if (dateBStr == null) return -1;
+        try {
+          final da = DateTime.parse(dateAStr.toString());
+          final db = DateTime.parse(dateBStr.toString());
+          final isPastA = da.isBefore(now);
+          final isPastB = db.isBefore(now);
+          // Futuro antes de passado
+          if (!isPastA && isPastB) return -1;
+          if (isPastA && !isPastB) return 1;
+          // Ambos futuros: mais próximo primeiro (ASC)
+          if (!isPastA && !isPastB) return da.compareTo(db);
+          // Ambos passados: mais recente primeiro (mais perto de hoje)
+          return db.compareTo(da);
+        } catch (e) {
+          return 0;
         }
-        if (dateA != null && dateB == null) return -1;
-        if (dateA == null && dateB != null) return 1;
-        return 0;
       });
     }
 

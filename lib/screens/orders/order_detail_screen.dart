@@ -880,11 +880,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       Builder(
                         builder: (context) {
                           final workshop = _bookingDetails?['workshop'] ?? widget.booking['workshop'];
+                          final lat = workshop?['latitude'] ?? _bookingDetails?['latitude'] ?? _bookingDetails?['workshop_latitude'] ?? widget.booking['latitude'] ?? widget.booking['workshop_latitude'];
+                          final lng = workshop?['longitude'] ?? _bookingDetails?['longitude'] ?? _bookingDetails?['workshop_longitude'] ?? widget.booking['longitude'] ?? widget.booking['workshop_longitude'];
                           return _buildLocationRow(
-                        Icons.location_on,
-                        _formatWorkshopAddress(_bookingDetails?['workshop_address'] ?? widget.booking['workshop_address']),
-                            workshop?['latitude'] ?? _bookingDetails?['latitude'] ?? widget.booking['latitude'],
-                            workshop?['longitude'] ?? _bookingDetails?['longitude'] ?? widget.booking['longitude'],
+                            Icons.location_on,
+                            _formatWorkshopAddress(_bookingDetails?['workshop_address'] ?? widget.booking['workshop_address']),
+                            lat,
+                            lng,
                           );
                         },
                       ),
@@ -1645,17 +1647,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildWorkshopMapCard(bool isDarkMode) {
-    // Buscar latitude/longitude de múltiplas fontes: workshop object, bookingDetails, ou booking direto
+    // Buscar latitude/longitude de múltiplas fontes: workshop object, bookingDetails (inclui workshop_latitude/longitude da API), ou booking direto
     final workshop = _bookingDetails?['workshop'] ?? widget.booking['workshop'];
     final lat = _parseCoordinate(
-      workshop?['latitude'] ?? 
-      _bookingDetails?['latitude'] ?? 
-      widget.booking['latitude']
+      workshop?['latitude'] ??
+      _bookingDetails?['latitude'] ??
+      _bookingDetails?['workshop_latitude'] ??
+      widget.booking['latitude'] ??
+      widget.booking['workshop_latitude']
     );
     final lng = _parseCoordinate(
-      workshop?['longitude'] ?? 
-      _bookingDetails?['longitude'] ?? 
-      widget.booking['longitude']
+      workshop?['longitude'] ??
+      _bookingDetails?['longitude'] ??
+      _bookingDetails?['workshop_longitude'] ??
+      widget.booking['longitude'] ??
+      widget.booking['workshop_longitude']
     );
     final hasCoords = lat != null && lng != null;
 

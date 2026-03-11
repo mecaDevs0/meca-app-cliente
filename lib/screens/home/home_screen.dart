@@ -317,8 +317,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Builder(
               builder: (context) {
                 const cardHeight = 168.0;
-                const miaHeight = 340.0;
                 final screenWidth = MediaQuery.of(context).size.width;
+                final miaHeight = screenWidth < 375 ? 220.0 : (screenWidth < 390 ? 270.0 : 340.0);
+                final miaRight = screenWidth < 375 ? -20.0 : (screenWidth < 390 ? -35.0 : -48.0);
+                final miaWidth = screenWidth < 375 ? miaHeight * 0.70 : miaHeight * 0.92;
                 return Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -356,65 +358,76 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                       child: Row(
                         children: [
-                          // 2. Lado Esquerdo (Blindado – nunca invade a MIA)
-                          SizedBox(
-                            width: screenWidth * 0.5,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: BackdropFilter(
-                                    filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.08),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: Colors.greenAccent.withOpacity(0.6),
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: const Text(
-                                        'IA',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF00C977),
-                                          letterSpacing: 1.2,
+                          // 2. Lado Esquerdo (responsivo para diferentes tamanhos de tela)
+                          Expanded(
+                            child: LayoutBuilder(
+                              builder: (ctx, constraints) {
+                                final w = constraints.maxWidth;
+                                final titleSize = w < 140 ? 18.0 : (w < 180 ? 20.0 : 24.0);
+                                final descSize = w < 140 ? 12.0 : (w < 180 ? 13.0 : 15.0);
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: BackdropFilter(
+                                        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withOpacity(0.08),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: Colors.greenAccent.withOpacity(0.6),
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'IA',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF00C977),
+                                              letterSpacing: 1.2,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                const Text(
-                                  'Diagnóstico Inteligente',
-                                  style: TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                    height: 1.1,
-                                    letterSpacing: -0.8,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Descubra o problema do seu carro com a IA do Meca',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.white70,
-                                    height: 1.3,
-                                  ),
-                                ),
-                              ],
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      'Diagnóstico Inteligente',
+                                      style: TextStyle(
+                                        fontSize: titleSize,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                        height: 1.1,
+                                        letterSpacing: -0.8,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Descubra o problema do seu carro com a IA do Meca',
+                                      style: TextStyle(
+                                        fontSize: descSize,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.white70,
+                                        height: 1.3,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      softWrap: true,
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
                           ),
-                          const SizedBox(width: 70),
+                          SizedBox(width: screenWidth < 375 ? 50 : 70),
                         ],
                       ),
                     ),
@@ -445,9 +458,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     // 4. MIA – base ancorada no fundo, vazando agressivamente pelo topo
                     Positioned(
                       bottom: 0,
-                      right: -48,
+                      right: miaRight,
                       child: SizedBox(
-                        width: miaHeight * 0.92,
+                        width: miaWidth,
                         height: miaHeight,
                         child: SvgPicture.asset(
                           'assets/images/MIA.svg',

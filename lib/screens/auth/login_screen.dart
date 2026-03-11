@@ -214,6 +214,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: Colors.white.withOpacity(0.15), width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
@@ -228,20 +236,25 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           blurRadius: 8,
                           spreadRadius: 2,
                         ),
+                        BoxShadow(
+                          color: const Color(0xFF00C977).withOpacity(0.3),
+                          blurRadius: 10,
+                          spreadRadius: 0,
+                        ),
                       ],
                     ),
                     indicatorSize: TabBarIndicatorSize.tab,
-                    indicatorPadding: const EdgeInsets.all(4),
+                    indicatorPadding: const EdgeInsets.all(5),
                     dividerColor: Colors.transparent,
                     labelColor: const Color(0xFF00C977),
                     unselectedLabelColor: Colors.white,
                     labelStyle: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
                     ),
                     unselectedLabelStyle: const TextStyle(
                       fontWeight: FontWeight.normal,
-                      fontSize: 16,
+                      fontSize: 15,
                     ),
                     tabs: const [
                       Tab(text: 'Entrar'),
