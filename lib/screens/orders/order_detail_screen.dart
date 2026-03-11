@@ -801,11 +801,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       if (_bookingDetails?['workshop_logo_url'] != null || widget.booking['workshop_logo_url'] != null)
                         Builder(
                           builder: (context) {
-                            final workshopId = (_bookingDetails?['workshop_id'] ?? widget.booking['workshop_id'] ?? _bookingDetails?['workshop']?['id'] ?? widget.booking['workshop']?['id'])?.toString() ?? '';
-                            final hasLogo = (_bookingDetails?['workshop_logo_url'] ?? widget.booking['workshop_logo_url'] ?? '').toString().trim().isNotEmpty;
-                            final logoUrl = (workshopId.isNotEmpty && hasLogo)
-                                ? '${AppConfig.apiBaseUrl}/workshop/$workshopId/logo/image'
-                                : null;
+                            final rawLogo = (_bookingDetails?['workshop_logo_url'] ?? widget.booking['workshop_logo_url'] ?? '').toString().trim();
+                            final logoUrl = rawLogo.isNotEmpty && rawLogo.startsWith('http') ? rawLogo : null;
                             if (logoUrl == null) return const SizedBox.shrink();
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 12),

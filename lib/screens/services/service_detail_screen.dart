@@ -506,11 +506,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                   child: Builder(
                     builder: (context) {
                       final raw = workshop['logo_url']?.toString() ?? '';
-                      final id = workshop['id']?.toString() ?? widget.workshopId ?? '';
-                      // Sempre usar proxy da API quando temos id e logo (evita 403 do S3)
-                      final logoUrl = (id.isNotEmpty && raw.trim().isNotEmpty)
-                          ? '${AppConfig.apiBaseUrl}/workshop/$id/logo/image'
-                          : (raw.isNotEmpty && raw.startsWith('http') && !raw.contains('amazonaws.com') ? raw : null);
+                      final logoUrl = raw.trim().isNotEmpty && raw.startsWith('http') ? raw : null;
                       return logoUrl != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(8),
@@ -742,9 +738,10 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
           servicePrice: _service?['price']?.toString() ?? '0',
           serviceDuration: _service?['duration']?.toString() ?? '',
           workshopName: workshop['name'] ?? 'Oficina',
-          workshopLogoUrl: (workshop['id'] != null && workshop['id'].toString().isNotEmpty && (workshop['logo_url']?.toString().trim().isNotEmpty ?? false))
-              ? '${AppConfig.apiBaseUrl}/workshop/${workshop['id']}/logo/image'
-              : null,
+          workshopLogoUrl: (() {
+            final raw = workshop['logo_url']?.toString().trim() ?? '';
+            return raw.isNotEmpty && raw.startsWith('http') ? raw : null;
+          })(),
         ),
       ),
     );

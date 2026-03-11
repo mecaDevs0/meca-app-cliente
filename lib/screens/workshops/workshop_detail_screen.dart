@@ -37,11 +37,8 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   /// URL do logo sempre via proxy da API (evita 403 do S3). Nunca retorna URL S3 direta.
   String? get _safeWorkshopLogoUrl {
     final raw = _workshop?['logo_url']?.toString()?.trim();
-    final id = _workshop?['id']?.toString();
-    if (id != null && id.isNotEmpty && raw != null && raw.isNotEmpty) {
-      return '${AppConfig.apiBaseUrl}/workshop/$id/logo/image';
-    }
-    return (raw != null && raw.isNotEmpty && !raw.contains('amazonaws.com')) ? raw : null;
+    if (raw != null && raw.isNotEmpty && raw.startsWith('http')) return raw;
+    return null;
   }
 
   @override
@@ -422,12 +419,8 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     final String workshopName = (_workshop!['name'] ?? 'Oficina').toString();
     final double? rating = _getWorkshopRating();
     
-    // Logo sempre via proxy da API (evita 403 do S3).
     final raw = _workshop!['logo_url']?.toString()?.trim();
-    final id = _workshop!['id']?.toString();
-    final String? logoUrl = (id != null && id.isNotEmpty && raw != null && raw.isNotEmpty)
-        ? '${AppConfig.apiBaseUrl}/workshop/$id/logo/image'
-        : (raw != null && raw.isNotEmpty && !raw.contains('amazonaws.com') ? raw : null);
+    final String? logoUrl = (raw != null && raw.isNotEmpty && raw.startsWith('http')) ? raw : null;
 
     return CustomScrollView(
       slivers: [

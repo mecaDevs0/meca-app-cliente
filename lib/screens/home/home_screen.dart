@@ -427,7 +427,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               },
                             ),
                           ),
-                          SizedBox(width: screenWidth < 375 ? 50 : 70),
+                          SizedBox(width: (miaWidth + miaRight - 10).clamp(80.0, 180.0)),
                         ],
                       ),
                     ),
@@ -1419,10 +1419,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _parseDouble(workshop['rating']) ?? _parseDouble(workshop['average_rating']);
     final rawLogo = workshop['logo_url']?.toString() ?? '';
     final workshopId = workshop['id']?.toString();
-    final bool isS3 = rawLogo.contains('amazonaws.com');
-    final String? logoUrl = (workshopId != null && workshopId.isNotEmpty && (rawLogo.isNotEmpty || workshop['logo_url'] != null))
-        ? '${AppConfig.apiBaseUrl}/workshop/$workshopId/logo/image'
-        : (rawLogo.isNotEmpty && rawLogo.startsWith('http') && !isS3 ? rawLogo : null);
+    // Usa a presigned URL da API diretamente (S3 presigned ou URL válida)
+    final String? logoUrl = rawLogo.isNotEmpty && rawLogo.startsWith('http') ? rawLogo : null;
     final hasLogo = logoUrl != null;
 
     final rawDist = _parseDistance(workshop['distance']);
@@ -1948,9 +1946,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final workshopName = booking['workshop_name'] ?? booking['workshop']?['name'] ?? 'Oficina';
     final workshopId = booking['workshop_id']?.toString() ?? booking['workshop']?['id']?.toString();
     final rawLogo = booking['workshop_logo_url'] ?? booking['workshop']?['logo_url']?.toString() ?? '';
-    // Sempre usar proxy da API para logo (evita 403 do S3). Nunca usar URL S3 direta.
-    final workshopLogoUrl = (workshopId != null && workshopId.isNotEmpty && rawLogo.toString().trim().isNotEmpty)
-        ? '${AppConfig.apiBaseUrl}/workshop/$workshopId/logo/image'
+    // Usa presigned URL da API diretamente
+    final workshopLogoUrl = rawLogo.toString().trim().isNotEmpty && rawLogo.toString().startsWith('http')
+        ? rawLogo.toString()
         : null;
     final hasLogo = workshopLogoUrl != null;
     

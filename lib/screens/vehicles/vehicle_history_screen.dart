@@ -341,11 +341,8 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
               // Logo da oficina: sempre via proxy da API (evita 403 do S3)
               Builder(
                 builder: (context) {
-                  final workshopId = item['workshop_id']?.toString() ?? item['workshop']?['id']?.toString() ?? '';
-                  final hasLogo = (item['workshop_logo_url'] ?? item['workshop']?['logo_url'])?.toString().trim().isNotEmpty ?? false;
-                  final logoUrl = (workshopId.isNotEmpty && hasLogo)
-                      ? '${AppConfig.apiBaseUrl}/workshop/$workshopId/logo/image'
-                      : null;
+                  final rawLogo = (item['workshop_logo_url'] ?? item['workshop']?['logo_url'])?.toString().trim() ?? '';
+                  final logoUrl = rawLogo.isNotEmpty && rawLogo.startsWith('http') ? rawLogo : null;
                   if (logoUrl != null) {
                     return Container(
                       width: 16,

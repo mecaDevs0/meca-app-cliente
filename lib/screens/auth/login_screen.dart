@@ -227,6 +227,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: TabBar(
                     controller: _tabController,
+                    splashFactory: NoSplash.splashFactory,
+                    overlayColor: WidgetStateProperty.all(Colors.transparent),
                     indicator: BoxDecoration(
                       borderRadius: BorderRadius.circular(30),
                       color: Colors.white,
@@ -253,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       fontSize: 15,
                     ),
                     unselectedLabelStyle: const TextStyle(
-                      fontWeight: FontWeight.normal,
+                      fontWeight: FontWeight.w500,
                       fontSize: 15,
                     ),
                     tabs: const [

@@ -900,10 +900,8 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                     // Logo: SEMPRE via proxy da API (evita 403 do S3). Tentar carregar sempre que tiver id (404 = placeholder).
                     Builder(
                       builder: (context) {
-                        final workshopId = workshop['id']?.toString();
-                        final logoUrl = (workshopId != null && workshopId.isNotEmpty)
-                            ? '${AppConfig.apiBaseUrl}/workshop/$workshopId/logo/image'
-                            : null;
+                        final rawLogo = workshop['logo_url']?.toString() ?? '';
+                        final logoUrl = rawLogo.isNotEmpty && rawLogo.startsWith('http') ? rawLogo : null;
                         if (logoUrl == null || logoUrl.isEmpty) {
                           return Container(
                             width: 70,
