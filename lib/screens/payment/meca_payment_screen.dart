@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as Math;
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
+import '../../services/asaas_payment_service.dart';
 import '../../widgets/app_alerts.dart';
 import '../review/review_screen.dart';
 import 'pagbank_encrypt_card_screen.dart';
@@ -20,6 +22,7 @@ class MecaPaymentScreen extends StatefulWidget {
   final int installments;
   final bool workshopAcceptsInstallment;
   final int workshopMaxInstallments;
+
   /// true quando o pagamento é de uma pré-compra (usa endpoint /pre-compra/:id/pay)
   final bool isPreCompra;
 
@@ -41,7 +44,9 @@ class MecaPaymentScreen extends StatefulWidget {
 
 class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   final ApiService _apiService = ApiService();
-  final NumberFormat _currencyFormatter = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+  final AsaasPaymentService _asaasPaymentService = AsaasPaymentService();
+  final NumberFormat _currencyFormatter =
+      NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
   static const String _newCardSentinel = '__new_card__';
 
@@ -58,8 +63,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       return;
     }
 
-    final bookingId = widget.bookingData['id']?.toString() ?? widget.bookingData['booking_id']?.toString();
-    final workshopId = widget.bookingData['workshop_id']?.toString() ?? widget.bookingData['oficina_id']?.toString();
+    final bookingId = widget.bookingData['id']?.toString() ??
+        widget.bookingData['booking_id']?.toString();
+    final workshopId = widget.bookingData['workshop_id']?.toString() ??
+        widget.bookingData['oficina_id']?.toString();
 
     if (bookingId != null && workshopId != null && mounted) {
       _apiService.invalidateBookingCache(bookingId);
@@ -91,15 +98,20 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   /// Planos de parcelamento da API (GET /payments/installments). Null = ainda não carregou ou oficina não aceita.
   List<Map<String, dynamic>>? _installmentPlans;
   bool _loadingInstallmentPlans = false;
+
   /// Máximo de parcelas retornado pela API (oficina). Usado no label "até Nx".
   int? _maxInstallmentsFromApi;
+
   /// Plano selecionado (mesmo que _selectedInstallments) para enviar total_with_interest, interest_paid_by_buyer, installment_value.
   Map<String, dynamic>? _selectedInstallmentPlan;
 
   Map<String, dynamic>? _paymentRecord;
   String? _pixCode;
+  String? _pixQrCodeBase64;
   String? _paymentLink;
   String? _paymentId;
+  bool _cardsMigrationNoticeShown = false;
+  bool _cardsMigratedToAsaas = false;
 
   Timer? _statusTimer;
 
@@ -135,6 +147,77 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     return 'O PagBank/PagSeguro não autorizou a transação.\n\nO que fazer: tente outro cartão, verifique limite/dados do cartão, ou use PIX.';
   }
 
+  String? _pickFirstNonEmpty(List<dynamic> values) {
+    for (final value in values) {
+      final text = (value ?? '').toString().trim();
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return null;
+  }
+
+  void _setPixDataFromResponse(
+      Map<String, dynamic> data, Map<String, dynamic> payment) {
+    _pixQrCodeBase64 = _pickFirstNonEmpty([
+      data['pix_qr_code'],
+      payment['pix_qr_code'],
+      data['pixQrCode'],
+      payment['pixQrCode'],
+      data['asaas_pix_qrcode'],
+      payment['asaas_pix_qrcode'],
+    ]);
+
+    _pixCode = _pickFirstNonEmpty([
+      data['pix_copy_paste'],
+      payment['pix_copy_paste'],
+      data['pixCopyPaste'],
+      payment['pixCopyPaste'],
+      data['pix_code'],
+      payment['pix_code'],
+      data['qr_code'],
+      payment['qr_code'],
+      // Compatibilidade antiga: alguns retornos antigos usavam pix_qr_code como payload "copia e cola".
+      data['pix_qr_code'],
+      payment['pix_qr_code'],
+    ]);
+  }
+
+  void _showCardsMigrationNoticeIfNeeded(Map<String, dynamic> data) {
+    if (_cardsMigrationNoticeShown || !mounted) return;
+
+    final cardsRequireUpdate = data['cards_require_update'] == true;
+    final cardsMigratedToAsaas = data['cards_migrated_to_asaas'] == true;
+    if (!cardsRequireUpdate && !cardsMigratedToAsaas) return;
+
+    _cardsMigrationNoticeShown = true;
+    final message = cardsRequireUpdate
+        ? 'Por segurança, seus cartões salvos precisam ser recadastrados neste pagamento.'
+        : 'Seus cartões salvos foram migrados para o novo provedor. Caso algum cartão não funcione, recadastre-o.';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 6),
+      ),
+    );
+  }
+
+  Uint8List? _decodePixQrImage(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) return null;
+
+    try {
+      // Aceita Base64 puro ou data URL (data:image/png;base64,...)
+      final normalized = value.contains(',')
+          ? value.substring(value.indexOf(',') + 1).trim()
+          : value;
+      return base64Decode(normalized);
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -167,30 +250,62 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
       if (result['success']) {
         final cards = List<Map<String, dynamic>>.from(result['data'] ?? []);
+        final cardsMigratedFlagFromResponse =
+            result['cards_migrated_to_asaas'] == true;
+        final cardsMigratedFlagFromItems =
+            cards.any((card) => card['cards_migrated_to_asaas'] == true);
+        _cardsMigratedToAsaas =
+            cardsMigratedFlagFromResponse || cardsMigratedFlagFromItems;
         // Filtrar cartões válidos para pagamento:
         // - Tokens PagBank normalmente começam com "CARD_"
         // - (Tokens "CHAR_" são IDs de charge e dão INVALID_CARD_ID)
         _savedCards = cards.where((card) {
-          final token = (card['card_token'] ?? card['cardToken'] ?? '').toString();
+          final token =
+              (card['card_token'] ?? card['cardToken'] ?? '').toString();
           if (token.isEmpty) return false;
           // Só aceitar tokens de cartão (CARD_). Qualquer outro formato deve ser ignorado.
           if (!token.startsWith('CARD_')) return false;
           return true;
         }).toList();
 
-        if (_savedCards.isNotEmpty) {
+        if (_cardsMigratedToAsaas) {
+          _selectedCardId = _newCardSentinel;
+          if (_savedCards.isNotEmpty && mounted && !_cardsMigrationNoticeShown) {
+            _cardsMigrationNoticeShown = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              if (!mounted) return;
+              await showDialog<void>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Atualize seus dados de cartão'),
+                  content: const Text(
+                    'Por segurança, precisamos que você insira os dados do cartão novamente neste pagamento.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Entendi'),
+                    ),
+                  ],
+                ),
+              );
+            });
+          }
+        } else if (_savedCards.isNotEmpty) {
           _selectedCardId = _savedCards.first['id']?.toString();
         } else {
           _selectedCardId = null;
         }
       } else {
         _savedCards = [];
+        _cardsMigratedToAsaas = false;
         _selectedCardId = null;
         if (mounted) {
           AppAlerts.showWarning(
             context,
             title: 'Cartões indisponíveis',
-            message: result['error'] ?? 'Não foi possível carregar seus cartões salvos agora.',
+            message: result['error'] ??
+                'Não foi possível carregar seus cartões salvos agora.',
           );
         }
       }
@@ -200,7 +315,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       _selectedCardId = null;
       AppAlerts.showError(
         context,
-        message: 'Não foi possível carregar seus cartões salvos. Tente novamente em instantes.',
+        message:
+            'Não foi possível carregar seus cartões salvos. Tente novamente em instantes.',
       );
     } finally {
       if (mounted) {
@@ -218,8 +334,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       _loadingInstallmentPlans = true;
       _installmentPlans = null;
     });
-    final bookingId = widget.bookingData['id']?.toString() ?? widget.bookingData['booking_id']?.toString();
-    final workshopId = widget.bookingData['workshop_id']?.toString() ?? widget.bookingData['oficina_id']?.toString();
+    final bookingId = widget.bookingData['id']?.toString() ??
+        widget.bookingData['booking_id']?.toString();
+    final workshopId = widget.bookingData['workshop_id']?.toString() ??
+        widget.bookingData['oficina_id']?.toString();
     try {
       final result = await _apiService.getInstallments(
         widget.totalAmount,
@@ -233,7 +351,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             ? result['max_installments'] as int?
             : int.tryParse(result['max_installments']?.toString() ?? '');
         setState(() {
-          _installmentPlans = plans.isNotEmpty ? plans : _fallbackInstallmentPlan();
+          _installmentPlans =
+              plans.isNotEmpty ? plans : _fallbackInstallmentPlan();
           _maxInstallmentsFromApi = maxFromApi;
           _loadingInstallmentPlans = false;
           _syncSelectedPlanFromInstallments();
@@ -287,12 +406,20 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       AppAlerts.showInfo(
         context,
         title: 'Pagamento já iniciado',
-        message: 'Seu pagamento já foi iniciado e está em análise. Aguarde a confirmação ou toque em "Atualizar status".',
+        message:
+            'Seu pagamento já foi iniciado e está em análise. Aguarde a confirmação ou toque em "Atualizar status".',
       );
       return;
     }
 
     if (_selectedMethod == 'credit_card') {
+      if (_cardsMigratedToAsaas) {
+        final bookingId = widget.bookingData['id']?.toString() ?? '';
+        if (bookingId.isNotEmpty) {
+          await _payWithNewCard(bookingId);
+        }
+        return;
+      }
       if (_savedCards.isNotEmpty && _selectedCardId == null) {
         AppAlerts.showWarning(
           context,
@@ -315,7 +442,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       }
 
       // Permitir pagar com um novo cartão mesmo se houver cartões salvos
-      if (_selectedMethod == 'credit_card' && _selectedCardId == _newCardSentinel) {
+      if (_selectedMethod == 'credit_card' &&
+          _selectedCardId == _newCardSentinel) {
         await _payWithNewCard(bookingId);
         return;
       }
@@ -328,13 +456,13 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
       String? cardToken;
       String? cvv;
-      
+
       if (_selectedMethod == 'credit_card') {
         cardToken = _extractCardToken(_selectedCardId);
         if (cardToken == null || cardToken.isEmpty) {
           throw Exception('Cartão selecionado não possui token válido.');
         }
-        
+
         // PASSO 11: Solicitar CVV na hora do pagamento
         if (_cvvController.text.trim().isEmpty) {
           AppAlerts.showWarning(
@@ -348,41 +476,70 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         cvv = _cvvController.text.trim();
       }
 
-      final workshopAccountId = (widget.bookingData['workshop_pagbank_account_id'] ?? widget.bookingData['workshopPagbankAccountId'])?.toString().trim();
-      final plan = _selectedMethod == 'credit_card' ? _selectedInstallmentPlan : null;
-      final totalWithInterest = plan != null && (plan['total_cents'] as int?) != null ? (plan['total_cents'] as int) / 100.0 : null;
-      final interestPaidByBuyer = plan != null && (plan['interest_cents'] as int?) != null ? (plan['interest_cents'] as int) / 100.0 : null;
-      final installmentValue = plan != null && (plan['installment_value_cents'] as int?) != null ? (plan['installment_value_cents'] as int) / 100.0 : null;
-      final interestInstallments = plan != null ? (plan['interest_installments'] as int?) : null;
+      final workshopAccountId =
+          (widget.bookingData['workshop_pagbank_account_id'] ??
+                  widget.bookingData['workshopPagbankAccountId'])
+              ?.toString()
+              .trim();
+      final plan =
+          _selectedMethod == 'credit_card' ? _selectedInstallmentPlan : null;
+      final totalWithInterest =
+          plan != null && (plan['total_cents'] as int?) != null
+              ? (plan['total_cents'] as int) / 100.0
+              : null;
+      final interestPaidByBuyer =
+          plan != null && (plan['interest_cents'] as int?) != null
+              ? (plan['interest_cents'] as int) / 100.0
+              : null;
+      final installmentValue =
+          plan != null && (plan['installment_value_cents'] as int?) != null
+              ? (plan['installment_value_cents'] as int) / 100.0
+              : null;
+      final interestInstallments =
+          plan != null ? (plan['interest_installments'] as int?) : null;
       // Escolher endpoint correto (booking normal vs pré-compra)
       final paymentResult = widget.isPreCompra
           ? await _apiService.createPreCompraPayment(
               bookingId,
-              paymentMethod: _selectedMethod == 'credit_card' ? 'CREDIT_CARD' : 'PIX',
+              paymentMethod:
+                  _selectedMethod == 'credit_card' ? 'CREDIT_CARD' : 'PIX',
               cardToken: cardToken,
               cvv: cvv,
-              holderName: _selectedMethod == 'credit_card' ? _extractCardHolderName(_selectedCardId) : null,
-              installments: _selectedMethod == 'credit_card' ? _selectedInstallments : null,
+              holderName: _selectedMethod == 'credit_card'
+                  ? _extractCardHolderName(_selectedCardId)
+                  : null,
+              installments: _selectedMethod == 'credit_card'
+                  ? _selectedInstallments
+                  : null,
               totalWithInterest: totalWithInterest,
               interestPaidByBuyer: interestPaidByBuyer,
               installmentValue: installmentValue,
               interestInstallments: interestInstallments,
               pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
-              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
+              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true
+                  ? workshopAccountId
+                  : null,
             )
           : await _apiService.createBookingPayment(
               bookingId,
-              paymentMethod: _selectedMethod == 'credit_card' ? 'CREDIT_CARD' : 'PIX',
+              paymentMethod:
+                  _selectedMethod == 'credit_card' ? 'CREDIT_CARD' : 'PIX',
               cardToken: cardToken,
               cvv: cvv,
-              holderName: _selectedMethod == 'credit_card' ? _extractCardHolderName(_selectedCardId) : null,
-              installments: _selectedMethod == 'credit_card' ? _selectedInstallments : null,
+              holderName: _selectedMethod == 'credit_card'
+                  ? _extractCardHolderName(_selectedCardId)
+                  : null,
+              installments: _selectedMethod == 'credit_card'
+                  ? _selectedInstallments
+                  : null,
               totalWithInterest: totalWithInterest,
               interestPaidByBuyer: interestPaidByBuyer,
               installmentValue: installmentValue,
               interestInstallments: interestInstallments,
               pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
-              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
+              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true
+                  ? workshopAccountId
+                  : null,
             );
 
       if (!mounted) return;
@@ -393,11 +550,14 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
         // Caso comum em produção: token de cartão salvo antigo/inválido para o PagBank (INVALID_CARD_ID)
         // Nesse cenário, removemos o cartão inválido automaticamente e direcionamos para "outro cartão".
-        if (_selectedMethod == 'credit_card' && normalized.contains('INVALID_CARD_ID')) {
+        if (_selectedMethod == 'credit_card' &&
+            normalized.contains('INVALID_CARD_ID')) {
           if (!mounted) return;
 
           final badCardId = _selectedCardId;
-          if (badCardId != null && badCardId.isNotEmpty && badCardId != _newCardSentinel) {
+          if (badCardId != null &&
+              badCardId.isNotEmpty &&
+              badCardId != _newCardSentinel) {
             try {
               await _apiService.deleteCard(badCardId);
             } catch (_) {}
@@ -405,7 +565,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
           if (badCardId != null) {
             _savedCards.removeWhere((c) => c['id']?.toString() == badCardId);
-            _selectedCardId = _savedCards.isNotEmpty ? _savedCards.first['id']?.toString() : null;
+            _selectedCardId = _savedCards.isNotEmpty
+                ? _savedCards.first['id']?.toString()
+                : null;
           }
 
           try {
@@ -444,19 +606,21 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
         AppAlerts.showError(
           context,
-          message: errMsg.isNotEmpty ? errMsg : 'Não foi possível iniciar o pagamento agora.',
+          message: errMsg.isNotEmpty
+              ? errMsg
+              : 'Não foi possível iniciar o pagamento agora.',
         );
         return;
       }
 
       final data = paymentResult['data'] as Map<String, dynamic>? ?? {};
-      
+
       // A API retorna status diretamente em data, não em payment
       final status = (data['status'] ?? '').toString().toLowerCase();
       final paymentId = data['payment_id']?.toString();
       final orderId = data['order_id']?.toString();
       final chargeId = data['charge_id']?.toString();
-      
+
       print('💳 [Payment] ========== RESPOSTA DA API ==========');
       print('💳 [Payment] Status recebido: $status');
       print('💳 [Payment] Payment ID: $paymentId');
@@ -464,10 +628,12 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       print('💳 [Payment] Charge ID: $chargeId');
       print('💳 [Payment] Data completo: $data');
       print('💳 [Payment] ======================================');
-      
+
       // Se pagamento foi aprovado IMEDIATAMENTE, não mostrar tela de análise
-      if (_selectedMethod == 'credit_card' && (status == 'approved' || status == 'paid')) {
-        print('✅ [Payment] Pagamento APROVADO IMEDIATAMENTE - navegando para review');
+      if (_selectedMethod == 'credit_card' &&
+          (status == 'approved' || status == 'paid')) {
+        print(
+            '✅ [Payment] Pagamento APROVADO IMEDIATAMENTE - navegando para review');
         AppAlerts.showSuccess(
           context,
           message: 'Pagamento aprovado com sucesso! Obrigado por usar o MECA.',
@@ -486,16 +652,24 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         await _navigateToReviewScreen();
         return;
       }
-      
+
       // Para PIX ou pagamentos pendentes, continuar com o fluxo normal
+      _showCardsMigrationNoticeIfNeeded(data);
+
       final payment = Map<String, dynamic>.from(data['payment'] ?? data);
+      payment['provider'] ??= data['provider'];
       _paymentRecord = payment;
-      _pixCode = payment['pix_qr_code'] ?? payment['pixCode'] ?? payment['pix_code'] ?? data['qr_code'];
-      _paymentLink = payment['payment_link'] ?? payment['paymentLink'] ?? data['payment_link'];
+      _setPixDataFromResponse(data, payment);
+      _paymentLink = payment['payment_link'] ??
+          payment['paymentLink'] ??
+          data['payment_link'];
       _paymentId = paymentId ?? payment['id']?.toString();
       _showResult = true;
 
-      final gatewayMessage = (data['gateway_message'] ?? payment['gateway_message'] ?? '').toString().trim();
+      final gatewayMessage =
+          (data['gateway_message'] ?? payment['gateway_message'] ?? '')
+              .toString()
+              .trim();
       final isDeclined = status == 'declined' || status == 'denied';
       final isCancelled = status == 'cancelled' || status == 'canceled';
 
@@ -507,7 +681,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           title: isDeclined ? 'Pagamento recusado' : 'Pagamento cancelado',
           message: gatewayMessage.isNotEmpty
               ? gatewayMessage
-              : (isDeclined ? 'O PagBank/PagSeguro não autorizou o pagamento. Tente outro cartão.' : 'O pagamento foi cancelado.'),
+              : (isDeclined
+                  ? 'O PagBank/PagSeguro não autorizou o pagamento. Tente outro cartão.'
+                  : 'O pagamento foi cancelado.'),
         );
         setState(() {});
         return;
@@ -517,13 +693,15 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         AppAlerts.showInfo(
           context,
           title: 'PIX gerado',
-          message: 'Copie o código abaixo para concluir o pagamento no seu banco.',
+          message:
+              'Copie o código abaixo para concluir o pagamento no seu banco.',
         );
       } else {
         AppAlerts.showInfo(
           context,
           title: 'Pagamento em análise',
-          message: 'O PagBank está processando seu pagamento. Avisaremos assim que for confirmado.',
+          message:
+              'O PagBank está processando seu pagamento. Avisaremos assim que for confirmado.',
         );
       }
 
@@ -638,7 +816,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                       SwitchListTile.adaptive(
                         value: saveCard,
                         onChanged: (v) => setDialogState(() => saveCard = v),
-                        title: const Text('Salvar cartão para próximas compras'),
+                        title:
+                            const Text('Salvar cartão para próximas compras'),
                       ),
                     ],
                   ),
@@ -668,19 +847,26 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       final cvv = cvvController.text.trim();
 
       if (rawNumber.length < 13) {
-        AppAlerts.showWarning(context, title: 'Dados inválidos', message: 'Informe um número de cartão válido.');
+        AppAlerts.showWarning(context,
+            title: 'Dados inválidos',
+            message: 'Informe um número de cartão válido.');
         return;
       }
       if (holderName.isEmpty) {
-        AppAlerts.showWarning(context, title: 'Dados inválidos', message: 'Informe o nome impresso no cartão.');
+        AppAlerts.showWarning(context,
+            title: 'Dados inválidos',
+            message: 'Informe o nome impresso no cartão.');
         return;
       }
       if (expMonth.length != 2 || expYear.isEmpty) {
-        AppAlerts.showWarning(context, title: 'Dados inválidos', message: 'Informe o mês e o ano de validade.');
+        AppAlerts.showWarning(context,
+            title: 'Dados inválidos',
+            message: 'Informe o mês e o ano de validade.');
         return;
       }
       if (cvv.length < 3) {
-        AppAlerts.showWarning(context, title: 'Dados inválidos', message: 'Informe um CVV válido.');
+        AppAlerts.showWarning(context,
+            title: 'Dados inválidos', message: 'Informe um CVV válido.');
         return;
       }
 
@@ -688,21 +874,11 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         expYear = '20$expYear';
       }
 
-      final publicKeyResult = await _apiService.getPagBankPublicKey();
-      if (!(publicKeyResult['success'] == true)) {
-        AppAlerts.showError(context, message: publicKeyResult['error'] ?? 'Erro ao obter chave pública do PagBank.');
-        return;
-      }
-      final publicKey = (publicKeyResult['data']?['public_key'] ?? '').toString();
-      if (publicKey.isEmpty) {
-        AppAlerts.showError(context, message: 'Chave pública do PagBank não disponível.');
-        return;
-      }
-
-      final encryptedCard = await Navigator.of(context).push<String?>(
+      final tokenizedCardResult =
+          await Navigator.of(context).push<Map<String, dynamic>?>(
         MaterialPageRoute(
           builder: (_) => PagBankEncryptCardScreen(
-            publicKey: publicKey,
+            publicKey: '',
             holderName: holderName,
             number: rawNumber,
             expMonth: expMonth,
@@ -712,8 +888,18 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           fullscreenDialog: true,
         ),
       );
-      if (encryptedCard == null || encryptedCard.isEmpty) {
-        AppAlerts.showError(context, message: 'Não foi possível criptografar o cartão. Tente novamente.');
+      if (tokenizedCardResult == null || tokenizedCardResult['success'] != true) {
+        AppAlerts.showError(context,
+            message:
+                tokenizedCardResult?['error']?.toString() ??
+                    'Não foi possível processar o cartão. Tente novamente.');
+        return;
+      }
+      final creditCard =
+          Map<String, dynamic>.from(tokenizedCardResult['credit_card'] ?? {});
+      if (creditCard.isEmpty) {
+        AppAlerts.showError(context,
+            message: 'Dados de cartão inválidos para pagamento.');
         return;
       }
 
@@ -729,53 +915,66 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         brand = 'ELO';
       }
 
-      final workshopAccountId = (widget.bookingData['workshop_pagbank_account_id'] ?? widget.bookingData['workshopPagbankAccountId'])?.toString().trim();
+      final workshopAccountId =
+          (widget.bookingData['workshop_pagbank_account_id'] ??
+                  widget.bookingData['workshopPagbankAccountId'])
+              ?.toString()
+              .trim();
       final plan = _selectedInstallmentPlan;
-      final totalWithInterest = plan != null && (plan['total_cents'] as int?) != null ? (plan['total_cents'] as int) / 100.0 : null;
-      final interestPaidByBuyer = plan != null && (plan['interest_cents'] as int?) != null ? (plan['interest_cents'] as int) / 100.0 : null;
-      final installmentValue = plan != null && (plan['installment_value_cents'] as int?) != null ? (plan['installment_value_cents'] as int) / 100.0 : null;
-      final interestInstallments = plan != null ? (plan['interest_installments'] as int?) : null;
+      final totalWithInterest =
+          plan != null && (plan['total_cents'] as int?) != null
+              ? (plan['total_cents'] as int) / 100.0
+              : null;
+      final interestPaidByBuyer =
+          plan != null && (plan['interest_cents'] as int?) != null
+              ? (plan['interest_cents'] as int) / 100.0
+              : null;
+      final installmentValue =
+          plan != null && (plan['installment_value_cents'] as int?) != null
+              ? (plan['installment_value_cents'] as int) / 100.0
+              : null;
+      final interestInstallments =
+          plan != null ? (plan['interest_installments'] as int?) : null;
+      final payload = <String, dynamic>{
+        'payment_method': 'CREDIT_CARD',
+        'paymentMethod': 'CREDIT_CARD',
+        'credit_card': creditCard,
+        'installments': _selectedInstallments,
+        'saveCard': saveCard,
+        'lastDigits': lastDigits,
+        'brand': brand,
+        'expiryMonth': expMonth,
+        'expiryYear': expYear,
+      };
+      if (totalWithInterest != null && totalWithInterest > 0) {
+        payload['totalWithInterest'] = totalWithInterest;
+        payload['total_with_interest'] = totalWithInterest;
+      }
+      if (interestPaidByBuyer != null && interestPaidByBuyer >= 0) {
+        payload['interestPaidByBuyer'] = interestPaidByBuyer;
+        payload['interest_paid_by_buyer'] = interestPaidByBuyer;
+      }
+      if (installmentValue != null && installmentValue > 0) {
+        payload['installmentValue'] = installmentValue;
+        payload['installment_value'] = installmentValue;
+      }
+      if (interestInstallments != null && interestInstallments > 0) {
+        payload['interest_installments'] = interestInstallments;
+      }
+      if (workshopAccountId?.isNotEmpty == true) {
+        payload['workshopAccountId'] = workshopAccountId;
+        payload['pagbankAccountId'] = workshopAccountId;
+      }
+
       final paymentResult = widget.isPreCompra
-          ? await _apiService.createPreCompraPayment(
-              bookingId,
-              paymentMethod: 'CREDIT_CARD',
-              cardToken: encryptedCard,
-              cvv: cvv,
-              holderName: holderName,
-              installments: _selectedInstallments,
-              totalWithInterest: totalWithInterest,
-              interestPaidByBuyer: interestPaidByBuyer,
-              installmentValue: installmentValue,
-              interestInstallments: interestInstallments,
-              saveCard: saveCard,
-              lastDigits: lastDigits,
-              brand: brand,
-              expiryMonth: expMonth,
-              expiryYear: expYear,
-              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
-            )
-          : await _apiService.createBookingPayment(
-              bookingId,
-              paymentMethod: 'CREDIT_CARD',
-              cardToken: encryptedCard,
-              cvv: cvv,
-              holderName: holderName,
-              installments: _selectedInstallments,
-              totalWithInterest: totalWithInterest,
-              interestPaidByBuyer: interestPaidByBuyer,
-              installmentValue: installmentValue,
-              interestInstallments: interestInstallments,
-              saveCard: saveCard,
-              lastDigits: lastDigits,
-              brand: brand,
-              expiryMonth: expMonth,
-              expiryYear: expYear,
-              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true ? workshopAccountId : null,
-            );
+          ? await _apiService.post('/pre-compra/$bookingId/pay', payload)
+          : await _apiService.post('/bookings/$bookingId/payment', payload);
 
       if (!mounted) return;
       if (paymentResult['success'] != true) {
-        AppAlerts.showError(context, message: paymentResult['error'] ?? 'Não foi possível iniciar o pagamento agora.');
+        AppAlerts.showError(context,
+            message: paymentResult['error'] ??
+                'Não foi possível iniciar o pagamento agora.');
         return;
       }
 
@@ -786,9 +985,12 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
       final data = paymentResult['data'] as Map<String, dynamic>? ?? {};
       final status = (data['status'] ?? '').toString().toLowerCase();
+      _showCardsMigrationNoticeIfNeeded(data);
 
       if (status == 'approved' || status == 'paid') {
-        AppAlerts.showSuccess(context, message: 'Pagamento aprovado com sucesso! Obrigado por usar o MECA.');
+        AppAlerts.showSuccess(context,
+            message:
+                'Pagamento aprovado com sucesso! Obrigado por usar o MECA.');
         final id = widget.bookingData['id']?.toString();
         if (id != null) {
           _apiService.invalidateBookingCache(id);
@@ -801,14 +1003,20 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       }
 
       final payment = Map<String, dynamic>.from(data['payment'] ?? data);
+      payment['provider'] ??= data['provider'];
       _paymentRecord = payment;
-      _pixCode = payment['pix_qr_code'] ?? payment['pixCode'] ?? payment['pix_code'] ?? data['qr_code'];
-      _paymentLink = payment['payment_link'] ?? payment['paymentLink'] ?? data['payment_link'];
+      _setPixDataFromResponse(data, payment);
+      _paymentLink = payment['payment_link'] ??
+          payment['paymentLink'] ??
+          data['payment_link'];
       _paymentId = data['payment_id']?.toString() ?? payment['id']?.toString();
       _showResult = true;
 
       final normalized = status.toLowerCase();
-      final gatewayMessage = (data['gateway_message'] ?? payment['gateway_message'] ?? '').toString().trim();
+      final gatewayMessage =
+          (data['gateway_message'] ?? payment['gateway_message'] ?? '')
+              .toString()
+              .trim();
       final isDeclined = normalized == 'declined' || normalized == 'denied';
       final isCancelled = normalized == 'cancelled' || normalized == 'canceled';
 
@@ -817,7 +1025,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         AppAlerts.showWarning(
           context,
           title: isDeclined ? 'Pagamento negado' : 'Pagamento cancelado',
-          message: isDeclined ? _declineHelpText(gatewayMessage) : 'O pagamento foi cancelado. Você pode tentar novamente.',
+          message: isDeclined
+              ? _declineHelpText(gatewayMessage)
+              : 'O pagamento foi cancelado. Você pode tentar novamente.',
         );
         setState(() {});
         return;
@@ -826,13 +1036,16 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       AppAlerts.showInfo(
         context,
         title: 'Pagamento em análise',
-        message: 'O PagBank está processando seu pagamento. Você pode acompanhar o status aqui.',
+        message:
+            'O PagBank está processando seu pagamento. Você pode acompanhar o status aqui.',
       );
       _startStatusPolling();
       setState(() {});
     } catch (e) {
       if (mounted) {
-        AppAlerts.showError(context, message: 'Não foi possível processar o pagamento com cartão agora.');
+        AppAlerts.showError(context,
+            message:
+                'Não foi possível processar o pagamento com cartão agora.');
       }
     } finally {
       cardNumberController.dispose();
@@ -857,7 +1070,23 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
     setState(() => _isCheckingStatus = true);
 
-    final result = await _apiService.getPaymentStatus(_paymentId!);
+    var result = await _apiService.getPaymentStatus(_paymentId!);
+    if (result['success'] != true) {
+      final provider =
+          (_paymentRecord?['provider'] ?? '').toString().toLowerCase();
+      final hasAsaasPayload =
+          provider == 'asaas' || (_pixQrCodeBase64?.isNotEmpty == true);
+      if (hasAsaasPayload) {
+        final asaasResult =
+            await _asaasPaymentService.getPaymentStatus(_paymentId!);
+        if (asaasResult['success'] == true) {
+          result = {
+            'success': true,
+            'data': asaasResult['data'],
+          };
+        }
+      }
+    }
     if (!mounted) return;
 
     if (result['success']) {
@@ -893,26 +1122,31 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           AppAlerts.showWarning(
             context,
             title: 'Pagamento negado',
-            message: _declineHelpText(_paymentRecord?['gateway_message']?.toString()),
+            message: _declineHelpText(
+                _paymentRecord?['gateway_message']?.toString()),
           );
         }
       } else if (!silent) {
         AppAlerts.showInfo(
           context,
           title: 'Status atualizado',
-          message: status == 'pending' ? 'Ainda em análise pelo PagBank.' : 'Status atual: ${_statusLabel(status)}',
+          message: status == 'pending'
+              ? 'Ainda em análise pelo PagBank.'
+              : 'Status atual: ${_statusLabel(status)}',
         );
       } else if (!silent && status == 'cancelled') {
         AppAlerts.showWarning(
           context,
           title: 'Pagamento cancelado',
-          message: 'Não recebemos a confirmação do PagBank. Verifique se o pagamento foi concluído.',
+          message:
+              'Não recebemos a confirmação do PagBank. Verifique se o pagamento foi concluído.',
         );
       }
     } else if (!silent) {
       AppAlerts.showError(
         context,
-        message: result['error'] ?? 'Não foi possível atualizar o status do pagamento.',
+        message: result['error'] ??
+            'Não foi possível atualizar o status do pagamento.',
       );
     }
 
@@ -926,10 +1160,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       print('⚠️ [Payment] cardId é null');
       return null;
     }
-    
+
     print('🔍 [Payment] Buscando token para cardId: $cardId');
     print('🔍 [Payment] Total de cartões salvos: ${_savedCards.length}');
-    
+
     // Tentar encontrar o cartão por diferentes campos de ID
     Map<String, dynamic>? card;
     try {
@@ -945,24 +1179,28 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       print('❌ [Payment] Erro ao buscar cartão: $e');
       return null;
     }
-    
+
     if (card == null || card.isEmpty) {
       print('❌ [Payment] Cartão não encontrado na lista para cardId: $cardId');
-      print('🔍 [Payment] IDs disponíveis: ${_savedCards.map((c) => c['id']?.toString()).join(", ")}');
+      print(
+          '🔍 [Payment] IDs disponíveis: ${_savedCards.map((c) => c['id']?.toString()).join(", ")}');
       return null;
     }
-    
+
     // Tentar diferentes campos de token
-    final token = card['card_token'] ?? card['cardToken'] ?? card['token'] ?? '';
+    final token =
+        card['card_token'] ?? card['cardToken'] ?? card['token'] ?? '';
     final tokenString = token.toString();
-    
-    print('✅ [Payment] Token encontrado: ${tokenString.isNotEmpty ? tokenString.substring(0, Math.min(20, tokenString.length)) + "..." : "VAZIO"}');
-    
+
+    print(
+        '✅ [Payment] Token encontrado: ${tokenString.isNotEmpty ? tokenString.substring(0, Math.min(20, tokenString.length)) + "..." : "VAZIO"}');
+
     if (tokenString.isEmpty) {
-      print('❌ [Payment] Cartão encontrado mas token está vazio. Campos disponíveis: ${card.keys.join(", ")}');
+      print(
+          '❌ [Payment] Cartão encontrado mas token está vazio. Campos disponíveis: ${card.keys.join(", ")}');
       return null;
     }
-    
+
     return tokenString;
   }
 
@@ -985,7 +1223,12 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
     if (card.isEmpty) return null;
 
-    final holder = (card['holder_name'] ?? card['cardholder_name'] ?? card['holderName'] ?? '').toString().trim();
+    final holder = (card['holder_name'] ??
+            card['cardholder_name'] ??
+            card['holderName'] ??
+            '')
+        .toString()
+        .trim();
     return holder.isEmpty ? null : holder;
   }
 
@@ -1004,7 +1247,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? theme.colorScheme.surface : theme.colorScheme.background,
+      backgroundColor:
+          isDark ? theme.colorScheme.surface : theme.colorScheme.background,
       appBar: AppBar(
         title: const Text('Pagamento'),
         backgroundColor: theme.colorScheme.primary,
@@ -1022,12 +1266,17 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               _buildPaymentMethodSelector(theme),
               const SizedBox(height: 20),
               if (_selectedMethod == 'credit_card')
-                _loadingCards ? const Center(child: CircularProgressIndicator()) : _buildSavedCardsSection(theme),
-              if (_selectedMethod == 'credit_card' && _selectedCardId != null && _selectedCardId != _newCardSentinel) ...[
+                _loadingCards
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildSavedCardsSection(theme),
+              if (_selectedMethod == 'credit_card' &&
+                  _selectedCardId != null &&
+                  _selectedCardId != _newCardSentinel) ...[
                 const SizedBox(height: 20),
                 _buildCvvSection(theme),
               ],
-              if (_selectedMethod == 'credit_card' && widget.workshopAcceptsInstallment) ...[
+              if (_selectedMethod == 'credit_card' &&
+                  widget.workshopAcceptsInstallment) ...[
                 const SizedBox(height: 20),
                 _buildInstallmentsSection(theme),
               ],
@@ -1051,14 +1300,17 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.colorScheme.primary,
                     foregroundColor: theme.colorScheme.onPrimary,
-                    textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    textStyle: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
                   ),
                   child: _isSubmitting
                       ? const SizedBox(
                           width: 24,
                           height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
                         )
                       : Text(
                           _selectedMethod == 'credit_card'
@@ -1077,8 +1329,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     final mecaFeeCents = (totalCents * 0.12).round();
     final workshopCents = totalCents - mecaFeeCents;
 
-    final surfaceColor = theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.9);
-    final borderColor = theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15);
+    final surfaceColor = theme.colorScheme.surfaceVariant
+        .withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.9);
+    final borderColor = theme.dividerColor
+        .withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15);
 
     return Container(
       width: double.infinity,
@@ -1089,7 +1343,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withOpacity(theme.brightness == Brightness.dark ? 0.15 : 0.05),
+            color: theme.shadowColor
+                .withOpacity(theme.brightness == Brightness.dark ? 0.15 : 0.05),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1099,8 +1354,11 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            widget.bookingData['service_name'] ?? widget.bookingData['service']?['name'] ?? 'Serviço',
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            widget.bookingData['service_name'] ??
+                widget.bookingData['service']?['name'] ??
+                'Serviço',
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           _buildSummaryRow(
@@ -1109,7 +1367,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             _displayTotalToPay(theme),
             isTotal: true,
           ),
-          if (_selectedMethod == 'credit_card' && widget.workshopAcceptsInstallment && _selectedInstallments > 1) ...[
+          if (_selectedMethod == 'credit_card' &&
+              widget.workshopAcceptsInstallment &&
+              _selectedInstallments > 1) ...[
             const SizedBox(height: 12),
             Text(
               _displayInstallmentLine(),
@@ -1130,7 +1390,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     // Cartão: usa total do plano selecionado (pode ter juros)
     if (_selectedMethod == 'credit_card' && _selectedInstallmentPlan != null) {
       final raw = _selectedInstallmentPlan!['total_cents'];
-      final totalCents = raw is int ? raw : (raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '0'));
+      final totalCents = raw is int
+          ? raw
+          : (raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '0'));
       if (totalCents != null && totalCents > 0) {
         return _currencyFormatter.format(totalCents / 100.0);
       }
@@ -1142,7 +1404,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         orElse: () => _installmentPlans!.first,
       );
       final raw = plan1['total_cents'];
-      final totalCents = raw is int ? raw : (raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '0'));
+      final totalCents = raw is int
+          ? raw
+          : (raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '0'));
       if (totalCents != null && totalCents > 0) {
         return _currencyFormatter.format(totalCents / 100.0);
       }
@@ -1155,7 +1419,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     if (_selectedInstallmentPlan == null) {
       return '${_selectedInstallments}x de ${_currencyFormatter.format(widget.totalAmount / _selectedInstallments)}';
     }
-    final parcelCents = (_selectedInstallmentPlan!['installment_value_cents'] as int?) ?? 0;
+    final parcelCents =
+        (_selectedInstallmentPlan!['installment_value_cents'] as int?) ?? 0;
     final totalCents = (_selectedInstallmentPlan!['total_cents'] as int?) ?? 0;
     final interestFree = _selectedInstallmentPlan!['interest_free'] == true;
     final parcel = parcelCents / 100.0;
@@ -1166,7 +1431,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     return '${_selectedInstallments}x de ${_currencyFormatter.format(parcel)} (total ${_currencyFormatter.format(total)} com juros)';
   }
 
-  Widget _buildSummaryRow(ThemeData theme, String label, String value, {bool isTotal = false, bool secondary = false}) {
+  Widget _buildSummaryRow(ThemeData theme, String label, String value,
+      {bool isTotal = false, bool secondary = false}) {
     final labelStyle = theme.textTheme.bodyMedium?.copyWith(
       fontWeight: secondary ? FontWeight.w500 : FontWeight.w600,
       color: secondary
@@ -1215,16 +1481,20 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
+        color: theme.colorScheme.surfaceVariant
+            .withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
+        border: Border.all(
+            color: theme.dividerColor
+                .withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Como você quer pagar?',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 16),
           for (final option in options) ...[
@@ -1247,25 +1517,71 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   }
 
   Widget _buildSavedCardsSection(ThemeData theme) {
+    if (_cardsMigratedToAsaas) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceVariant
+              .withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+              color: theme.dividerColor.withOpacity(
+                  theme.brightness == Brightness.dark ? 0.3 : 0.15)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Atualize seus dados de cartão',
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Por segurança, cartões salvos anteriormente não podem ser reutilizados neste pagamento.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7)),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final bookingId = widget.bookingData['id']?.toString() ?? '';
+                if (bookingId.isNotEmpty) {
+                  await _payWithNewCard(bookingId);
+                }
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Inserir novo cartão'),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (_savedCards.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
+          color: theme.colorScheme.surfaceVariant
+              .withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
+          border: Border.all(
+              color: theme.dividerColor.withOpacity(
+                  theme.brightness == Brightness.dark ? 0.3 : 0.15)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Nenhum cartão salvo',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(
               'Adicione um cartão para pagar com crédito.',
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7)),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7)),
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
@@ -1288,26 +1604,30 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
+        color: theme.colorScheme.surfaceVariant
+            .withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
+        border: Border.all(
+            color: theme.dividerColor
+                .withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
       ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
+            children: [
+              Text(
                 'Escolha um cartão salvo',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                  ),
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
               TextButton(
                 onPressed: _openSavedCards,
                 child: const Text('Gerenciar cartões'),
-                  ),
-                ],
               ),
+            ],
+          ),
           const SizedBox(height: 12),
           for (final card in _savedCards) ...[
             _SavedCardTile(
@@ -1344,9 +1664,12 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
+        color: theme.colorScheme.surfaceVariant
+            .withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
+        border: Border.all(
+            color: theme.dividerColor
+                .withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1357,7 +1680,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               const SizedBox(width: 8),
               Text(
                 'Código de segurança',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -1373,7 +1697,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+                borderSide:
+                    BorderSide(color: theme.colorScheme.primary, width: 2),
               ),
             ),
             keyboardType: TextInputType.number,
@@ -1411,7 +1736,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             Expanded(
               child: Text(
                 'A oficina selecionada não aceita parcelamento. Pagamento apenas à vista.',
-                style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFEF6C00)),
+                style: TextStyle(
+                    fontWeight: FontWeight.w600, color: Color(0xFFEF6C00)),
               ),
             ),
           ],
@@ -1423,15 +1749,23 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
+          color: theme.colorScheme.surfaceVariant
+              .withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
+          border: Border.all(
+              color: theme.dividerColor.withOpacity(
+                  theme.brightness == Brightness.dark ? 0.3 : 0.15)),
         ),
         child: Row(
           children: [
-            Text('Parcelamento', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            Text('Parcelamento',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(width: 12),
-            const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2)),
           ],
         ),
       );
@@ -1441,9 +1775,12 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
+        color: theme.colorScheme.surfaceVariant
+            .withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
+        border: Border.all(
+            color: theme.dividerColor
+                .withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1452,7 +1789,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             children: [
               Text(
                 'Parcelamento',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(width: 8),
               Text(
@@ -1470,7 +1808,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
             ),
           ),
-          if (plans.isNotEmpty && plans.length < (_maxInstallmentsFromApi ?? widget.workshopMaxInstallments))
+          if (plans.isNotEmpty &&
+              plans.length <
+                  (_maxInstallmentsFromApi ?? widget.workshopMaxInstallments))
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
@@ -1487,27 +1827,26 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               (p) => (p['installments'] as int?) == _selectedInstallments,
               orElse: () => plans.first,
             ),
-            items: plans
-                .map(
-                  (plan) {
-                    final n = (plan['installments'] as int?) ?? 1;
-                    final installmentCents = (plan['installment_value_cents'] as int?) ?? 0;
-                    final totalCents = (plan['total_cents'] as int?) ?? 0;
-                    final interestFree = plan['interest_free'] == true;
-                    final parcelValue = installmentCents / 100.0;
-                    final totalValue = totalCents / 100.0;
-                    final label = n == 1
-                        ? 'À vista (${_currencyFormatter.format(totalValue)})'
-                        : interestFree
-                            ? '${n}x de ${_currencyFormatter.format(parcelValue)} sem juros'
-                            : '${n}x de ${_currencyFormatter.format(parcelValue)} (total ${_currencyFormatter.format(totalValue)} com juros)';
-                    return DropdownMenuItem<Map<String, dynamic>>(
-                      value: plan,
-                      child: Text(label),
-                    );
-                  },
-                )
-                .toList(),
+            items: plans.map(
+              (plan) {
+                final n = (plan['installments'] as int?) ?? 1;
+                final installmentCents =
+                    (plan['installment_value_cents'] as int?) ?? 0;
+                final totalCents = (plan['total_cents'] as int?) ?? 0;
+                final interestFree = plan['interest_free'] == true;
+                final parcelValue = installmentCents / 100.0;
+                final totalValue = totalCents / 100.0;
+                final label = n == 1
+                    ? 'À vista (${_currencyFormatter.format(totalValue)})'
+                    : interestFree
+                        ? '${n}x de ${_currencyFormatter.format(parcelValue)} sem juros'
+                        : '${n}x de ${_currencyFormatter.format(parcelValue)} (total ${_currencyFormatter.format(totalValue)} com juros)';
+                return DropdownMenuItem<Map<String, dynamic>>(
+                  value: plan,
+                  child: Text(label),
+                );
+              },
+            ).toList(),
             onChanged: (plan) {
               if (plan != null) {
                 final n = (plan['installments'] as int?) ?? 1;
@@ -1519,7 +1858,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             },
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
           ),
         ],
@@ -1532,15 +1872,19 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     final isPix = _selectedMethod == 'pix';
     final isDeclined = status == 'declined' || status == 'denied';
     final isCancelled = status == 'cancelled' || status == 'canceled';
-    final gatewayMessage = (_paymentRecord?['gateway_message'] ?? '').toString().trim();
+    final gatewayMessage =
+        (_paymentRecord?['gateway_message'] ?? '').toString().trim();
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
+        color: theme.colorScheme.surfaceVariant
+            .withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: theme.dividerColor.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
+        border: Border.all(
+            color: theme.dividerColor
+                .withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1552,16 +1896,16 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                     ? Icons.check_circle
                     : (isDeclined || isCancelled)
                         ? Icons.error_outline
-                    : isPix
-                        ? Icons.qr_code_2
-                        : Icons.access_time,
+                        : isPix
+                            ? Icons.qr_code_2
+                            : Icons.access_time,
                 color: status == 'approved'
                     ? theme.colorScheme.primary
                     : (isDeclined || isCancelled)
                         ? Colors.redAccent
-                    : theme.colorScheme.secondary,
+                        : theme.colorScheme.secondary,
                 size: 32,
-          ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -1574,7 +1918,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                               : (isPix
                                   ? 'PIX gerado. Copie o código abaixo e finalize em seu aplicativo bancário.'
                                   : 'Pagamento em análise. A confirmação pode levar alguns instantes.'))),
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -1611,6 +1956,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                         _paymentId = null;
                         _paymentRecord = null;
                         _pixCode = null;
+                        _pixQrCodeBase64 = null;
                         _paymentLink = null;
                       });
                     },
@@ -1622,7 +1968,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               ] else ...[
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: (_isSubmitting || _isCheckingStatus) ? null : () => _checkPaymentStatus(silent: false),
+                    onPressed: (_isSubmitting || _isCheckingStatus)
+                        ? null
+                        : () => _checkPaymentStatus(silent: false),
                     icon: const Icon(Icons.refresh),
                     label: const Text('Atualizar status'),
                   ),
@@ -1647,22 +1995,52 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   }
 
   Widget _buildPixResult(ThemeData theme) {
+    final qrImageBytes = _decodePixQrImage(_pixQrCodeBase64);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (qrImageBytes != null) ...[
+          Text(
+            'QR Code PIX',
+            style: theme.textTheme.bodyLarge
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: theme.colorScheme.primary.withOpacity(0.2)),
+              ),
+              child: Image.memory(
+                qrImageBytes,
+                width: 220,
+                height: 220,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         if (_pixCode != null && _pixCode!.isNotEmpty) ...[
-        Text(
+          Text(
             'Código PIX (copia e cola)',
-            style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
+            style: theme.textTheme.bodyLarge
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: theme.colorScheme.background,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+              border:
+                  Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
             ),
             child: SelectableText(
               _pixCode!,
@@ -1698,16 +2076,19 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
   Widget _buildCardResult(ThemeData theme) {
     final status = (_paymentRecord?['status'] ?? '').toString().toLowerCase();
-    final gatewayMessage = (_paymentRecord?['gateway_message'] ?? '').toString().trim();
+    final gatewayMessage =
+        (_paymentRecord?['gateway_message'] ?? '').toString().trim();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Status atual: ${_statusLabel(status)}',
-          style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+          style:
+              theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
-        if ((status == 'declined' || status == 'denied') && gatewayMessage.isNotEmpty) ...[
+        if ((status == 'declined' || status == 'denied') &&
+            gatewayMessage.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
             'Motivo: $gatewayMessage',
@@ -1716,7 +2097,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             ),
           ),
         ],
-        if (_paymentRecord?['installments'] != null && (_paymentRecord?['installments'] ?? 1) > 1) ...[
+        if (_paymentRecord?['installments'] != null &&
+            (_paymentRecord?['installments'] ?? 1) > 1) ...[
           const SizedBox(height: 8),
           Text(
             'Parcelamento: ${_paymentRecord?['installments']}x de ${_currencyFormatter.format(widget.totalAmount / (_paymentRecord?['installments'] ?? 1))}',
@@ -1778,9 +2160,11 @@ class _PaymentMethodTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? theme.colorScheme.primary : theme.dividerColor.withOpacity(0.2),
+            color: selected
+                ? theme.colorScheme.primary
+                : theme.dividerColor.withOpacity(0.2),
             width: selected ? 2 : 1,
           ),
           color: selected
@@ -1791,7 +2175,8 @@ class _PaymentMethodTile extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: selected ? theme.colorScheme.primary : theme.iconTheme.color,
+              color:
+                  selected ? theme.colorScheme.primary : theme.iconTheme.color,
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -1800,7 +2185,8 @@ class _PaymentMethodTile extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -1815,11 +2201,13 @@ class _PaymentMethodTile extends StatelessWidget {
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child: selected
-                  ? Icon(Icons.check_circle, key: const ValueKey('checked'), color: theme.colorScheme.primary)
+                  ? Icon(Icons.check_circle,
+                      key: const ValueKey('checked'),
+                      color: theme.colorScheme.primary)
                   : const SizedBox(width: 24, key: ValueKey('unchecked')),
-                  ),
-                ],
-              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1839,9 +2227,14 @@ class _SavedCardTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = (card['brand'] ?? card['card_brand'] ?? 'Cartão').toString();
-    final lastDigits =
-        (card['last4'] ?? card['last_four'] ?? card['last_digits'] ?? card['lastFourDigits'] ?? '****').toString();
-    final holder = (card['holder_name'] ?? card['cardholder_name'] ?? '').toString();
+    final lastDigits = (card['last4'] ??
+            card['last_four'] ??
+            card['last_digits'] ??
+            card['lastFourDigits'] ??
+            '****')
+        .toString();
+    final holder =
+        (card['holder_name'] ?? card['cardholder_name'] ?? '').toString();
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -1851,7 +2244,9 @@ class _SavedCardTile extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor.withOpacity(0.2),
+            color: selected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).dividerColor.withOpacity(0.2),
             width: selected ? 2 : 1,
           ),
           color: selected
@@ -1865,7 +2260,7 @@ class _SavedCardTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
-          ),
+              ),
               child: Icon(
                 Icons.credit_card,
                 color: Theme.of(context).colorScheme.primary,
@@ -1875,17 +2270,24 @@ class _SavedCardTile extends StatelessWidget {
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+                children: [
                   Text(
                     '$brand •••• $lastDigits',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyLarge
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
                   if (holder.isNotEmpty)
                     Text(
                       holder,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
-          ),
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.color
+                                ?.withOpacity(0.7),
+                          ),
                     ),
                 ],
               ),
@@ -1897,9 +2299,8 @@ class _SavedCardTile extends StatelessWidget {
               activeColor: Theme.of(context).colorScheme.primary,
             )
           ],
-            ),
         ),
-      );
-    }
+      ),
+    );
   }
-
+}

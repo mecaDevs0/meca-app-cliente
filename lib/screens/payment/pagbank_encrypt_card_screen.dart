@@ -1,12 +1,9 @@
-import 'dart:convert';
-import 'dart:developer';
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
-/// Tela utilitária para gerar `encryptedCard` via JS oficial do PagSeguro/PagBank.
-///
-/// Script: https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/browser/pagseguro.min.js
-/// API: `window.PagSeguro.encryptCard({ publicKey, holder, number, expMonth, expYear, securityCode })`
+import '../../services/pagbank_tokenization_service.dart';
+
+/// Tela utilitária para preparar payload de cartão no fluxo Asaas.
+/// O nome e o arquivo são mantidos para compatibilidade com imports existentes.
 class PagBankEncryptCardScreen extends StatefulWidget {
   final String publicKey;
   final String holderName;
@@ -32,108 +29,35 @@ class PagBankEncryptCardScreen extends StatefulWidget {
 class _PagBankEncryptCardScreenState extends State<PagBankEncryptCardScreen> {
   bool _done = false;
   String? _error;
-
-  late final WebViewController _controller;
+  final PagBankTokenizationService _tokenizationService =
+      PagBankTokenizationService();
 
   @override
   void initState() {
     super.initState();
-
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..addJavaScriptChannel(
-        'PagBank',
-        onMessageReceived: (message) {
-          if (_done) return;
-          _done = true;
-
-          try {
-            final decoded = jsonDecode(message.message);
-            if (decoded is Map<String, dynamic>) {
-              final success = decoded['success'] == true;
-              if (success) {
-                final encryptedCard = decoded['encryptedCard']?.toString();
-                if (encryptedCard != null && encryptedCard.isNotEmpty) {
-                  if (mounted) {
-                    Navigator.of(context).pop(encryptedCard);
-                  }
-                  return;
-                }
-              }
-
-              final err = decoded['error']?.toString();
-              setState(() => _error = err ?? 'Não foi possível criptografar o cartão.');
-              return;
-            }
-          } catch (e, st) {
-            log('PagBankEncryptCardScreen: parse error', error: e, stackTrace: st);
-          }
-
-          setState(() => _error = 'Não foi possível criptografar o cartão.');
-        },
-      )
-      ..loadHtmlString(_buildHtml());
+    _tokenizeCard();
   }
 
-  String _buildHtml() {
-    // Nunca logar dados do cartão. Aqui só serializamos para o HTML interno do WebView.
-    final payload = jsonEncode({
-      'publicKey': widget.publicKey,
-      'holder': widget.holderName,
-      'number': widget.number,
-      'expMonth': widget.expMonth,
-      'expYear': widget.expYear,
-      'securityCode': widget.securityCode,
-    });
+  Future<void> _tokenizeCard() async {
+    final result = await _tokenizationService.tokenizeCard(
+      cardNumber: widget.number,
+      expiryMonth: widget.expMonth,
+      expiryYear: widget.expYear,
+      cvv: widget.securityCode,
+      holderName: widget.holderName,
+    );
 
-    return '''
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PagBank Encrypt</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; padding: 16px; }
-    .muted { color: #666; font-size: 14px; }
-  </style>
-  <script src="https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/browser/pagseguro.min.js"></script>
-  <script>
-    function send(obj) {
-      try { PagBank.postMessage(JSON.stringify(obj)); } catch (e) {}
+    if (_done || !mounted) return;
+    _done = true;
+
+    if (result['success'] == true) {
+      Navigator.of(context).pop(result);
+      return;
     }
-    function runEncrypt() {
-      try {
-        if (!window.PagSeguro || !window.PagSeguro.encryptCard) {
-          send({ success: false, error: 'SDK do PagSeguro não carregou.' });
-          return;
-        }
-        var input = $payload;
-        var result = window.PagSeguro.encryptCard({
-          publicKey: input.publicKey,
-          holder: input.holder,
-          number: input.number,
-          expMonth: input.expMonth,
-          expYear: input.expYear,
-          securityCode: input.securityCode,
-        });
-        if (result && result.hasErrors) {
-          send({ success: false, error: (result.errors || []).join(', ') || 'Erro ao criptografar cartão.' });
-          return;
-        }
-        send({ success: true, encryptedCard: result.encryptedCard });
-      } catch (e) {
-        send({ success: false, error: String(e) });
-      }
-    }
-    window.onload = function() { setTimeout(runEncrypt, 50); };
-  </script>
-</head>
-<body>
-  <div class="muted">Criptografando cartão com segurança…</div>
-</body>
-</html>
-''';
+
+    setState(() {
+      _error = (result['error'] ?? 'Não foi possível processar os dados do cartão.').toString();
+    });
   }
 
   @override
@@ -153,7 +77,7 @@ class _PagBankEncryptCardScreenState extends State<PagBankEncryptCardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Não foi possível criptografar o cartão',
+                      'Não foi possível processar o cartão',
                       style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 12),
@@ -164,7 +88,7 @@ class _PagBankEncryptCardScreenState extends State<PagBankEncryptCardScreen> {
                       height: 48,
                       child: ElevatedButton(
                         onPressed: () => Navigator.of(context).pop(null),
-                        child: const Text('Voltar'),
+                      child: const Text('Fechar'),
                       ),
                     ),
                   ],
