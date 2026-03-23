@@ -1652,8 +1652,8 @@ class ApiService {
   }
 
   // Salvar cartão de crédito (direto com API que tokeniza internamente)
-  // Obter chave pública do PagBank para tokenização
-  Future<Map<String, dynamic>> getPagBankPublicKey() async {
+  // Obter chave pública do gateway de pagamento para tokenização
+  Future<Map<String, dynamic>> getPaymentGatewayPublicKey() async {
     try {
       // Rota pública, não precisa de autenticação
       // Usar skipCache para sempre obter a chave mais recente
@@ -1661,7 +1661,7 @@ class ApiService {
         '/pagbank/public-key',
         options: Options(extra: {'skipCache': true}),
       );
-      
+
       if (response.data != null && response.data['success'] == true) {
         final publicKey = response.data['data']?['public_key'];
         if (publicKey != null && publicKey.isNotEmpty) {
@@ -1674,8 +1674,11 @@ class ApiService {
     }
   }
 
+  // Alias mantido para compatibilidade com código legado
+  Future<Map<String, dynamic>> getPagBankPublicKey() => getPaymentGatewayPublicKey();
+
   // DEPRECATED: saveCardDirect não deve ser usado em produção
-  // Use saveCard com token já tokenizado pelo PagBank
+  // Use saveCard com token já tokenizado pelo gateway de pagamento
   @Deprecated('Use saveCard com token já tokenizado. Não envie número do cartão diretamente.')
   Future<Map<String, dynamic>> saveCardDirect({
     required String customerId,
@@ -1689,7 +1692,7 @@ class ApiService {
     // PRODUÇÃO REAL: Rejeitar número do cartão diretamente
     return {
       'success': false,
-      'error': 'Número do cartão não pode ser enviado diretamente por questões de segurança. Tokenize o cartão usando a chave pública do PagBank antes de salvar.',
+      'error': 'Número do cartão não pode ser enviado diretamente por questões de segurança. Tokenize o cartão usando a chave pública do gateway de pagamento antes de salvar.',
       'public_key_endpoint': '/pagbank/public-key'
     };
   }
@@ -1925,7 +1928,7 @@ class ApiService {
     }
   }
 
-  /// GET /payments/installments?amount=X — opções de parcelamento (PagBank produção).
+  /// GET /payments/installments?amount=X — opções de parcelamento.
   /// Se [bookingId] ou [workshopId] for passado, a API respeita a configuração da oficina (aceita parcelamento e máximo de parcelas).
   Future<Map<String, dynamic>> getInstallments(double amount, {String? creditCardBin, String? bookingId, String? workshopId}) async {
     try {
@@ -1963,7 +1966,7 @@ class ApiService {
     double? totalWithInterest,
     double? interestPaidByBuyer,
     double? installmentValue,
-    /// Número de parcelas em que o comprador paga juros (vem do plano PagBank GET fees/calculate)
+    /// Número de parcelas em que o comprador paga juros (vem do plano do gateway de pagamento)
     int? interestInstallments,
     int? pixExpirationInSeconds,
     bool? saveCard,
@@ -1975,7 +1978,7 @@ class ApiService {
   }) async {
     try {
       await loadToken();
-      
+
       // Criar pagamento diretamente no endpoint /bookings/:id/payment
       final payload = <String, dynamic>{
         'paymentMethod': paymentMethod.toUpperCase(),
@@ -2061,7 +2064,7 @@ class ApiService {
   // Pré-Compra Veicular
   // ============================================================
 
-  /// POST /pre-compra/:id/pay — pagamento de pré-compra via PagBank (PIX ou Cartão)
+  /// POST /pre-compra/:id/pay — pagamento de pré-compra via gateway de pagamento (PIX ou Cartão)
   Future<Map<String, dynamic>> createPreCompraPayment(
     String preCompraId, {
     required String paymentMethod,

@@ -16,6 +16,7 @@ import 'screens/vehicles/edit_vehicle_screen.dart';
 import 'screens/vehicles/my_vehicles_screen.dart';
 import 'screens/workshops/workshop_detail_screen.dart';
 import 'screens/mia/mia_chat_screen.dart';
+import 'screens/payment/payment_history_screen.dart';
 import 'screens/pre_compra/pre_compra_detail_screen.dart';
 import 'services/theme_service.dart';
 import 'services/notification_service.dart';
@@ -276,6 +277,8 @@ class MecaClienteApp extends StatelessWidget {
                       preCompraId: args['id']?.toString() ?? '',
                     ),
                   );
+                case '/payment-history':
+                  return MaterialPageRoute(builder: (_) => const PaymentHistoryScreen());
                 case '/help':
                   return MaterialPageRoute(builder: (_) => const HelpCenterScreen());
                 case '/mia-chat':

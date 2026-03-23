@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as Math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +12,7 @@ import '../../services/api_service.dart';
 import '../../services/asaas_payment_service.dart';
 import '../../widgets/app_alerts.dart';
 import '../review/review_screen.dart';
-import 'pagbank_encrypt_card_screen.dart';
+import 'encrypt_card_screen.dart';
 import 'saved_cards_screen.dart';
 
 class MecaPaymentScreen extends StatefulWidget {
@@ -108,6 +109,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   Map<String, dynamic>? _paymentRecord;
   String? _pixCode;
   String? _pixQrCodeBase64;
+  int _pixSecondsRemaining = 3600;
+  Timer? _pixExpirationTimer;
+  bool _pixExpired = false;
   String? _paymentLink;
   String? _paymentId;
   bool _cardsMigrationNoticeShown = false;
@@ -144,7 +148,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     if (msg.isNotEmpty) {
       return '$msg\n\nO que fazer: tente outro cartão, verifique limite/dados do cartão, ou use PIX.';
     }
-    return 'O PagBank/PagSeguro não autorizou a transação.\n\nO que fazer: tente outro cartão, verifique limite/dados do cartão, ou use PIX.';
+    return 'O gateway de pagamento não autorizou a transação.\n\nO que fazer: tente outro cartão, verifique limite/dados do cartão, ou use PIX.';
   }
 
   String? _pickFirstNonEmpty(List<dynamic> values) {
@@ -234,6 +238,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   @override
   void dispose() {
     _statusTimer?.cancel();
+    _pixExpirationTimer?.cancel();
     _cvvController.dispose();
     super.dispose();
   }
@@ -257,7 +262,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         _cardsMigratedToAsaas =
             cardsMigratedFlagFromResponse || cardsMigratedFlagFromItems;
         // Filtrar cartões válidos para pagamento:
-        // - Tokens PagBank normalmente começam com "CARD_"
+        // - Tokens de cartão normalmente começam com "CARD_"
         // - (Tokens "CHAR_" são IDs de charge e dão INVALID_CARD_ID)
         _savedCards = cards.where((card) {
           final token =
@@ -548,7 +553,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         final errMsg = (paymentResult['error'] ?? '').toString();
         final normalized = errMsg.toUpperCase();
 
-        // Caso comum em produção: token de cartão salvo antigo/inválido para o PagBank (INVALID_CARD_ID)
+        // Caso comum em produção: token de cartão salvo antigo/inválido (INVALID_CARD_ID)
         // Nesse cenário, removemos o cartão inválido automaticamente e direcionamos para "outro cartão".
         if (_selectedMethod == 'credit_card' &&
             normalized.contains('INVALID_CARD_ID')) {
@@ -579,7 +584,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                 builder: (context) => AlertDialog(
                   title: const Text('Cartão inválido removido'),
                   content: const Text(
-                    'Removemos este cartão da sua lista porque ele não pôde ser validado pelo PagBank.\n\n'
+                    'Removemos este cartão da sua lista porque ele não pôde ser validado pelo gateway de pagamento.\n\n'
                     'Para continuar, use outro cartão agora. Se quiser, marque "Salvar cartão" no pagamento para salvar novamente.',
                   ),
                   actions: [
@@ -660,6 +665,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       payment['provider'] ??= data['provider'];
       _paymentRecord = payment;
       _setPixDataFromResponse(data, payment);
+      if (_selectedMethod == 'pix') _startPixExpirationTimer();
       _paymentLink = payment['payment_link'] ??
           payment['paymentLink'] ??
           data['payment_link'];
@@ -682,7 +688,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           message: gatewayMessage.isNotEmpty
               ? gatewayMessage
               : (isDeclined
-                  ? 'O PagBank/PagSeguro não autorizou o pagamento. Tente outro cartão.'
+                  ? 'O gateway de pagamento não autorizou o pagamento. Tente outro cartão.'
                   : 'O pagamento foi cancelado.'),
         );
         setState(() {});
@@ -701,7 +707,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           context,
           title: 'Pagamento em análise',
           message:
-              'O PagBank está processando seu pagamento. Avisaremos assim que for confirmado.',
+              'O gateway de pagamento está processando seu pagamento. Avisaremos assim que for confirmado.',
         );
       }
 
@@ -877,7 +883,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       final tokenizedCardResult =
           await Navigator.of(context).push<Map<String, dynamic>?>(
         MaterialPageRoute(
-          builder: (_) => PagBankEncryptCardScreen(
+          builder: (_) => EncryptCardScreen(
             publicKey: '',
             holderName: holderName,
             number: rawNumber,
@@ -1006,6 +1012,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       payment['provider'] ??= data['provider'];
       _paymentRecord = payment;
       _setPixDataFromResponse(data, payment);
+      if (_selectedMethod == 'pix') _startPixExpirationTimer();
       _paymentLink = payment['payment_link'] ??
           payment['paymentLink'] ??
           data['payment_link'];
@@ -1037,7 +1044,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         context,
         title: 'Pagamento em análise',
         message:
-            'O PagBank está processando seu pagamento. Você pode acompanhar o status aqui.',
+            'O gateway de pagamento está processando seu pagamento. Você pode acompanhar o status aqui.',
       );
       _startStatusPolling();
       setState(() {});
@@ -1061,6 +1068,22 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     if (_paymentId == null) return;
     _statusTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       _checkPaymentStatus(silent: true);
+    });
+  }
+
+  void _startPixExpirationTimer() {
+    _pixExpirationTimer?.cancel();
+    _pixSecondsRemaining = 3600;
+    _pixExpired = false;
+    _pixExpirationTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) { timer.cancel(); return; }
+      setState(() {
+        _pixSecondsRemaining--;
+        if (_pixSecondsRemaining <= 0) {
+          _pixExpired = true;
+          timer.cancel();
+        }
+      });
     });
   }
 
@@ -1105,6 +1128,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
       if (status == 'approved' || status == 'paid') {
         _statusTimer?.cancel();
+        _pixExpirationTimer?.cancel();
         if (!silent) {
           AppAlerts.showSuccess(
             context,
@@ -1131,7 +1155,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           context,
           title: 'Status atualizado',
           message: status == 'pending'
-              ? 'Ainda em análise pelo PagBank.'
+              ? 'Ainda em análise pelo gateway de pagamento.'
               : 'Status atual: ${_statusLabel(status)}',
         );
       } else if (!silent && status == 'cancelled') {
@@ -1139,7 +1163,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           context,
           title: 'Pagamento cancelado',
           message:
-              'Não recebemos a confirmação do PagBank. Verifique se o pagamento foi concluído.',
+              'Não recebemos a confirmação do pagamento. Verifique se o pagamento foi concluído.',
         );
       }
     } else if (!silent) {
@@ -1803,7 +1827,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             ],
           ),
           Text(
-            'Valores e juros dinâmicos (PagBank)',
+            'Valores e juros dinâmicos',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
             ),
@@ -1927,7 +1951,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           const SizedBox(height: 16),
           if (isDeclined) ...[
             Text(
-              'Motivo: ${gatewayMessage.isNotEmpty ? gatewayMessage : 'Não autorizado pelo PagBank/PagSeguro'}',
+              'Motivo: ${gatewayMessage.isNotEmpty ? gatewayMessage : 'Não autorizado pelo gateway de pagamento'}',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.textTheme.bodyMedium?.color?.withOpacity(0.85),
               ),
@@ -2000,6 +2024,89 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Countdown timer
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: _pixExpired
+                  ? const Color(0xFFEF4444).withOpacity(0.15)
+                  : _pixSecondsRemaining <= 300
+                      ? const Color(0xFFF59E0B).withOpacity(0.15)
+                      : const Color(0xFF00C977).withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _pixExpired
+                    ? const Color(0xFFEF4444).withOpacity(0.3)
+                    : _pixSecondsRemaining <= 300
+                        ? const Color(0xFFF59E0B).withOpacity(0.3)
+                        : const Color(0xFF00C977).withOpacity(0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _pixExpired ? Icons.timer_off : Icons.timer,
+                  size: 18,
+                  color: _pixExpired
+                      ? const Color(0xFFEF4444)
+                      : _pixSecondsRemaining <= 300
+                          ? const Color(0xFFF59E0B)
+                          : const Color(0xFF00C977),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _pixExpired
+                      ? 'QR Code expirado'
+                      : '${(_pixSecondsRemaining ~/ 60).toString().padLeft(2, '0')}:${(_pixSecondsRemaining % 60).toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                    color: _pixExpired
+                        ? const Color(0xFFEF4444)
+                        : _pixSecondsRemaining <= 300
+                            ? const Color(0xFFF59E0B)
+                            : const Color(0xFF00C977),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_pixExpired) ...[
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              'O tempo para pagamento expirou.',
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _pixExpired = false;
+                  _pixCode = null;
+                  _pixQrCodeBase64 = null;
+                  _showResult = false;
+                });
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Tentar novamente'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00C977),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ] else ...[
         if (qrImageBytes != null) ...[
           Text(
             'QR Code PIX',
@@ -2067,9 +2174,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           OutlinedButton.icon(
             onPressed: () => _openPaymentLink(_paymentLink!),
             icon: const Icon(Icons.open_in_new),
-            label: const Text('Abrir página de pagamento PagBank'),
+            label: const Text('Abrir página de pagamento'),
           ),
         ],
+        ], // end else (not expired)
       ],
     );
   }
@@ -2110,7 +2218,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           OutlinedButton.icon(
             onPressed: () => _openPaymentLink(_paymentLink!),
             icon: const Icon(Icons.open_in_new),
-            label: const Text('Ver detalhes no PagBank'),
+            label: const Text('Ver detalhes do pagamento'),
           ),
         ],
       ],
@@ -2122,7 +2230,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     if (uri == null) {
       AppAlerts.showError(
         context,
-        message: 'Link inválido fornecido pelo PagBank.',
+        message: 'Link de pagamento inválido.',
       );
       return;
     }
@@ -2130,7 +2238,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       if (!mounted) return;
       AppAlerts.showError(
         context,
-        message: 'Não foi possível abrir o link do PagBank.',
+        message: 'Não foi possível abrir o link de pagamento.',
       );
     }
   }

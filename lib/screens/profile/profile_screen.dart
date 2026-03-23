@@ -11,6 +11,7 @@ import '../notifications/recent_notifications_screen.dart';
 import '../../providers/notification_provider.dart';
 import '../../utils/formatters.dart';
 import 'edit_password_screen.dart';
+import '../payment/payment_history_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -415,6 +416,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           title: 'Meus Veículos',
           subtitle: 'Gerenciar veículos cadastrados',
           onTap: () => Navigator.pushNamed(context, '/my-vehicles'),
+        ),
+        _buildSettingTile(
+          icon: Icons.receipt_long,
+          title: 'Meus Pagamentos',
+          subtitle: 'Histórico de pagamentos realizados',
+          onTap: () => Navigator.pushNamed(context, '/payment-history'),
         ),
         _buildSettingTile(
           icon: Icons.notifications,

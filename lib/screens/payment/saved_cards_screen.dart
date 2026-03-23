@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/app_alerts.dart';
-// Observação: no PagBank, o token do cartão (ex: "CARD_...") só é retornado após um pagamento aprovado com `store/save=true`.
+// Observação: o token do cartão (ex: "CARD_...") só é retornado após um pagamento aprovado com `store/save=true`.
 
 class SavedCardsScreen extends StatefulWidget {
   const SavedCardsScreen({Key? key}) : super(key: key);
@@ -371,7 +371,7 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
     AppAlerts.showWarning(
       context,
       title: 'Salvar cartão',
-      message: 'Por segurança e regras do PagBank, o cartão só pode ser salvo após um pagamento aprovado.\n\n'
+      message: 'Por segurança, o cartão só pode ser salvo após um pagamento aprovado.\n\n'
           'Para usar um novo cartão, faça o pagamento normalmente e, se quiser, marque a opção "Salvar cartão" durante o pagamento.',
     );
   }

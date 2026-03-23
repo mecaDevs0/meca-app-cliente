@@ -323,7 +323,7 @@ class _BookingScreenState extends State<BookingScreen> {
             ],
           ),
           content: const Text(
-            'Esta oficina não possui pagamento online. O pagamento não será efetuado com sucesso. Fale com o responsável da oficina para ele vincular a conta PagBank. Deseja continuar com o agendamento?',
+            'Esta oficina não possui pagamento online ativo. O pagamento não será efetuado com sucesso. Fale com o responsável da oficina. Deseja continuar com o agendamento?',
             style: TextStyle(fontSize: 16),
           ),
           actions: [
@@ -559,7 +559,7 @@ class _BookingScreenState extends State<BookingScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Esta oficina não possui pagamento online. O pagamento não será efetuado com sucesso. Fale com o responsável da oficina para ele vincular a conta PagBank.',
+              'Esta oficina não possui pagamento online ativo. O pagamento não será efetuado com sucesso. Fale com o responsável da oficina.',
               style: TextStyle(
                 fontSize: 14,
                 color: isDarkMode ? Colors.orange[200] : Colors.orange[900],
