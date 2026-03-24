@@ -220,6 +220,7 @@ class ApiService {
         final response = await _dio.post('/auth/login', data: {
           'email': normalizedEmail,
           'password': normalizedPassword,
+          'role': 'customer',
         });
         AppLogger.info('✅ [Login] Resposta recebida: ${response.statusCode}', tag: 'Auth');
         return await _handleAuthResponse(response, fallbackError: 'Erro no login');
