@@ -59,14 +59,10 @@ class _BookingScreenState extends State<BookingScreen> {
   List<Map<String, dynamic>> _workshopServices = [];
   Map<String, dynamic>? _selectedService;
   
-  // PagBank: null = ainda não carregou, false = oficina sem PagBank verificado
-  bool? _pagbankVerified;
-
   @override
   void initState() {
     super.initState();
     _loadUserVehicles();
-    _loadPagBankStatus();
     
     // Se serviceId está vazio, carregar serviços da oficina
     if (widget.serviceId.isEmpty) {
@@ -147,17 +143,6 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  Future<void> _loadPagBankStatus() async {
-    try {
-      final workshopDetails = await _apiService.getWorkshopDetails(widget.workshopId);
-      if (mounted && workshopDetails['success'] == true && workshopDetails['data'] is Map) {
-        final data = workshopDetails['data'] as Map<String, dynamic>;
-        setState(() => _pagbankVerified = data['pagbank_verified'] == true);
-      }
-    } catch (_) {
-      if (mounted) setState(() => _pagbankVerified = null);
-    }
-  }
 
   Future<void> _loadWorkshopServices() async {
     try {
@@ -302,44 +287,6 @@ class _BookingScreenState extends State<BookingScreen> {
         await _showSnackBar('Selecione a janela de horário (início e fim)', isError: true);
         return;
       }
-    }
-
-    // Ajuste 2: Aviso se oficina sem PagBank vinculado (não bloqueia o agendamento)
-    final workshopDetails = await _apiService.getWorkshopDetails(widget.workshopId);
-    final pagbankVerified = workshopDetails['success'] == true &&
-        (workshopDetails['data'] is Map) &&
-        (workshopDetails['data'] as Map)['pagbank_verified'] == true;
-    if (!pagbankVerified && mounted) {
-      final proceed = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.orange[700], size: 28),
-              const SizedBox(width: 10),
-              const Expanded(child: Text('Pagamento Online', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-            ],
-          ),
-          content: const Text(
-            'Esta oficina não possui pagamento online ativo. O pagamento não será efetuado com sucesso. Fale com o responsável da oficina. Deseja continuar com o agendamento?',
-            style: TextStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Voltar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00C977)),
-              child: const Text('Continuar'),
-            ),
-          ],
-        ),
-      );
-      if (proceed != true || !mounted) return;
     }
 
     setState(() => _isCreatingBooking = true);
@@ -510,9 +457,6 @@ class _BookingScreenState extends State<BookingScreen> {
                 child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Aviso: oficina sem PagBank verificado (pagamento online indisponível)
-                  if (_pagbankVerified == false) _buildPagBankWarningBanner(isDarkMode),
-                  if (_pagbankVerified == false) const SizedBox(height: 16),
                   // Informações do Serviço
                   _buildServiceInfoCard(isDarkMode),
                   const SizedBox(height: 24),
@@ -540,34 +484,6 @@ class _BookingScreenState extends State<BookingScreen> {
                 ],
               ),
             ),
-      ),
-    );
-  }
-
-  Widget _buildPagBankWarningBanner(bool isDarkMode) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(isDarkMode ? 0.2 : 0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withOpacity(0.5)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.info_outline, color: Colors.orange[700], size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Esta oficina não possui pagamento online ativo. O pagamento não será efetuado com sucesso. Fale com o responsável da oficina.',
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? Colors.orange[200] : Colors.orange[900],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -917,8 +833,9 @@ class _BookingScreenState extends State<BookingScreen> {
                     ),
                     const SizedBox(height: 8),
                     TextButton.icon(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/my-vehicles');
+                      onPressed: () async {
+                        await Navigator.pushNamed(context, '/add-vehicle');
+                        _loadUserVehicles();
                       },
                       icon: const Icon(Icons.add),
                       label: const Text('Adicionar Veículo'),
@@ -1018,7 +935,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 ],
               ),
             ),
-            if (vehicle['isDefault'] == true)
+            if (vehicle['is_default'] == true || vehicle['isDefault'] == true)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
