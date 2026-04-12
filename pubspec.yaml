@@ -1,6 +1,6 @@
 name: meca_app_cliente
 description: MECA - App do Cliente para agendamento de serviços automotivos
-version: 2.2.2+222
+version: 2.3.0+230
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
