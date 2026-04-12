@@ -224,10 +224,10 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
   }
 
   Widget _buildPaymentCard(Map<String, dynamic> payment, bool isDark) {
-    final amount = (payment['amount'] as num?)?.toDouble() ?? 0.0;
+    final amount = double.tryParse(payment['amount']?.toString() ?? '') ?? 0.0;
     final method = (payment['payment_method'] as String? ?? '').toUpperCase();
     final status = payment['status'] as String? ?? '';
-    final installments = (payment['installments'] as num?)?.toInt() ?? 1;
+    final installments = int.tryParse(payment['installments']?.toString() ?? '') ?? 1;
     final createdAtRaw = payment['created_at'] as String?;
     final bookingId = payment['booking_id']?.toString() ?? '';
     final paymentId = payment['id']?.toString() ?? '';

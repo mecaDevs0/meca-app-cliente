@@ -316,19 +316,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             duration: const Duration(milliseconds: 150),
             child: Builder(
               builder: (context) {
-                const cardHeight = 168.0;
                 final screenWidth = MediaQuery.of(context).size.width;
                 final miaHeight = screenWidth < 375 ? 220.0 : (screenWidth < 390 ? 270.0 : 340.0);
                 final miaRight = screenWidth < 375 ? -20.0 : (screenWidth < 390 ? -35.0 : -48.0);
                 final miaWidth = screenWidth < 375 ? miaHeight * 0.70 : miaHeight * 0.92;
+                // Espaço à direita só para não colidir com a arte da MIA; em telas estreitas prioriza largura do texto.
+                final reservedRight = screenWidth < 360
+                    ? 64.0
+                    : screenWidth < 400
+                        ? 76.0
+                        : (miaWidth + miaRight - 10).clamp(80.0, 150.0);
                 return Stack(
                   clipBehavior: Clip.none,
                   children: [
                     // 1. Background do Card (glassmorphism profundo)
                     Container(
-                      height: cardHeight,
+                      constraints: const BoxConstraints(minHeight: 152),
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                      padding: const EdgeInsets.fromLTRB(20.0, 16.0, 16.0, 16.0),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(24),
                         gradient: const LinearGradient(
@@ -357,14 +362,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ],
                       ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // 2. Lado Esquerdo (responsivo para diferentes tamanhos de tela)
+                          // 2. Lado Esquerdo (texto com quebra de linha; altura do card acompanha o conteúdo)
                           Expanded(
                             child: LayoutBuilder(
                               builder: (ctx, constraints) {
                                 final w = constraints.maxWidth;
-                                final titleSize = w < 140 ? 18.0 : (w < 180 ? 20.0 : 24.0);
-                                final descSize = w < 140 ? 12.0 : (w < 180 ? 13.0 : 15.0);
+                                final titleSize = w < 140 ? 17.0 : (w < 180 ? 19.0 : 22.0);
+                                final descSize = w < 140 ? 12.0 : (w < 180 ? 13.0 : 14.0);
                                 return Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -403,23 +409,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         fontSize: titleSize,
                                         fontWeight: FontWeight.w800,
                                         color: Colors.white,
-                                        height: 1.1,
+                                        height: 1.15,
                                         letterSpacing: -0.8,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                      softWrap: true,
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 6),
                                     Text(
                                       'Descubra o problema do seu carro com a IA do Meca',
                                       style: TextStyle(
                                         fontSize: descSize,
                                         fontWeight: FontWeight.w500,
                                         color: Colors.white70,
-                                        height: 1.3,
+                                        height: 1.35,
                                       ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
                                       softWrap: true,
                                     ),
                                   ],
@@ -427,7 +430,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               },
                             ),
                           ),
-                          SizedBox(width: (miaWidth + miaRight - 10).clamp(80.0, 180.0)),
+                          SizedBox(width: reservedRight),
                         ],
                       ),
                     ),

@@ -3,12 +3,12 @@ import 'package:dio/dio.dart';
 import '../config/app_config.dart';
 import '../core/http_client_config.dart';
 
-/// NOTA: nome mantido por compatibilidade com imports existentes.
-/// Internamente este serviço usa o fluxo Asaas.
-class PagBankTokenizationService {
+/// Serviço que prepara e valida dados do cartão antes de enviar ao backend.
+/// O backend MECA encaminha os dados ao Asaas via TLS.
+class CardPreparationService {
   late Dio _dio;
 
-  PagBankTokenizationService() {
+  CardPreparationService() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiBaseUrl,
       connectTimeout: const Duration(seconds: 30),
@@ -33,10 +33,10 @@ class PagBankTokenizationService {
     }
   }
 
-  /// Wrapper de tokenização para fluxo Asaas.
+  /// Prepara e valida dados do cartão para envio ao backend.
   /// No app Flutter, os dados são enviados via TLS para o backend MECA,
   /// que encaminha ao Asaas no servidor.
-  Future<Map<String, dynamic>> tokenizeCard({
+  Future<Map<String, dynamic>> prepareCard({
     required String cardNumber,
     required String expiryMonth,
     required String expiryYear,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../services/pagbank_tokenization_service.dart';
+import '../../services/card_preparation_service.dart';
 
 /// Tela utilitária para preparar payload de cartão no fluxo de pagamento.
 class EncryptCardScreen extends StatefulWidget {
@@ -28,8 +28,8 @@ class EncryptCardScreen extends StatefulWidget {
 class _EncryptCardScreenState extends State<EncryptCardScreen> {
   bool _done = false;
   String? _error;
-  final PagBankTokenizationService _tokenizationService =
-      PagBankTokenizationService();
+  final CardPreparationService _tokenizationService =
+      CardPreparationService();
 
   @override
   void initState() {
@@ -38,7 +38,7 @@ class _EncryptCardScreenState extends State<EncryptCardScreen> {
   }
 
   Future<void> _tokenizeCard() async {
-    final result = await _tokenizationService.tokenizeCard(
+    final result = await _tokenizationService.prepareCard(
       cardNumber: widget.number,
       expiryMonth: widget.expMonth,
       expiryYear: widget.expYear,

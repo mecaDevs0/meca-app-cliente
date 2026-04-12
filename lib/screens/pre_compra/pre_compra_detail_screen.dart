@@ -94,7 +94,6 @@ class _PreCompraDetailScreenState extends State<PreCompraDetailScreen> {
     }
 
     final oficina_id = item['oficina_id']?.toString() ?? '';
-    final workshopPagbankAccountId = item['workshop_pagbank_account_id']?.toString() ?? '';
     final workshopName = item['workshop_name']?.toString() ?? 'Oficina';
     final mecaFee = totalAmount * 0.12;
 
@@ -106,7 +105,6 @@ class _PreCompraDetailScreenState extends State<PreCompraDetailScreen> {
             'id': widget.preCompraId,
             'oficina_id': oficina_id,
             'workshop_id': oficina_id,
-            'workshop_pagbank_account_id': workshopPagbankAccountId,
             'workshop_name': workshopName,
           },
           totalAmount: totalAmount,

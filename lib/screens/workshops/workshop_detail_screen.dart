@@ -676,10 +676,15 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                                     ),
                                   },
                                   mapType: MapType.normal,
+                                  liteModeEnabled: true,
                                   myLocationEnabled: false,
                                   myLocationButtonEnabled: false,
                                   zoomControlsEnabled: false,
                                   mapToolbarEnabled: false,
+                                  scrollGesturesEnabled: false,
+                                  tiltGesturesEnabled: false,
+                                  rotateGesturesEnabled: false,
+                                  zoomGesturesEnabled: false,
                                   onMapCreated: (GoogleMapController controller) {
                                   },
                                 ),
@@ -1588,7 +1593,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         return null;
       }
       final parsed = double.tryParse(trimmed.replaceAll(',', '.'));
-      if (parsed != null && parsed != 0.0 && !parsed.isNaN && parsed.isFinite) {
+      if (parsed != null && !parsed.isNaN && parsed.isFinite) {
         return parsed;
       }
     }

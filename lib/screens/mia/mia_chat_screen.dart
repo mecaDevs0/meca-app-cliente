@@ -140,10 +140,32 @@ class MiaChatBubble extends StatelessWidget {
                 ),
               ),
             ),
-            if (!isBot) const SizedBox(width: 40),
+            if (!isBot && showAvatar) const SizedBox(width: 8),
+            if (!isBot && showAvatar) _buildUserAvatar(),
           ],
         ),
       );
+  }
+
+  static Widget _buildUserAvatar() {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF00C977).withOpacity(0.5), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00C977).withOpacity(0.15),
+            blurRadius: 8,
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: const CircleAvatar(
+        radius: 18,
+        backgroundColor: Color(0xFF00C977),
+        child: Icon(Icons.person, color: Colors.white, size: 20),
+      ),
+    );
   }
 
   static Widget buildBotAvatar() {

@@ -28,15 +28,12 @@ class AppConfig {
   static const String buildNumber = '164';
   
   // ========================================
-  // PAGSEGURO / PAGBANK
+  // PLATAFORMA MECA
   // ========================================
-  
-  /// Chave pública PagBank
-  static const String pagBankPublicKey = 'YOUR_PUBLIC_KEY_HERE'; // TODO: Adicionar chave real
-  
-  /// Uso interno (cálculo; cliente não vê taxa).
+
+  /// Taxa interna da plataforma (cálculo; cliente não vê taxa).
   static const double mecaPlatformFee = 0.12;
-  
+
   // ========================================
   // FIPE API (Consulta de Veículos)
   // ========================================

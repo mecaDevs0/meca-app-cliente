@@ -1659,7 +1659,7 @@ class ApiService {
       // Rota pública, não precisa de autenticação
       // Usar skipCache para sempre obter a chave mais recente
       final response = await _dio.get(
-        '/pagbank/public-key',
+        '/asaas/public-key',
         options: Options(extra: {'skipCache': true}),
       );
 
@@ -1673,29 +1673,6 @@ class ApiService {
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
     }
-  }
-
-  // Alias mantido para compatibilidade com código legado
-  Future<Map<String, dynamic>> getPagBankPublicKey() => getPaymentGatewayPublicKey();
-
-  // DEPRECATED: saveCardDirect não deve ser usado em produção
-  // Use saveCard com token já tokenizado pelo gateway de pagamento
-  @Deprecated('Use saveCard com token já tokenizado. Não envie número do cartão diretamente.')
-  Future<Map<String, dynamic>> saveCardDirect({
-    required String customerId,
-    required String cardNumber,
-    required String expiryMonth,
-    required String expiryYear,
-    required String cvv,
-    required String holderName,
-    bool isDefault = false,
-  }) async {
-    // PRODUÇÃO REAL: Rejeitar número do cartão diretamente
-    return {
-      'success': false,
-      'error': 'Número do cartão não pode ser enviado diretamente por questões de segurança. Tokenize o cartão usando a chave pública do gateway de pagamento antes de salvar.',
-      'public_key_endpoint': '/pagbank/public-key'
-    };
   }
 
   // Salvar cartão de crédito (com token já gerado)
@@ -1975,7 +1952,6 @@ class ApiService {
     String? brand,
     String? expiryMonth,
     String? expiryYear,
-    String? workshopPagbankAccountId,
   }) async {
     try {
       await loadToken();
@@ -2036,11 +2012,6 @@ class ApiService {
       if (expiryYear != null && expiryYear.trim().isNotEmpty) {
         payload['expiryYear'] = expiryYear.trim();
       }
-      if (workshopPagbankAccountId != null && workshopPagbankAccountId.trim().isNotEmpty) {
-        payload['workshopAccountId'] = workshopPagbankAccountId.trim();
-        payload['pagbankAccountId'] = workshopPagbankAccountId.trim();
-      }
-
       print('💳 [API] Criando pagamento para booking $bookingId com payload: paymentMethod=${payload['paymentMethod']}, hasCardToken=${payload.containsKey('cardToken')}, hasCvv=${payload.containsKey('cvv')}, installments=${payload['installments']}');
 
       final response = await _dio.post('/bookings/$bookingId/payment', data: payload);
@@ -2083,7 +2054,6 @@ class ApiService {
     String? brand,
     String? expiryMonth,
     String? expiryYear,
-    String? workshopPagbankAccountId,
   }) async {
     try {
       await loadToken();
@@ -2117,10 +2087,6 @@ class ApiService {
       if (brand != null && brand.trim().isNotEmpty) payload['brand'] = brand.trim();
       if (expiryMonth != null && expiryMonth.trim().isNotEmpty) payload['expiryMonth'] = expiryMonth.trim();
       if (expiryYear != null && expiryYear.trim().isNotEmpty) payload['expiryYear'] = expiryYear.trim();
-      if (workshopPagbankAccountId != null && workshopPagbankAccountId.trim().isNotEmpty) {
-        payload['workshopAccountId'] = workshopPagbankAccountId.trim();
-        payload['pagbankAccountId'] = workshopPagbankAccountId.trim();
-      }
 
       final response = await _dio.post('/pre-compra/$preCompraId/pay', data: payload);
       if (response.data != null && response.data['success'] == true) {

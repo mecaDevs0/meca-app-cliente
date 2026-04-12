@@ -481,11 +481,6 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         cvv = _cvvController.text.trim();
       }
 
-      final workshopAccountId =
-          (widget.bookingData['workshop_pagbank_account_id'] ??
-                  widget.bookingData['workshopPagbankAccountId'])
-              ?.toString()
-              .trim();
       final plan =
           _selectedMethod == 'credit_card' ? _selectedInstallmentPlan : null;
       final totalWithInterest =
@@ -521,9 +516,6 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               installmentValue: installmentValue,
               interestInstallments: interestInstallments,
               pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
-              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true
-                  ? workshopAccountId
-                  : null,
             )
           : await _apiService.createBookingPayment(
               bookingId,
@@ -542,9 +534,6 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               installmentValue: installmentValue,
               interestInstallments: interestInstallments,
               pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
-              workshopPagbankAccountId: workshopAccountId?.isNotEmpty == true
-                  ? workshopAccountId
-                  : null,
             );
 
       if (!mounted) return;
@@ -606,6 +595,18 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           } else {
             setState(() => _isSubmitting = false);
           }
+          return;
+        }
+
+        // Detectar erros específicos de oficina não configurada / em análise
+        if (normalized.contains('NAO CONFIGUROU SUA CONTA') ||
+            normalized.contains('CONTA PARA RECEBIMENTOS')) {
+          await _showWorkshopNotConfiguredDialog();
+          return;
+        }
+        if (normalized.contains('EM ANALISE PELO ASAAS') ||
+            normalized.contains('ANALISE PELO ASAAS')) {
+          await _showWorkshopPendingDialog();
           return;
         }
 
@@ -921,11 +922,6 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         brand = 'ELO';
       }
 
-      final workshopAccountId =
-          (widget.bookingData['workshop_pagbank_account_id'] ??
-                  widget.bookingData['workshopPagbankAccountId'])
-              ?.toString()
-              .trim();
       final plan = _selectedInstallmentPlan;
       final totalWithInterest =
           plan != null && (plan['total_cents'] as int?) != null
@@ -967,10 +963,6 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       if (interestInstallments != null && interestInstallments > 0) {
         payload['interest_installments'] = interestInstallments;
       }
-      if (workshopAccountId?.isNotEmpty == true) {
-        payload['workshopAccountId'] = workshopAccountId;
-        payload['pagbankAccountId'] = workshopAccountId;
-      }
 
       final paymentResult = widget.isPreCompra
           ? await _apiService.post('/pre-compra/$bookingId/pay', payload)
@@ -978,9 +970,23 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
       if (!mounted) return;
       if (paymentResult['success'] != true) {
+        final errMsg = (paymentResult['error'] ?? '').toString();
+        final normalized = errMsg.toUpperCase();
+        // Detectar erros de oficina não configurada / em análise
+        if (normalized.contains('NAO CONFIGUROU SUA CONTA') ||
+            normalized.contains('CONTA PARA RECEBIMENTOS')) {
+          await _showWorkshopNotConfiguredDialog();
+          return;
+        }
+        if (normalized.contains('EM ANALISE PELO ASAAS') ||
+            normalized.contains('ANALISE PELO ASAAS')) {
+          await _showWorkshopPendingDialog();
+          return;
+        }
         AppAlerts.showError(context,
-            message: paymentResult['error'] ??
-                'Não foi possível iniciar o pagamento agora.');
+            message: errMsg.isNotEmpty
+                ? errMsg
+                : 'Não foi possível iniciar o pagamento agora.');
         return;
       }
 
@@ -1263,6 +1269,154 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     if (reloaded == true && mounted) {
       _loadSavedCards();
     }
+  }
+
+  /// Dialog quando a oficina não configurou conta de recebimentos
+  Future<void> _showWorkshopNotConfiguredDialog() async {
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final isDark = theme.brightness == Brightness.dark;
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3CD),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.account_balance_outlined, size: 48, color: Color(0xFFFF8F00)),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Oficina sem pagamento ativo',
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Esta oficina ainda não ativou o recebimento de pagamentos na plataforma. '
+                'Já notificamos a oficina para que configure sua conta.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C977),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Entendi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Dialog quando a oficina está com conta em análise pelo Asaas
+  Future<void> _showWorkshopPendingDialog() async {
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final isDark = theme.brightness == Brightness.dark;
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3F2FD),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.hourglass_top_rounded, size: 48, color: Color(0xFF1976D2)),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Pagamento em ativação',
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'O sistema de pagamentos desta oficina está sendo ativado. '
+                'Isso pode levar até 2 dias úteis. Tente novamente em breve!',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C977),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Entendi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
