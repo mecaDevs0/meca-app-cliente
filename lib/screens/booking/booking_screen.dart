@@ -1634,6 +1634,7 @@ class _BookingScreenState extends State<BookingScreen> {
           TextField(
             controller: _observationsController,
             maxLines: 4,
+            textCapitalization: TextCapitalization.sentences,
             decoration: InputDecoration(
               hintText: 'Descreva o problema ou observações sobre o serviço...',
               hintStyle: TextStyle(
