@@ -146,8 +146,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
   Future<void> _loadWorkshopServices() async {
     try {
-      // Carregar todos os serviços disponíveis
-      final result = await _apiService.getServices();
+      final result = await _apiService.getWorkshopServices(widget.workshopId);
       
       if (result['success']) {
         setState(() {

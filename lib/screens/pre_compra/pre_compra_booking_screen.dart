@@ -593,6 +593,7 @@ class _PreCompraBookingScreenState extends State<PreCompraBookingScreen> {
                 TextFormField(
                   controller: _notesCtrl,
                   maxLines: 3,
+                  textCapitalization: TextCapitalization.sentences,
                   style: TextStyle(color: text),
                   decoration: InputDecoration(
                     hintText: 'Descreva o que você quer verificar no veículo...',
