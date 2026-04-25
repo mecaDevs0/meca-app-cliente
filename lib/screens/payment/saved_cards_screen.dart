@@ -368,11 +368,157 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
   }
 
   void _showAddCardDialog() {
-    AppAlerts.showWarning(
-      context,
-      title: 'Salvar cartão',
-      message: 'Por segurança, o cartão só pode ser salvo após um pagamento aprovado.\n\n'
-          'Para usar um novo cartão, faça o pagamento normalmente e, se quiser, marque a opção "Salvar cartão" durante o pagamento.',
+    final cardNumberController = TextEditingController();
+    final holderNameController = TextEditingController();
+    final expiryMonthController = TextEditingController();
+    final expiryYearController = TextEditingController();
+    final cvvController = TextEditingController();
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+            return AlertDialog(
+              backgroundColor: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text(
+                'Cadastrar Cartão',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline, color: Colors.amber, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Uma micro-cobrança de R\$1,00 será realizada e estornada automaticamente para validar seu cartão.',
+                              style: TextStyle(fontSize: 12, color: isDarkMode ? Colors.amber[200] : Colors.amber[800]),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: cardNumberController,
+                      decoration: const InputDecoration(labelText: 'Número do cartão', hintText: '0000 0000 0000 0000'),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(19)],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: holderNameController,
+                      decoration: const InputDecoration(labelText: 'Nome no cartão', hintText: 'NOME COMPLETO'),
+                      textCapitalization: TextCapitalization.characters,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: expiryMonthController,
+                            decoration: const InputDecoration(labelText: 'Mês', hintText: 'MM'),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: expiryYearController,
+                            decoration: const InputDecoration(labelText: 'Ano', hintText: 'AAAA'),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: cvvController,
+                            decoration: const InputDecoration(labelText: 'CVV', hintText: '123'),
+                            keyboardType: TextInputType.number,
+                            obscureText: true,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (cardNumberController.text.trim().length < 13 ||
+                              holderNameController.text.trim().isEmpty ||
+                              expiryMonthController.text.trim().isEmpty ||
+                              expiryYearController.text.trim().isEmpty ||
+                              cvvController.text.trim().length < 3) {
+                            AppAlerts.showError(context, message: 'Preencha todos os campos corretamente.');
+                            return;
+                          }
+                          setDialogState(() => isSubmitting = true);
+                          try {
+                            final result = await _apiService.tokenizeCard(
+                              cardNumber: cardNumberController.text.trim(),
+                              holderName: holderNameController.text.trim(),
+                              expiryMonth: expiryMonthController.text.trim(),
+                              expiryYear: expiryYearController.text.trim(),
+                              cvv: cvvController.text.trim(),
+                            );
+                            if (!mounted) return;
+                            Navigator.of(dialogContext).pop();
+                            if (result['success'] == true) {
+                              await _loadSavedCards();
+                              setState(() => _hasChanges = true);
+                              AppAlerts.showSuccess(context, message: 'Cartão salvo com sucesso!');
+                            } else {
+                              AppAlerts.showError(context, message: result['error']?.toString() ?? 'Não foi possível salvar o cartão.');
+                            }
+                          } catch (e) {
+                            if (!mounted) return;
+                            Navigator.of(dialogContext).pop();
+                            AppAlerts.showError(context, message: 'Erro ao validar cartão. Tente novamente.');
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C977),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: isSubmitting
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Salvar Cartão', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

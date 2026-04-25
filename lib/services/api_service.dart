@@ -1760,6 +1760,31 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> tokenizeCard({
+    required String cardNumber,
+    required String holderName,
+    required String expiryMonth,
+    required String expiryYear,
+    required String cvv,
+  }) async {
+    try {
+      await loadToken();
+      final response = await _dio.post('/saved-cards/tokenize', data: {
+        'cardNumber': cardNumber.replaceAll(' ', ''),
+        'holderName': holderName.trim(),
+        'expiryMonth': expiryMonth.trim(),
+        'expiryYear': expiryYear.trim(),
+        'cvv': cvv.trim(),
+      });
+      return Map<String, dynamic>.from(response.data ?? {});
+    } catch (e) {
+      if (e is DioException && e.response?.data is Map) {
+        return Map<String, dynamic>.from(e.response!.data);
+      }
+      return {'success': false, 'error': 'Não foi possível validar o cartão. Verifique os dados e tente novamente.'};
+    }
+  }
+
   // Definir cartão como padrão
   Future<Map<String, dynamic>> setDefaultCard(String cardId) async {
     try {

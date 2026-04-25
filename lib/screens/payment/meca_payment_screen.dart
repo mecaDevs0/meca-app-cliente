@@ -735,8 +735,6 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     final expiryMonthController = TextEditingController();
     final expiryYearController = TextEditingController();
     final cvvController = TextEditingController();
-    bool saveCard = true;
-
     try {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -818,13 +816,6 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                           FilteringTextInputFormatter.digitsOnly,
                           LengthLimitingTextInputFormatter(4),
                         ],
-                      ),
-                      const SizedBox(height: 12),
-                      SwitchListTile.adaptive(
-                        value: saveCard,
-                        onChanged: (v) => setDialogState(() => saveCard = v),
-                        title:
-                            const Text('Salvar cartão para próximas compras'),
                       ),
                     ],
                   ),
@@ -942,7 +933,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         'paymentMethod': 'CREDIT_CARD',
         'credit_card': creditCard,
         'installments': _selectedInstallments,
-        'saveCard': saveCard,
+        'saveCard': false,
         'lastDigits': lastDigits,
         'brand': brand,
         'expiryMonth': expMonth,
@@ -1723,13 +1714,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: () async {
-                final bookingId = widget.bookingData['id']?.toString() ?? '';
-                if (bookingId.isNotEmpty) {
-                  await _payWithNewCard(bookingId);
-                }
+                await _openSavedCards();
               },
-              icon: const Icon(Icons.add),
-              label: const Text('Inserir novo cartão'),
+              icon: const Icon(Icons.add_card),
+              label: const Text('Cadastrar novo cartão'),
             ),
           ],
         ),
@@ -1764,15 +1752,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: () async {
-                final bookingId = widget.bookingData['id']?.toString() ?? '';
-                if (bookingId.isNotEmpty) {
-                  await _payWithNewCard(bookingId);
-                } else {
-                  _openSavedCards();
-                }
+                await _openSavedCards();
               },
-              icon: const Icon(Icons.add),
-              label: const Text('Usar outro cartão agora'),
+              icon: const Icon(Icons.add_card),
+              label: const Text('Cadastrar cartão'),
             ),
           ],
         ),
@@ -1822,16 +1805,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           const SizedBox(height: 14),
           OutlinedButton.icon(
             onPressed: () async {
-              setState(() {
-                _selectedCardId = _newCardSentinel;
-              });
-              final bookingId = widget.bookingData['id']?.toString() ?? '';
-              if (bookingId.isNotEmpty) {
-                await _payWithNewCard(bookingId);
-              }
+              await _openSavedCards();
             },
             icon: const Icon(Icons.add_card),
-            label: const Text('Usar outro cartão agora'),
+            label: const Text('Cadastrar novo cartão'),
           ),
         ],
       ),
