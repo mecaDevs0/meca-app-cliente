@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../../widgets/meca_toast.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -1605,14 +1606,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                                     onPressed: () {
                                       // Copiar número para área de transferência
                                       Clipboard.setData(ClipboardData(text: cleanPhone));
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: const Text('Número copiado!'),
-                                          backgroundColor: const Color(0xFF25D366),
-                                          duration: const Duration(seconds: 2),
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
-                                      );
+                                      MecaToast.showSuccess(context, 'Número copiado!');
                                     },
                                     icon: const Icon(Icons.copy, size: 18),
                                     label: const Text('Copiar'),

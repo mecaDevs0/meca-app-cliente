@@ -1766,6 +1766,7 @@ class ApiService {
     required String expiryMonth,
     required String expiryYear,
     required String cvv,
+    required String cpfCnpj,
   }) async {
     try {
       await loadToken();
@@ -1775,6 +1776,7 @@ class ApiService {
         'expiryMonth': expiryMonth.trim(),
         'expiryYear': expiryYear.trim(),
         'cvv': cvv.trim(),
+        'cpfCnpj': cpfCnpj.replaceAll(RegExp(r'[.\-/]'), ''),
       });
       return Map<String, dynamic>.from(response.data ?? {});
     } catch (e) {

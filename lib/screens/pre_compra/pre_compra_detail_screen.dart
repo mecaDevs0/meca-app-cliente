@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../widgets/meca_toast.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
@@ -151,11 +152,11 @@ class _PreCompraDetailScreenState extends State<PreCompraDetailScreen> {
 
   void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError ? Colors.red[700] : _kGreen,
-      behavior: SnackBarBehavior.floating,
-    ));
+    if (isError) {
+      MecaToast.show(context, msg);
+    } else {
+      MecaToast.showSuccess(context, msg);
+    }
   }
 
   @override

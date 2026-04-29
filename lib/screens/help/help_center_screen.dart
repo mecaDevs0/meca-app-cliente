@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../widgets/meca_toast.dart';
 
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({Key? key}) : super(key: key);
@@ -97,9 +98,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível abrir o e-mail.'), backgroundColor: Colors.redAccent),
-      );
+      MecaToast.show(context, 'Não foi possível abrir o e-mail.');
     }
   }
 
@@ -108,9 +107,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível abrir o telefone.'), backgroundColor: Colors.redAccent),
-      );
+      MecaToast.show(context, 'Não foi possível abrir o telefone.');
     }
   }
 

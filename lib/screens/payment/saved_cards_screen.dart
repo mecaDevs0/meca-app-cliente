@@ -93,7 +93,21 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                   padding: const EdgeInsets.all(16),
                   itemCount: _savedCards.length,
                   itemBuilder: (context, index) {
-                    return _buildCardItem(_savedCards[index]);
+                    return TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: Duration(milliseconds: 350 + (index * 100)),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: Transform.translate(
+                            offset: Offset(0, 20 * (1 - value)),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: _buildCardItem(_savedCards[index]),
+                    );
                   },
                   ),
                 ),
@@ -225,10 +239,10 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
               onSelected: (value) {
                 switch (value) {
                   case 'set_default':
-                    _setAsDefault(card['id']);
+                    _setAsDefault(card['id'].toString());
                     break;
                   case 'remove':
-                    _removeCard(card['id']);
+                    _removeCard(card['id'].toString());
                     break;
                 }
               },
@@ -367,13 +381,24 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
     );
   }
 
-  void _showAddCardDialog() {
+  void _showAddCardDialog() async {
     final cardNumberController = TextEditingController();
     final holderNameController = TextEditingController();
     final expiryMonthController = TextEditingController();
     final expiryYearController = TextEditingController();
     final cvvController = TextEditingController();
+    final cpfController = TextEditingController();
     bool isSubmitting = false;
+
+    try {
+      final profile = await _apiService.getProfile();
+      if (profile['success'] == true && profile['data'] != null) {
+        final cpf = profile['data']['cpf']?.toString() ?? '';
+        if (cpf.isNotEmpty) cpfController.text = cpf;
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
 
     showDialog(
       context: context,
@@ -410,7 +435,7 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Uma micro-cobrança de R\$1,00 será realizada e estornada automaticamente para validar seu cartão.',
+                              'Uma micro-cobrança de R\$5,00 será realizada e estornada automaticamente para validar seu cartão.',
                               style: TextStyle(fontSize: 12, color: isDarkMode ? Colors.amber[200] : Colors.amber[800]),
                             ),
                           ),
@@ -422,13 +447,20 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                       controller: cardNumberController,
                       decoration: const InputDecoration(labelText: 'Número do cartão', hintText: '0000 0000 0000 0000'),
                       keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(19)],
+                      inputFormatters: [_CardNumberFormatter()],
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: holderNameController,
                       decoration: const InputDecoration(labelText: 'Nome no cartão', hintText: 'NOME COMPLETO'),
                       textCapitalization: TextCapitalization.characters,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: cpfController,
+                      decoration: const InputDecoration(labelText: 'CPF do titular', hintText: '000.000.000-00'),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [_CpfFormatter()],
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -474,12 +506,17 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                   onPressed: isSubmitting
                       ? null
                       : () async {
+                          final cpfClean = cpfController.text.replaceAll(RegExp(r'[.\-/]'), '').trim();
                           if (cardNumberController.text.trim().length < 13 ||
                               holderNameController.text.trim().isEmpty ||
                               expiryMonthController.text.trim().isEmpty ||
                               expiryYearController.text.trim().isEmpty ||
                               cvvController.text.trim().length < 3) {
                             AppAlerts.showError(context, message: 'Preencha todos os campos corretamente.');
+                            return;
+                          }
+                          if (cpfClean.length < 11) {
+                            AppAlerts.showError(context, message: 'Informe o CPF do titular do cartão.');
                             return;
                           }
                           setDialogState(() => isSubmitting = true);
@@ -490,10 +527,12 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                               expiryMonth: expiryMonthController.text.trim(),
                               expiryYear: expiryYearController.text.trim(),
                               cvv: cvvController.text.trim(),
+                              cpfCnpj: cpfClean,
                             );
                             if (!mounted) return;
                             Navigator.of(dialogContext).pop();
                             if (result['success'] == true) {
+                              _apiService.invalidateSavedCardsCache();
                               await _loadSavedCards();
                               setState(() => _hasChanges = true);
                               AppAlerts.showSuccess(context, message: 'Cartão salvo com sucesso!');
@@ -523,7 +562,42 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
   }
 }
 
+class _CardNumberFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    if (digits.length > 16) return oldValue;
+    final buf = StringBuffer();
+    for (int i = 0; i < digits.length; i++) {
+      if (i > 0 && i % 4 == 0) buf.write(' ');
+      buf.write(digits[i]);
+    }
+    final formatted = buf.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
 
+class _CpfFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    if (digits.length > 11) return oldValue;
+    final buf = StringBuffer();
+    for (int i = 0; i < digits.length; i++) {
+      if (i == 3 || i == 6) buf.write('.');
+      if (i == 9) buf.write('-');
+      buf.write(digits[i]);
+    }
+    final formatted = buf.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
 
 
 

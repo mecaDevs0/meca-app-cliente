@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import '../../widgets/meca_toast.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -29,8 +30,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late TabController _tabController;
-  static const double _fallbackLatitude = -23.5505;
-  static const double _fallbackLongitude = -46.6333;
 
   bool _isLoading = true;
   List<Map<String, dynamic>> _upcomingBookings = [];
@@ -161,19 +160,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _currentPosition = position;
           await _updateNearbyWorkshops(position.latitude, position.longitude, usedFallback: false);
           await _checkIfInSaoPaulo(position.latitude, position.longitude);
-        } else {
-          await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude, usedFallback: true);
-          await _checkIfInSaoPaulo(_fallbackLatitude, _fallbackLongitude);
+          return;
         }
       } catch (e) {
         print('Erro ao obter localização: $e');
-        await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude, usedFallback: true);
-        await _checkIfInSaoPaulo(_fallbackLatitude, _fallbackLongitude);
       }
-    } else {
-      await _updateNearbyWorkshops(_fallbackLatitude, _fallbackLongitude, usedFallback: true);
-      if (mounted) setState(() => _isInSaoPaulo = false);
     }
+    await _updateNearbyWorkshopsNoLocation();
+    if (mounted) setState(() => _isInSaoPaulo = false);
   }
 
   @override
@@ -604,20 +598,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             await launchUrl(uri, mode: LaunchMode.externalApplication);
           } else {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Não foi possível abrir o WhatsApp. Verifique se o app está instalado.'),
-                ),
-              );
+              MecaToast.show(context, 'Não foi possível abrir o WhatsApp. Verifique se o app está instalado.');
             }
           }
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Erro ao abrir WhatsApp: $e'),
-              ),
-            );
+            MecaToast.show(context, 'Erro ao abrir WhatsApp: $e');
           }
         }
       },
@@ -1395,6 +1381,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     } else {
       setState(() {
         _usedFallbackLocationForNearby = usedFallback;
+        _nearbyWorkshops = [];
+      });
+    }
+  }
+
+  Future<void> _updateNearbyWorkshopsNoLocation() async {
+    final response = await _apiService.getAllWorkshops();
+
+    if (!mounted) return;
+
+    if (response['success'] == true) {
+      final data = response['data'];
+      List<dynamic> workshops = [];
+
+      if (data is Map) {
+        workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
+      } else if (data is List) {
+        workshops = data;
+      }
+
+      setState(() {
+        _usedFallbackLocationForNearby = false;
+        _nearbyWorkshops = workshops
+            .whereType<Map>()
+            .map((w) => _normalizeWorkshop(Map<String, dynamic>.from(w)))
+            .take(3)
+            .toList();
+      });
+    } else {
+      setState(() {
+        _usedFallbackLocationForNearby = false;
         _nearbyWorkshops = [];
       });
     }

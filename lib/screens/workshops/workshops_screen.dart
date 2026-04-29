@@ -28,9 +28,6 @@ class WorkshopsScreen extends StatefulWidget {
 }
 
 class _WorkshopsScreenState extends State<WorkshopsScreen> {
-  static const double _fallbackLatitude = -23.5505;
-  static const double _fallbackLongitude = -46.6333;
-
   final ApiService _apiService = ApiService();
   final LocationService _locationService = LocationService.instance;
   List<dynamic> _workshops = [];
@@ -73,8 +70,8 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     
     try {
       final status = await _locationService.ensurePermissions();
-      double targetLat = _fallbackLatitude;
-      double targetLng = _fallbackLongitude;
+      double? targetLat;
+      double? targetLng;
 
       if (status.canRequestPosition) {
         final position = await _locationService.getCurrentPosition(forceFresh: true);
@@ -82,21 +79,20 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
           targetLat = position.latitude;
           targetLng = position.longitude;
         } else {
-        if (!mounted) return;
-        setState(() {
-            _locationWarning = 'Não conseguimos acessar sua localização agora. Mostrando oficinas próximas a São Paulo.';
+          if (!mounted) return;
+          setState(() {
+            _locationWarning = 'Não conseguimos acessar sua localização. Distâncias não serão exibidas.';
           });
         }
       } else {
-          if (!mounted) return;
-          setState(() {
+        if (!mounted) return;
+        setState(() {
           _locationWarning = _buildLocationWarning(status);
         });
       }
 
-      // Converter filtro de distância para km (padrão 50km)
-      double? radiusKm; // null = buscar todas
-      if (_selectedDistance != 'Todas') {
+      double? radiusKm;
+      if (targetLat != null && _selectedDistance != 'Todas') {
         switch (_selectedDistance) {
           case 'Até 50km':
             radiusKm = 50.0;
@@ -104,11 +100,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
           case 'Até 200km':
             radiusKm = 200.0;
             break;
-          default:
-            radiusKm = null; // Todas = buscar todas
         }
-      } else {
-        radiusKm = null; // Todas = buscar todas
       }
       await _fetchWorkshops(targetLat, targetLng, radiusKm: radiusKm);
     } catch (e) {
@@ -141,8 +133,8 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     });
 
     try {
-      double targetLat = _fallbackLatitude;
-      double targetLng = _fallbackLongitude;
+      double? targetLat;
+      double? targetLng;
       final status = await _locationService.ensurePermissions();
       if (status.canRequestPosition) {
         final position = await _locationService.getCurrentPosition(forceFresh: true);
@@ -156,7 +148,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         serviceId,
         lat: targetLat,
         lng: targetLng,
-        radiusKm: 200.0,
+        radiusKm: targetLat != null ? 200.0 : null,
       );
 
       if (!mounted) return;
@@ -185,43 +177,48 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     }
   }
 
-  Future<void> _fetchWorkshops(double userLat, double userLng, {double? radiusKm}) async {
-    // Se tiver busca por nome, passar o texto de busca (busca independente de distância)
+  Future<void> _fetchWorkshops(double? userLat, double? userLng, {double? radiusKm}) async {
     final searchQuery = _searchController.text.trim().isNotEmpty ? _searchController.text.trim() : null;
-    // Se radiusKm for null (Todos), passar um valor muito alto para buscar todas
-    final finalRadiusKm = radiusKm ?? 999999.0; // Valor muito alto para buscar todas
-    final result = await _apiService.getNearbyWorkshops(userLat, userLng, finalRadiusKm, searchQuery);
-      
-      if (!mounted) return;
-             if (result['success']) {
-               final data = result['data'];
-               List<dynamic> workshops = [];
-               
-               if (data is Map) {
-                 workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
-               } else if (data is List) {
-                 workshops = data;
-               }
-               
-               _normalizeWorkshopList(workshops, userLat, userLng);
-               
-               setState(() {
-                 _workshops = workshops;
-                 _filteredWorkshops = List.from(_workshops);
-                 _loading = false;
-        _error = '';
-               });
-               _applyFilters();
-             } else {
-        setState(() {
-          _error = result['error'] ?? 'Erro ao carregar oficinas';
-          _loading = false;
-        });
+    final hasLocation = userLat != null && userLng != null;
+
+    Map<String, dynamic> result;
+    if (hasLocation) {
+      final finalRadiusKm = radiusKm ?? 999999.0;
+      result = await _apiService.getNearbyWorkshops(userLat, userLng, finalRadiusKm, searchQuery);
+    } else {
+      result = await _apiService.getAllWorkshops();
+    }
+
+    if (!mounted) return;
+    if (result['success']) {
+      final data = result['data'];
+      List<dynamic> workshops = [];
+
+      if (data is Map) {
+        workshops = data['workshops'] ?? data['workshop'] ?? data['data'] ?? [];
+      } else if (data is List) {
+        workshops = data;
       }
+
+      _normalizeWorkshopList(workshops, userLat, userLng);
+
+      setState(() {
+        _workshops = workshops;
+        _filteredWorkshops = List.from(_workshops);
+        _loading = false;
+        _error = '';
+      });
+      _applyFilters();
+    } else {
+      setState(() {
+        _error = result['error'] ?? 'Erro ao carregar oficinas';
+        _loading = false;
+      });
+    }
   }
 
   /// Normaliza lista de workshops: distância, endereço, logo, rating (evita duplicação)
-  void _normalizeWorkshopList(List<dynamic> workshops, double userLat, double userLng) {
+  void _normalizeWorkshopList(List<dynamic> workshops, double? userLat, double? userLng) {
     for (var workshop in workshops) {
       final workshopLat = _extractLatitude(workshop);
       final workshopLng = _extractLongitude(workshop);
@@ -235,7 +232,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         }
         if (distance != null && distance <= 0) distance = null;
       }
-      if (distance == null && workshopLat != null && workshopLng != null) {
+      if (distance == null && userLat != null && userLng != null && workshopLat != null && workshopLng != null) {
         try {
           distance = Geolocator.distanceBetween(userLat, userLng, workshopLat, workshopLng) / 1000.0;
         } catch (_) {}

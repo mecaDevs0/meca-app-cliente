@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../widgets/meca_toast.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -948,12 +949,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   Future<void> _launchExternalUrl(Uri url) async {
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Não foi possível abrir o app de mapas.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      MecaToast.show(context, 'Não foi possível abrir o app de mapas.');
     }
   }
 

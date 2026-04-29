@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../widgets/meca_toast.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/app_alerts.dart';
@@ -159,20 +160,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
         });
         AppAlerts.showWarning(context, message: errMsg, title: 'Placa não encontrada');
         if (allowManual && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Expanded(child: Text('Placa não encontrada. Preencha os dados manualmente.', style: TextStyle(color: Colors.white))),
-                ],
-              ),
-              backgroundColor: Colors.orange.shade700,
-              duration: const Duration(seconds: 4),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          MecaToast.showWarning(context, 'Placa não encontrada. Preencha os dados manualmente.');
         }
       }
     } catch (e) {
@@ -212,22 +200,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
         : source;
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text('Dados encontrados via $label', style: const TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
-          backgroundColor: Colors.green.shade700,
-          duration: const Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      MecaToast.showSuccess(context, 'Dados encontrados via $label');
     }
   }
 

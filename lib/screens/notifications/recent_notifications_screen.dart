@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../widgets/meca_toast.dart';
 
 import '../../providers/notification_provider.dart';
 import '../../services/api_service.dart';
@@ -102,34 +103,14 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
         // A próxima vez que o usuário entrar na tela, as notificações serão sincronizadas
         
         // Mostrar feedback de sucesso
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Todas as notificações foram marcadas como lidas'),
-            backgroundColor: Color(0xFF00C977),
-            duration: Duration(seconds: 2),
-          ),
-        );
+        MecaToast.showSuccess(context, 'Todas as notificações foram marcadas como lidas');
       } else {
-        // Mostrar erro
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erro ao marcar notificações como lidas'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        MecaToast.show(context, result['error'] ?? 'Erro ao marcar notificações como lidas');
       }
     } catch (e) {
       print('Erro ao marcar todas como lidas: $e');
       if (!mounted) return;
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erro ao conectar com o servidor. Tente novamente.'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
+      MecaToast.show(context, 'Erro ao conectar com o servidor. Tente novamente.');
     }
   }
 
@@ -444,12 +425,7 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Esta notificação não tem uma ação direta. Verifique os detalhes manualmente.'),
-        duration: Duration(seconds: 3),
-      ),
-    );
+    MecaToast.showInfo(context, 'Esta notificação não tem uma ação direta. Verifique os detalhes manualmente.');
   }
 }
 

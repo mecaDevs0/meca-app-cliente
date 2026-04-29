@@ -36,7 +36,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
     });
 
     try {
-      final result = await _apiService.get('/payments');
+      final result = await _apiService.get('/payments', skipCache: true);
       if (!mounted) return;
 
       if (result['success'] == true) {

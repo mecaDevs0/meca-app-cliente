@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as Math;
+import '../../widgets/meca_toast.dart';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -199,12 +200,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         ? 'Por segurança, seus cartões salvos precisam ser recadastrados neste pagamento.'
         : 'Seus cartões salvos foram migrados para o novo provedor. Caso algum cartão não funcione, recadastre-o.';
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 6),
-      ),
-    );
+    MecaToast.showWarning(context, message);
   }
 
   Uint8List? _decodePixQrImage(String? raw) {

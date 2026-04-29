@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../widgets/meca_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -82,7 +83,7 @@ class _PreCompraBookingScreenState extends State<PreCompraBookingScreen> {
 
   Future<void> _loadWorkshops() async {
     try {
-      final result = await _api.get('/workshop/nearby?lat=-23.5505&lng=-46.6333&radius=100');
+      final result = await _api.getAllWorkshops();
       final data = result['data'];
       List<Map<String, dynamic>> list = [];
       if (data is List) {
@@ -271,11 +272,11 @@ class _PreCompraBookingScreenState extends State<PreCompraBookingScreen> {
 
   void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError ? Colors.red[700] : _kGreen,
-      behavior: SnackBarBehavior.floating,
-    ));
+    if (isError) {
+      MecaToast.show(context, msg);
+    } else {
+      MecaToast.showSuccess(context, msg);
+    }
   }
 
   @override

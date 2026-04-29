@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../widgets/meca_toast.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -512,13 +513,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           _shownInProgressPopup = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Início do serviço aprovado! Agora é só aguardar atualizações da oficina.'),
-                backgroundColor: Color(0xFF00C977),
-                duration: Duration(seconds: 4),
-              ),
-            );
+            MecaToast.showSuccess(context, 'Início do serviço aprovado! Agora é só aguardar atualizações da oficina.');
           });
         }
       }
@@ -1228,18 +1223,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
           return Container(
             decoration: BoxDecoration(
-              color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, -2),
+              color: isDarkMode ? const Color(0xFF0A0A0A) : Colors.white,
+              border: Border(
+                top: BorderSide(
+                  color: isDarkMode ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.05),
+                  width: 0.5,
                 ),
-              ],
+              ),
             ),
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1326,15 +1320,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     String subtitle;
 
     if (normalizedStatus == 'awaiting_payment') {
-      title = isFinalQuote ? 'Orçamento Final' : 'Orçamento aprovado';
-      subtitle = isFinalQuote 
+      title = isFinalQuote ? 'Orçamento Final' : 'Orçamento Detalhado';
+      subtitle = isFinalQuote
           ? 'Valor final após conclusão do serviço. Realize o pagamento.'
           : 'Finalize o pagamento para concluir o serviço.';
     } else if (hasCompletedAt) {
       title = 'Orçamento final da oficina';
       subtitle = 'Valor definido após o término do serviço.';
     } else {
-      title = 'Orçamento aprovado';
+      title = 'Orçamento Detalhado';
       subtitle = 'A oficina iniciará o serviço com este valor.';
     }
 
@@ -1358,10 +1352,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           (merged['quote_status'] ?? widget.booking['quote_status']) == 'pending';
 
     // PDF: deixar evidente que pode modificar orçamento; texto do chefe
-    if (isQuotePending && isEditedQuote && title == 'Orçamento aprovado') {
+    if (isQuotePending && isEditedQuote && title == 'Orçamento Detalhado') {
       title = 'Aperte aqui caso deseje modificar algo no orçamento';
       subtitle = 'A oficina alterou o orçamento durante o serviço. Revise o novo valor e aprove ou rejeite.';
-    } else if (isEditedQuote && normalizedStatus == 'em_andamento' && title == 'Orçamento aprovado') {
+    } else if (isEditedQuote && normalizedStatus == 'em_andamento' && title == 'Orçamento Detalhado') {
       title = 'Aperte aqui caso deseje modificar algo no orçamento';
       subtitle = 'Você aprovou o novo orçamento. O serviço continua com o valor atualizado.';
     }
@@ -1433,6 +1427,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  Builder(builder: (_) {
+                    final reason = merged['quote_reason']?.toString() ?? widget.booking['quote_reason']?.toString();
+                    if (reason == null || reason.trim().isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.message_rounded, size: 14, color: Colors.white.withValues(alpha: 0.8)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              reason.trim(),
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontSize: 13,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
                   const SizedBox(height: 12),
                   // Items do orçamento
                   ...List<Widget>.from(quoteItems.asMap().entries.map<Widget>((entry) {
@@ -2357,22 +2375,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final normalizedStatus = _normalizeStatusKey(finalStatus);
     final rawStatus = finalStatus.toLowerCase();
     
-    // DEBUG: Log para verificar detecção de sugestão
-    debugPrint('🔍 [OrderDetail] _buildActionButtons:');
-    debugPrint('  - status original: $status');
-    debugPrint('  - finalStatus: $finalStatus');
-    debugPrint('  - rawStatus: $rawStatus');
-    debugPrint('  - merged[sugerido_por]: ${merged['sugerido_por']}');
-    debugPrint('  - merged[suggested_by]: ${merged['suggested_by']}');
-    debugPrint('  - merged[data_sugerida]: ${merged['data_sugerida']}');
-    debugPrint('  - merged[suggested_date]: ${merged['suggested_date']}');
-    debugPrint('  - merged[status]: ${merged['status']}');
-    debugPrint('  - _bookingDetails[sugerido_por]: ${_bookingDetails?['sugerido_por']}');
-    debugPrint('  - _bookingDetails[suggested_by]: ${_bookingDetails?['suggested_by']}');
-    debugPrint('  - _bookingDetails[data_sugerida]: ${_bookingDetails?['data_sugerida']}');
-    debugPrint('  - _bookingDetails[suggested_date]: ${_bookingDetails?['suggested_date']}');
-    debugPrint('  - _bookingDetails[status]: ${_bookingDetails?['status']}');
-    
     // Verificar sugestão de horário com múltiplas variações de campos
     final suggestedBy = merged['suggested_by'] ?? 
                        merged['sugerido_por'] ?? 
@@ -2384,10 +2386,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             _bookingDetails?['data_sugerida'];
     final hasSuggestedDate = suggestedDateRaw != null && suggestedDateRaw.toString().isNotEmpty && suggestedDateRaw.toString() != 'null';
     final isTimeSuggestion = (suggestedBy == 'oficina' || suggestedBy == 'workshop') && hasSuggestedDate;
-    
-    debugPrint('  - suggestedBy: $suggestedBy');
-    debugPrint('  - hasSuggestedDate: $hasSuggestedDate');
-    debugPrint('  - isTimeSuggestion: $isTimeSuggestion');
     
     final hasQuote = (merged['final_price'] != null && merged['final_price'] > 0) ||
                      (_bookingDetails?['final_price'] != null && _bookingDetails!['final_price'] > 0);
@@ -2516,96 +2514,41 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
     final isFinalQuote = quoteStatus == 'final';
     
-    return Column(
+    return Row(
       children: [
-        // Botão de aprovar orçamento/finalização
-        Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF00C977), Color(0xFF00B369)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF00C977).withOpacity(0.4),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: isAwaitingFinalizationApproval ? _approveFinalization : _approveQuote,
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Aprovar Orçamento',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ],
+        if (isAwaitingFinalizationApproval || !isFinalQuote)
+          Expanded(
+            flex: 2,
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.red.withValues(alpha: 0.1)
+                    : Colors.red.withValues(alpha: 0.06),
+                border: Border.all(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.red.withValues(alpha: 0.3)
+                      : Colors.red.withValues(alpha: 0.2),
+                  width: 1,
                 ),
               ),
-            ),
-          ),
-        ),
-        // Botão de rejeitar (não mostrar se for orçamento final e não for finalização)
-        if (isAwaitingFinalizationApproval || !isFinalQuote)
-          Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Theme.of(context).brightness == Brightness.dark 
-                    ? Colors.grey[700]!
-                    : Colors.grey[300]!,
-                width: 2,
-              ),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => isAwaitingFinalizationApproval ? _rejectFinalization() : _rejectQuote(),
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => isAwaitingFinalizationApproval ? _rejectFinalization() : _rejectQuote(),
+                  borderRadius: BorderRadius.circular(12),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        Icons.close_rounded,
-                        color: Colors.red[600],
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
+                      Icon(Icons.close_rounded, color: Colors.red[400], size: 18),
+                      const SizedBox(width: 5),
                       Text(
-                        'Rejeitar Orçamento',
+                        'Rejeitar',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: Colors.red[600],
-                          letterSpacing: -0.5,
+                          color: Colors.red[400],
                         ),
                       ),
                     ],
@@ -2614,6 +2557,51 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ),
           ),
+        if (isAwaitingFinalizationApproval || !isFinalQuote)
+          const SizedBox(width: 10),
+        Expanded(
+          flex: 3,
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF00C977), Color(0xFF00B369)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00C977).withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: isAwaitingFinalizationApproval ? _approveFinalization : _approveQuote,
+                borderRadius: BorderRadius.circular(12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                    const SizedBox(width: 5),
+                    const Text(
+                      'Aprovar',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -2917,39 +2905,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         // Recarregar detalhes do agendamento
         await _loadBookingDetails(forceRefresh: true);
         
-        // Verificar se é orçamento inicial ou final
         final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
-        final newStatus = result['data']?['status']?.toString().toLowerCase() ?? 
-                         (hasCompletedAt ? 'finalizado_aguardando_pagamento' : 'confirmado');
-        
+        final newStatus = result['data']?['status']?.toString().toLowerCase() ??
+                         (hasCompletedAt ? 'aguardando_pagamento' : 'em_andamento');
+
         String message;
         if (isEditedQuote) {
-          message = 'Orçamento atualizado aprovado com sucesso! O serviço continuará com o novo valor.';
+          message = 'Orçamento atualizado aprovado! O serviço continua em andamento.';
         } else {
           message = hasCompletedAt
-              ? 'Orçamento aprovado com sucesso! Agora você pode realizar o pagamento.'
-              : 'Orçamento aprovado com sucesso! A oficina pode iniciar o serviço agora.';
+              ? 'Orçamento aprovado! Agora você pode realizar o pagamento.'
+              : 'Orçamento aprovado! A oficina continuará o serviço e você será notificado quando finalizar.';
         }
-        
-        AppAlerts.showSuccess(
-          context,
-          message: message,
-        );
-        
-        // Atualizar o status local baseado na resposta da API
+
+        MecaToast.showSuccess(context, message);
+
         if (!mounted) return;
         setState(() {
           widget.booking['status'] = newStatus;
+          widget.booking['quote_status'] = 'approved';
           if (_bookingDetails != null) {
             _bookingDetails!['status'] = newStatus;
-          }
-        });
-        
-        // IMPORTANTE: Retornar true para indicar que houve atualização
-        // Navegar de volta após um delay para permitir que a tela anterior atualize
-        Future.delayed(const Duration(milliseconds: 800), () {
-          if (mounted) {
-            Navigator.of(context).pop(true); // Passar true para indicar refresh necessário
+            _bookingDetails!['quote_status'] = 'approved';
           }
         });
       } else {
