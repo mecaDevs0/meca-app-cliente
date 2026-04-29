@@ -1473,8 +1473,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                       'aguardando_autorizacao_inicio',
                       'aguardando_aprovacao_finalizacao',
                       'aguardando_aprovacao_orcamento',
-                      'finalizado', 'finalizado_aguardando_pagamento', 'completed',
-                      'pago', 'paid',
+                      'finalizado', 'finalizado_aguardando_pagamento',
+                      'aguardando_pagamento',
                     ].contains(normalizedStatus);
                     
                     if (!canShowPhone) return const SizedBox.shrink();
