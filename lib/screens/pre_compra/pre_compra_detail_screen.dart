@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
+import '../../utils/formatters.dart';
 import '../payment/meca_payment_screen.dart';
 
 const _kGreen = Color(0xFF00C977);
@@ -247,7 +248,7 @@ class _PreCompraDetailScreenState extends State<PreCompraDetailScreen> {
           // Oficina
           _section('Oficina', card, isDark, [
             _row(Icons.store, 'Nome', workshopName, text, sub),
-            if (workshopPhone.isNotEmpty) _row(Icons.phone, 'Telefone', workshopPhone, text, sub),
+            if (workshopPhone.isNotEmpty) _row(Icons.phone, 'Telefone', Formatters.formatPhone(workshopPhone), text, sub),
             if (workshopAddress.isNotEmpty) _row(Icons.location_on, 'Endereço', workshopAddress, text, sub),
             if (formattedDate.isNotEmpty) _row(Icons.calendar_today, 'Agendado para', formattedDate, text, sub),
           ]),

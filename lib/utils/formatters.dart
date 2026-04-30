@@ -37,5 +37,12 @@ class Formatters {
       return '(${digitsOnly.substring(0, 2)}) ${digitsOnly.substring(2, 7)}-${digitsOnly.substring(7)}';
     }
   }
+
+  static String formatCnpj(String? cnpj) {
+    if (cnpj == null || cnpj.isEmpty) return 'Não informado';
+    final digitsOnly = cnpj.replaceAll(RegExp(r'\D'), '');
+    if (digitsOnly.length != 14) return cnpj;
+    return '${digitsOnly.substring(0, 2)}.${digitsOnly.substring(2, 5)}.${digitsOnly.substring(5, 8)}/${digitsOnly.substring(8, 12)}-${digitsOnly.substring(12)}';
+  }
 }
 
