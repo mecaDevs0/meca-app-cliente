@@ -1466,16 +1466,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 // Seção de contato WhatsApp - quando status do agendamento for no mínimo confirmado
                 Builder(
                   builder: (context) {
-                    final normalizedStatus = status.toString().toLowerCase().trim();
-                    final canShowPhone = [
-                      'confirmado', 'confirmed',
-                      'em_andamento', 'in_progress',
-                      'aguardando_autorizacao_inicio',
-                      'aguardando_aprovacao_finalizacao',
-                      'aguardando_aprovacao_orcamento',
-                      'finalizado', 'finalizado_aguardando_pagamento',
-                      'aguardando_pagamento',
-                    ].contains(normalizedStatus);
+                    final normalizedKey = _normalizeStatusKeyForList(status.toString());
+                    final canShowPhone = normalizedKey != 'paid' && normalizedKey != 'cancelled';
                     
                     if (!canShowPhone) return const SizedBox.shrink();
                     
