@@ -1632,14 +1632,21 @@ class ApiService {
     required String workshopId,
     required int rating,
     String? comment,
+    int? qualityRating,
+    int? priceRating,
+    int? timeRating,
   }) async {
     try {
       await loadToken();
-      final response = await _dio.post('/reviews', data: {
+      final data = <String, dynamic>{
         'booking_id': bookingId,
         'rating': rating,
         'comment': comment ?? '',
-      });
+      };
+      if (qualityRating != null && qualityRating > 0) data['quality_rating'] = qualityRating;
+      if (priceRating != null && priceRating > 0) data['price_rating'] = priceRating;
+      if (timeRating != null && timeRating > 0) data['time_rating'] = timeRating;
+      final response = await _dio.post('/reviews', data: data);
       if (response.data != null && response.data['success'] == true) {
         return {'success': true, 'data': response.data['data']};
       }

@@ -82,6 +82,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           builder: (context) => ReviewScreen(
             bookingId: bookingId,
             workshopId: workshopId,
+            fromPayment: true,
           ),
         ),
       );

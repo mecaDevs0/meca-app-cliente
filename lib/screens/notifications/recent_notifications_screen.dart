@@ -126,36 +126,56 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
             backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
             title: Row(
               children: [
-                Expanded(
-                  child: Text(
-                    'Notificações',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: isDark ? Colors.white : const Color(0xFF252940),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 22,
-                    ),
+                Text(
+                  'Notificações',
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF252940),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 22,
                   ),
                 ),
                 if (_unreadCount > 0) ...[
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0xFF00C977).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       '$_unreadCount',
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: Color(0xFF00C977),
                         fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
                 ],
+                const Spacer(),
+                if (_unreadCount > 0)
+                  GestureDetector(
+                    onTap: _markAllAsRead,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.done_all_rounded,
+                          size: 15,
+                          color: (isDark ? Colors.white : const Color(0xFF252940)).withOpacity(0.45),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Ler todas',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: (isDark ? Colors.white : const Color(0xFF252940)).withOpacity(0.45),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
             leading: IconButton(
@@ -165,24 +185,6 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
               ),
               onPressed: () => Navigator.pop(context),
             ),
-            actions: [
-              if (_unreadCount > 0)
-                TextButton.icon(
-                  onPressed: _markAllAsRead,
-                  icon: const Icon(
-                    Icons.done_all,
-                    size: 18,
-                    color: Color(0xFF00C977),
-                  ),
-                  label: const Text(
-                    'Ler todas',
-                    style: TextStyle(
-                      color: Color(0xFF00C977),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-            ],
           ),
           body: _isLoading
               ? const Center(child: CircularProgressIndicator(color: Color(0xFF00C977)))
