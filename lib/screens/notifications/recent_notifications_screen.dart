@@ -43,7 +43,7 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
       if (result['success'] == true) {
         final payload = result['data'];
         final normalized = NotificationProvider.normalizeNotifications(payload);
-        final unread = NotificationProvider.extractUnreadCount(payload);
+        final unread = normalized.where((n) => n['read'] != true && n['is_read'] != true).length;
 
         setState(() {
           _notifications = normalized;
