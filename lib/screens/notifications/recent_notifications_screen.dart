@@ -153,9 +153,10 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
                   ),
                 ],
                 const Spacer(),
-                if (_unreadCount > 0)
-                  GestureDetector(
-                    onTap: _markAllAsRead,
+                GestureDetector(
+                  onTap: _unreadCount > 0 ? _markAllAsRead : null,
+                  child: Opacity(
+                    opacity: _unreadCount > 0 ? 1.0 : 0.3,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -176,6 +177,7 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
                       ],
                     ),
                   ),
+                ),
               ],
             ),
             leading: IconButton(
