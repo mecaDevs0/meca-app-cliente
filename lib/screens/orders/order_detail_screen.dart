@@ -264,15 +264,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         normalized == 'awaiting_payment';
   }
 
-  /// Cliente só pode ver telefone da oficina quando status do agendamento for no mínimo confirmado
-  /// NÃO permitidos: pendente_oficina, pendente_cliente, pendente, pending, suggested_time, cancelado
+  /// Cliente só pode ver telefone da oficina quando serviço estiver em andamento ou adiante.
+  /// Evita que o cliente pegue o contato e faça o serviço por fora da plataforma.
   bool _canShowWorkshopPhone(String? status) {
     if (status == null || status.isEmpty) return false;
     final s = status.toLowerCase().trim();
     const allowed = [
-      'confirmado', 'confirmed',
       'em_andamento', 'in_progress',
-      'aguardando_autorizacao_inicio',
       'aguardando_aprovacao_finalizacao',
       'aguardando_aprovacao_orcamento',
       'aguardando_pagamento',
@@ -780,6 +778,61 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
               child: _buildStatusInfoCard(status, normalizedStatus),
             ),
+            // Motivo de cancelamento/recusa
+            Builder(
+              builder: (context) {
+                final merged = _mergeBookingData();
+                final cancelReason = (merged['cancel_reason'] ?? '').toString().trim();
+                final cancelledBy = (merged['cancelled_by'] ?? '').toString().trim();
+                if (normalizedStatus != 'cancelled' || cancelReason.isEmpty) return const SizedBox.shrink();
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF3D1F1F).withOpacity(0.55) : const Color(0xFFFEE2E2),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFFFF6B6B).withOpacity(0.4) : const Color(0xFFE8867C).withOpacity(0.4),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, color: isDark ? const Color(0xFFFF6B6B) : const Color(0xFFE8867C), size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                cancelledBy == 'workshop' ? 'Motivo da recusa:' : 'Motivo do cancelamento:',
+                                style: TextStyle(
+                                  color: isDark ? const Color(0xFFFF6B6B) : const Color(0xFFE8867C),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                cancelReason,
+                                style: TextStyle(
+                                  color: isDark ? Colors.white70 : Colors.black87,
+                                  fontSize: 14,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
             if (_shouldShowReminderButton())
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -898,15 +951,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             return _buildInfoRow(Icons.phone, Formatters.formatPhone(phone));
                           return _buildInfoRow(
                             Icons.phone,
-                            'Telefone disponível após a oficina confirmar o agendamento',
+                            'Telefone disponível quando o serviço estiver em andamento',
                           );
                         },
                       ),
-                      if (_bookingDetails?['workshop_email'] != null)
-                        _buildInfoRow(
-                          Icons.email,
-                          (_bookingDetails?['workshop_email'] ?? '').toString(),
-                        ),
+                      Builder(
+                        builder: (context) {
+                          final merged = _mergeBookingData();
+                          final status = merged['status']?.toString() ?? '';
+                          final canShow = _canShowWorkshopPhone(status);
+                          final email = (_bookingDetails?['workshop_email'] ?? '').toString().trim();
+                          if (canShow && email.isNotEmpty)
+                            return _buildInfoRow(Icons.email, email);
+                          return const SizedBox.shrink();
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 20),

@@ -103,7 +103,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
   }
 
   Future<void> _launchPhone() async {
-    final uri = Uri(scheme: 'tel', path: '+551130000000');
+    final uri = Uri(scheme: 'tel', path: '+551130644243');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else if (mounted) {
@@ -261,7 +261,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                   _ContactCard(
                     icon: Icons.phone_outlined,
                     title: 'Telefone',
-                    subtitle: '(11) 3000-0000',
+                    subtitle: '(11) 3064-4243',
                     onTap: _launchPhone,
                     isDark: isDark,
                     surface: surface,

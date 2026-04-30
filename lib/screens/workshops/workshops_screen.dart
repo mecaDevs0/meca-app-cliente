@@ -48,6 +48,13 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   String _selectedInstallment = 'Todos';
   String _sortBy = 'distancia';
 
+  bool get _hasActiveFilters =>
+      _selectedService != 'Todos' ||
+      _selectedDistance != 'Todas' ||
+      _selectedRating != 'Todos' ||
+      _selectedInstallment != 'Todos' ||
+      _sortBy != 'distancia';
+
   @override
   void initState() {
     super.initState();
@@ -374,16 +381,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
             pinned: true,
             backgroundColor: const Color(0xFF00C977),
             elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-              onPressed: () {
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/home',
-                  (route) => false,
-                );
-              },
-            ),
+            automaticallyImplyLeading: false,
             title: Text(
               'Oficinas Próximas',
               style: TextStyle(
@@ -402,11 +400,27 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
             ),
             centerTitle: true,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.filter_list, color: Colors.white, size: 20),
-                onPressed: () {
-                  _showFilterModal();
-                },
+              Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 22),
+                    onPressed: _showFilterModal,
+                  ),
+                  if (_hasActiveFilters)
+                    Positioned(
+                      right: 10,
+                      top: 10,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFF00C977), width: 1.5),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: 4),
             ],
@@ -1602,22 +1616,23 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                 
                 return SizedBox(
                   width: cardWidth,
+                  height: 56,
                   child: InkWell(
                     onTap: () {
                       onChanged(option);
                     },
                     borderRadius: BorderRadius.circular(20),
                     child: Container(
-                      width: cardWidth,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        color: isSelected 
-                            ? const Color(0xFF00C977) 
+                        color: isSelected
+                            ? const Color(0xFF00C977)
                             : (isDarkMode ? const Color(0xFF2A2A2A) : Colors.white),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isSelected 
-                              ? const Color(0xFF00C977) 
+                          color: isSelected
+                              ? const Color(0xFF00C977)
                               : (isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
                           width: isSelected ? 2 : 1.5,
                         ),
@@ -1632,11 +1647,11 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                       child: Text(
                         displayOption,
                         textAlign: TextAlign.center,
-                        maxLines: 3,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: isSelected 
-                              ? Colors.white 
+                          color: isSelected
+                              ? Colors.white
                               : (isDarkMode ? Colors.white70 : Colors.grey[700]!),
                           fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                           fontSize: 13,

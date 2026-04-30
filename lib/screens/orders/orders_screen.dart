@@ -253,20 +253,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
             floating: false,
             pinned: true,
             backgroundColor: const Color(0xFF00C977),
-            leading: IconButton(
-              icon: const Icon(
-                Icons.arrow_back,
-                color: Colors.white,
-                size: 24,
-              ),
-              onPressed: () {
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/home',
-                  (route) => false,
-                );
-              },
-            ),
+            automaticallyImplyLeading: false,
             flexibleSpace: FlexibleSpaceBar(
               title: const Text(
                 'Meus Agendamentos',
@@ -1096,6 +1083,50 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 ),
                 const SizedBox(height: 15),
 
+                // Motivo de cancelamento/recusa
+                if (normalizedStatus == 'cancelled' && (booking['cancel_reason'] ?? '').toString().trim().isNotEmpty) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: (isDarkMode ? const Color(0xFF3D1F1F) : const Color(0xFFFEE2E2)).withOpacity(0.55),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, color: isDarkMode ? const Color(0xFFFF6B6B) : const Color(0xFFE8867C), size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                booking['cancelled_by'] == 'workshop' ? 'Motivo da recusa:' : 'Motivo do cancelamento:',
+                                style: TextStyle(
+                                  color: isDarkMode ? const Color(0xFFFF6B6B) : const Color(0xFFE8867C),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                booking['cancel_reason'].toString().trim(),
+                                style: TextStyle(
+                                  color: isDarkMode ? Colors.white70 : Colors.black87,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 12.5,
+                                  height: 1.25,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 if (isAwaitingPayment) ...[
                   Container(
                     margin: const EdgeInsets.only(bottom: 14),
@@ -1463,13 +1494,18 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   },
                 ),
                 
-                // Seção de contato WhatsApp - quando status do agendamento for no mínimo confirmado
+                // Seção de contato WhatsApp - só quando serviço estiver em andamento ou adiante
                 Builder(
                   builder: (context) {
-                    final normalizedKey = _normalizeStatusKeyForList(status.toString());
-                    final canShowPhone = normalizedKey != 'paid' && normalizedKey != 'cancelled';
-                    
-                    if (!canShowPhone) return const SizedBox.shrink();
+                    final s = status.toString().toLowerCase().trim();
+                    const allowedForContact = [
+                      'em_andamento', 'in_progress',
+                      'aguardando_aprovacao_finalizacao',
+                      'aguardando_aprovacao_orcamento',
+                      'aguardando_pagamento',
+                      'finalizado', 'finalizado_aguardando_pagamento', 'completed',
+                    ];
+                    if (!allowedForContact.contains(s)) return const SizedBox.shrink();
                     
                     // Obter telefone da oficina
                     final workshopPhone = booking['workshop_phone'] ?? 
