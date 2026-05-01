@@ -3467,14 +3467,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
-        // IMPORTANTE: Invalidar cache de bookings para forçar reload
         _apiService.invalidateBookingsCache();
         _apiService.invalidateBookingCache(bookingId);
-        
-        AppAlerts.showSuccess(
-          context,
-          message: 'Sugestão recusada. O agendamento foi cancelado e a oficina foi notificada.',
-        );
         Navigator.pop(context, true);
       } else {
         AppAlerts.showError(
