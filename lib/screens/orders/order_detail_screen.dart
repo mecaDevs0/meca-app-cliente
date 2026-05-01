@@ -3544,129 +3544,138 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 : 'Você confirma a rejeição deste orçamento?'),
             if (isEditedQuote && previousQuote != null) ...[
               const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Orçamento anterior será restaurado:',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.attach_money, color: Colors.green.shade700),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Valor original: ${PriceUtils.formatCurrency(previousQuote['final_price']) ?? 'R\$ 0,00'}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-              
-              // Aviso sobre pagamento do diagnóstico
-              if (!hasCompletedAt && hasDiagnostic)
-                Container(
+              Builder(builder: (ctx) {
+                final isDark = Theme.of(ctx).brightness == Brightness.dark;
+                return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
+                    color: isDark ? Colors.blue.shade900.withValues(alpha: 0.3) : Colors.blue.shade50,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.shade200),
+                    border: Border.all(color: isDark ? Colors.blue.shade700.withValues(alpha: 0.5) : Colors.blue.shade200),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.info_outline, color: Colors.orange.shade700),
+                          Icon(Icons.info_outline, color: isDark ? Colors.blue.shade300 : Colors.blue.shade700, size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            'Atenção',
+                            'Orçamento anterior será restaurado:',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              color: Colors.orange.shade700,
+                              color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        'Ao rejeitar este orçamento, você precisará pagar apenas o valor do diagnóstico:',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.orange.shade900,
-                        ),
+                      Row(
+                        children: [
+                          Icon(Icons.attach_money, color: isDark ? Colors.green.shade400 : Colors.green.shade700),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Valor original: ${PriceUtils.formatCurrency(previousQuote!['final_price']) ?? 'R\$ 0,00'}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.green.shade400 : Colors.green.shade700,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
+                    ],
+                  ),
+                );
+              }),
+            ],
+            const SizedBox(height: 16),
+              
+              // Aviso sobre pagamento do diagnóstico
+              if (!hasCompletedAt && hasDiagnostic)
+                Builder(builder: (ctx) {
+                  final isDark = Theme.of(ctx).brightness == Brightness.dark;
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.orange.shade900.withValues(alpha: 0.3) : Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: isDark ? Colors.orange.shade700.withValues(alpha: 0.5) : Colors.orange.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.orange.shade400),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Atenção',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade400,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Ao rejeitar este orçamento, você precisará pagar apenas o valor do diagnóstico:',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.orange.shade200 : Colors.orange.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          PriceUtils.formatCurrency(_diagnosticValueInReais(diagnosticValue)) ?? 'R\$ 0,00',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade400,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Isso porque a oficina já analisou seu veículo e identificou os problemas.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.orange.shade300 : Colors.orange.shade800,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                })
+              else if (_bookingDetails?['final_price'] != null || widget.booking['final_price'] != null)
+              Builder(builder: (ctx) {
+                final isDark = Theme.of(ctx).brightness == Brightness.dark;
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.red.shade900.withValues(alpha: 0.3) : Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: isDark ? Colors.red.shade700.withValues(alpha: 0.5) : Colors.red.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.attach_money, color: isDark ? Colors.red.shade400 : Colors.red.shade700),
+                      const SizedBox(width: 8),
                       Text(
-                        PriceUtils.formatCurrency(_diagnosticValueInReais(diagnosticValue)) ?? 'R\$ 0,00',
+                        'Valor: ${PriceUtils.formatCurrency(_bookingDetails?['final_price'] ?? widget.booking['final_price']) ?? 'R\$ 0,00'}',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.orange.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Isso porque a oficina já analisou seu veículo e identificou os problemas.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.orange.shade800,
-                          fontStyle: FontStyle.italic,
+                          color: isDark ? Colors.red.shade400 : Colors.red.shade700,
                         ),
                       ),
                     ],
                   ),
-                )
-              else if (_bookingDetails?['final_price'] != null || widget.booking['final_price'] != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.attach_money, color: Colors.red.shade700),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Valor: ${PriceUtils.formatCurrency(_bookingDetails?['final_price'] ?? widget.booking['final_price']) ?? 'R\$ 0,00'}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red.shade700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                );
+              }),
             const SizedBox(height: 16),
             TextField(
               controller: reasonController,
@@ -3707,24 +3716,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
-        // Recarregar detalhes do agendamento
+        _apiService.invalidateBookingsCache();
+        _apiService.invalidateBookingCache(bookingId);
         await _loadBookingDetails();
-        
-        AppAlerts.showSuccess(
-          context,
-          message: isEditedQuote 
-              ? 'Orçamento atualizado rejeitado. O orçamento anterior foi restaurado e o serviço continuará com o valor original. A oficina foi notificada.'
-              : 'Orçamento rejeitado com sucesso. A oficina foi notificada e poderá enviar um novo orçamento.',
-        );
-        
-        // Atualizar o status local
-        setState(() {
-          final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
-          widget.booking['status'] = hasCompletedAt ? 'em_andamento' : 'confirmado';
-          if (_bookingDetails != null) {
-            _bookingDetails!['status'] = hasCompletedAt ? 'em_andamento' : 'confirmado';
-          }
-        });
+
+        String successMessage;
+        if (isEditedQuote) {
+          successMessage = 'Orçamento atualizado rejeitado. O orçamento anterior foi restaurado e o serviço continuará com o valor original.';
+        } else if (hasDiagnostic) {
+          successMessage = 'Orçamento rejeitado. Você precisará pagar apenas o valor do diagnóstico.';
+        } else {
+          successMessage = 'Orçamento rejeitado e agendamento cancelado. A oficina foi notificada.';
+        }
+
+        AppAlerts.showSuccess(context, message: successMessage);
       } else {
         AppAlerts.showError(
           context,
