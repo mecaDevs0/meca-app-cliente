@@ -1226,14 +1226,41 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 ),
                 const SizedBox(height: 10),
 
+                // Service
+                if ((booking['service_name'] ?? booking['service']?['name'] ?? '').toString().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        Icon(Icons.build_outlined, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            (booking['service_name'] ?? booking['service']?['name'] ?? '').toString(),
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 // Vehicle
                 Row(
                   children: [
                     Icon(Icons.directions_car, size: 16, color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600),
                     const SizedBox(width: 8),
-                    Text(
-                      _getVehicleDisplayName(booking),
-                      style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+                    Expanded(
+                      child: Text(
+                        _getVehicleDisplayName(booking),
+                        style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
@@ -1806,7 +1833,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     // Cores adaptadas para modo escuro e claro
     final configs = {
       'pending': {
-        'label': 'Pendente',
+        'label': 'Aguardando Oficina',
         'color': isDarkMode ? const Color(0xFF3D2F1A) : const Color(0xFFFCF4E5),
         'textColor': isDarkMode ? const Color(0xFFFFC94A) : const Color(0xFFDBA800),
       },

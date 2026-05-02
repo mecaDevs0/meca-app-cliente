@@ -834,6 +834,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     TextButton.icon(
                       onPressed: () async {
                         await Navigator.pushNamed(context, '/add-vehicle');
+                        _apiService.invalidateVehiclesCache();
                         _loadUserVehicles();
                       },
                       icon: const Icon(Icons.add),

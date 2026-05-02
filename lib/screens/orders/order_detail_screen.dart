@@ -1292,7 +1292,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
