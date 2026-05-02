@@ -1955,6 +1955,35 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
+  Widget _buildRejectInfoRow(IconData icon, String label, String value, Color accentColor, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, color: accentColor, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: accentColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLocationRow(IconData icon, String text, dynamic latitude, dynamic longitude) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final hasLocation = latitude != null && longitude != null;
@@ -3532,177 +3561,103 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final reasonController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isEditedQuote ? '⚠️ Rejeitar Orçamento Atualizado' : 'Rejeitar Orçamento'),
-        content: SingleChildScrollView(
-          child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(isEditedQuote 
-                ? 'Você confirma a rejeição do orçamento atualizado? O orçamento anterior será restaurado automaticamente e o serviço continuará com o valor original.'
-                : 'Você confirma a rejeição deste orçamento?'),
-            if (isEditedQuote && previousQuote != null) ...[
-              const SizedBox(height: 16),
-              Builder(builder: (ctx) {
-                final isDark = Theme.of(ctx).brightness == Brightness.dark;
-                return Container(
+      builder: (dialogCtx) {
+        final isDark = Theme.of(dialogCtx).brightness == Brightness.dark;
+        return AlertDialog(
+          title: const Text('Rejeitar Orçamento'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isEditedQuote
+                      ? 'O orçamento anterior será restaurado automaticamente.'
+                      : 'Você confirma a rejeição deste orçamento?',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.grey[300] : Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.blue.shade900.withValues(alpha: 0.3) : Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: isDark ? Colors.blue.shade700.withValues(alpha: 0.5) : Colors.blue.shade200),
+                    color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
                   ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.info_outline, color: isDark ? Colors.blue.shade300 : Colors.blue.shade700, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Orçamento anterior será restaurado:',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(Icons.attach_money, color: isDark ? Colors.green.shade400 : Colors.green.shade700),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Valor original: ${PriceUtils.formatCurrency(previousQuote!['final_price']) ?? 'R\$ 0,00'}',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.green.shade400 : Colors.green.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-            const SizedBox(height: 16),
-              
-              // Aviso sobre pagamento do diagnóstico
-              if (!hasCompletedAt && hasDiagnostic)
-                Builder(builder: (ctx) {
-                  final isDark = Theme.of(ctx).brightness == Brightness.dark;
-                  return Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.orange.shade900.withValues(alpha: 0.3) : Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: isDark ? Colors.orange.shade700.withValues(alpha: 0.5) : Colors.orange.shade200),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline, color: Colors.orange.shade400),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Atenção',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orange.shade400,
-                              ),
-                            ),
-                          ],
+                      if (isEditedQuote && previousQuote != null)
+                        _buildRejectInfoRow(
+                          Icons.restore,
+                          'Valor original',
+                          PriceUtils.formatCurrency(previousQuote!['final_price']) ?? 'R\$ 0,00',
+                          isDark ? Colors.blue.shade300 : Colors.blue.shade700,
+                          isDark,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Ao rejeitar este orçamento, você precisará pagar apenas o valor do diagnóstico:',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: isDark ? Colors.orange.shade200 : Colors.orange.shade900,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
+                      if (isEditedQuote && previousQuote != null && hasDiagnostic)
+                        Divider(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300, height: 20),
+                      if (hasDiagnostic)
+                        _buildRejectInfoRow(
+                          Icons.receipt_long,
+                          'Taxa de diagnóstico',
                           PriceUtils.formatCurrency(_diagnosticValueInReais(diagnosticValue)) ?? 'R\$ 0,00',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange.shade400,
-                          ),
+                          Colors.orange.shade400,
+                          isDark,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Isso porque a oficina já analisou seu veículo e identificou os problemas.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? Colors.orange.shade300 : Colors.orange.shade800,
-                            fontStyle: FontStyle.italic,
-                          ),
+                      if (!hasDiagnostic && !isEditedQuote)
+                        _buildRejectInfoRow(
+                          Icons.cancel_outlined,
+                          'Resultado',
+                          'Agendamento cancelado',
+                          isDark ? Colors.red.shade400 : Colors.red.shade700,
+                          isDark,
                         ),
-                      ],
-                    ),
-                  );
-                })
-              else if (_bookingDetails?['final_price'] != null || widget.booking['final_price'] != null)
-              Builder(builder: (ctx) {
-                final isDark = Theme.of(ctx).brightness == Brightness.dark;
-                return Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.red.shade900.withValues(alpha: 0.3) : Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: isDark ? Colors.red.shade700.withValues(alpha: 0.5) : Colors.red.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.attach_money, color: isDark ? Colors.red.shade400 : Colors.red.shade700),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Valor: ${PriceUtils.formatCurrency(_bookingDetails?['final_price'] ?? widget.booking['final_price']) ?? 'R\$ 0,00'}',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.red.shade400 : Colors.red.shade700,
-                        ),
-                      ),
                     ],
                   ),
-                );
-              }),
-            const SizedBox(height: 16),
-            TextField(
-              controller: reasonController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Motivo da rejeição (opcional)',
-                hintText: 'Informe o motivo da rejeição...',
-                border: OutlineInputBorder(),
+                ),
+                if (hasDiagnostic) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'A oficina já analisou seu veículo, por isso a taxa de diagnóstico será cobrada.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.grey[500] : Colors.grey[600],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: reasonController,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: 'Motivo (opcional)',
+                    hintText: 'Informe o motivo...',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
               ),
+              child: const Text('Rejeitar', style: TextStyle(color: Colors.white)),
             ),
           ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('Rejeitar', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+        );
+      },
     );
 
     if (confirmed != true) return;
@@ -3722,7 +3677,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
         String successMessage;
         if (isEditedQuote) {
-          successMessage = 'Orçamento atualizado rejeitado. O orçamento anterior foi restaurado e o serviço continuará com o valor original.';
+          successMessage = 'Orçamento atualizado rejeitado. O valor original foi restaurado e está pronto para pagamento.';
         } else if (hasDiagnostic) {
           successMessage = 'Orçamento rejeitado. Você precisará pagar apenas o valor do diagnóstico.';
         } else {
