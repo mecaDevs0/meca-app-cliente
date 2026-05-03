@@ -295,7 +295,7 @@ class _BookingScreenState extends State<BookingScreen> {
         'customer_id': userId,
         'vehicle_id': _selectedVehicle!['id'],
         'oficina_id': widget.workshopId,
-        'product_id': _selectedService!['id'],
+        'product_id': _selectedService!['service_id'] ?? _selectedService!['id'],
         'customer_notes': _observationsController.text.trim(),
         'status': 'pendente_oficina',
         'schedule_type': _scheduleType, // 'specific_time', 'time_window', 'day_only'
