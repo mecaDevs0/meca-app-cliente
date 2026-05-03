@@ -2376,35 +2376,40 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final rawStatus = finalStatus.toLowerCase();
 
     String phrase = '';
+    IconData icon = Icons.info_outline;
+    Color accent = const Color(0xFF00C977);
 
     if (rawStatus == 'pendente_oficina' || finalNormalizedStatus == 'pending') {
-      phrase = 'Sua solicitação já foi recebida, aguarde a confirmação.';
+      phrase = 'Sua solicitação foi recebida. Aguarde a oficina analisar e confirmar seu agendamento.';
+      icon = Icons.hourglass_top_rounded;
+      accent = Colors.amber.shade600;
     } else if (rawStatus == 'confirmado' || finalNormalizedStatus == 'confirmed') {
-      phrase = 'Dia e horário reservados. A oficina enviará orçamento ou iniciará no dia.';
+      phrase = 'Agendamento confirmado! Compareça na data e horário marcados. A oficina avaliará seu veículo e enviará o orçamento.';
+      icon = Icons.event_available_rounded;
+      accent = const Color(0xFF4A90D9);
     } else if (rawStatus == 'aguardando_autorizacao_inicio' || finalNormalizedStatus == 'awaiting_service_start') {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Text(
-          'Arraste para baixo para confirmar o serviço.',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
-            height: 1.3,
-          ),
-        ),
-      );
+      phrase = 'A oficina está pronta para iniciar. Confirme abaixo para autorizar o início do serviço.';
+      icon = Icons.play_circle_outline_rounded;
+      accent = const Color(0xFF00C977);
     } else if (rawStatus == 'aguardando_aprovacao_orcamento' || finalNormalizedStatus == 'awaiting_quote_approval') {
       final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
       phrase = hasCompletedAt
-          ? 'Revise o orçamento final e aprove para liberar o pagamento.'
-          : 'A oficina enviou o valor. Aprove ou rejeite para prosseguir.';
+          ? 'O serviço foi concluído e o orçamento final está pronto. Revise os valores e aprove para liberar o pagamento.'
+          : 'A oficina enviou o orçamento detalhado. Revise os itens e valores, e aprove ou rejeite para prosseguir.';
+      icon = Icons.receipt_long_rounded;
+      accent = Colors.orange.shade600;
     } else if (rawStatus == 'veiculo_na_oficina' || finalNormalizedStatus == 'vehicle_at_workshop') {
-      phrase = 'Seu veículo está na oficina. O serviço começará em breve.';
+      phrase = 'Seu veículo já está na oficina e será avaliado em breve. Você receberá uma notificação quando houver atualizações.';
+      icon = Icons.garage_rounded;
+      accent = const Color(0xFF4A90D9);
     } else if (rawStatus == 'aguardando_aprovacao_finalizacao' || finalNormalizedStatus == 'awaiting_finalization_approval') {
-      phrase = 'Revise o orçamento final e aprove para liberar o pagamento.';
+      phrase = 'O serviço foi concluído e o orçamento final está pronto. Revise os valores e aprove para liberar o pagamento.';
+      icon = Icons.task_alt_rounded;
+      accent = Colors.orange.shade600;
     } else if (rawStatus == 'em_disputa' || finalNormalizedStatus == 'in_dispute') {
-      phrase = 'Há uma pendência. Entre em contato com a oficina.';
+      phrase = 'Existe uma pendência neste agendamento. Entre em contato com a oficina para resolver.';
+      icon = Icons.warning_amber_rounded;
+      accent = Colors.red.shade400;
     } else if (rawStatus == 'pendente_cliente' || finalNormalizedStatus == 'pending_customer') {
       final suggestedBy = merged['suggested_by'] ?? merged['sugerido_por'];
       final hasSuggestedDate = merged['suggested_date'] != null || merged['data_sugerida'] != null;
@@ -2414,44 +2419,72 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           (merged['estimated_price'] != null && (merged['estimated_price'] is num ? merged['estimated_price'] > 0 : false)) ||
           (merged['quote_items'] != null && merged['quote_items'] is List && (merged['quote_items'] as List).isNotEmpty);
       if (serviceStartPending && !hasQuote) {
-        phrase = 'A oficina iniciou. Aguarde atualizações.';
+        phrase = 'A oficina deu início ao atendimento. Acompanhe aqui as atualizações do serviço.';
+        icon = Icons.construction_rounded;
+        accent = const Color(0xFF00C977);
       } else if (isTimeSuggestion) {
-        phrase = 'A oficina sugeriu um horário. Aceite ou sugira outro.';
+        phrase = 'A oficina sugeriu um novo horário para o seu agendamento. Aceite a sugestão ou proponha outro horário.';
+        icon = Icons.schedule_rounded;
+        accent = Colors.amber.shade600;
       } else {
         final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
         phrase = hasCompletedAt
-            ? 'Revise o orçamento final e aprove para liberar o pagamento.'
-            : 'A oficina enviou o valor. Aprove ou rejeite para prosseguir.';
+            ? 'O serviço foi concluído e o orçamento final está pronto. Revise os valores e aprove para liberar o pagamento.'
+            : 'A oficina enviou o orçamento detalhado. Revise os itens e valores, e aprove ou rejeite para prosseguir.';
+        icon = Icons.receipt_long_rounded;
+        accent = Colors.orange.shade600;
       }
     } else if (finalNormalizedStatus == 'in_progress') {
-      phrase = 'Seu veículo está sendo atendido. Avisaremos quando finalizar.';
+      phrase = 'Seu veículo está sendo atendido pela oficina. Você será notificado assim que o serviço for concluído.';
+      icon = Icons.build_rounded;
+      accent = const Color(0xFF00C977);
     } else if (finalNormalizedStatus == 'awaiting_payment') {
-      phrase = 'Orçamento aprovado. Use o botão abaixo para pagar.';
+      phrase = 'O serviço foi finalizado e o orçamento aprovado. Realize o pagamento para concluir.';
+      icon = Icons.payments_rounded;
+      accent = const Color(0xFF4A90D9);
     } else if (finalNormalizedStatus == 'completed' || finalNormalizedStatus == 'paid' || rawStatus == 'pago') {
-      phrase = 'Pagamento confirmado. Obrigado por usar o MECA!';
+      phrase = 'Tudo certo! Pagamento confirmado com sucesso. Obrigado por usar o MECA!';
+      icon = Icons.check_circle_rounded;
+      accent = const Color(0xFF00C977);
     }
 
     if (phrase.isEmpty) return const SizedBox.shrink();
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.white.withOpacity(0.06) : Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(10),
+        color: isDarkMode ? accent.withValues(alpha: 0.1) : accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isDarkMode ? Colors.orange.shade800 : Colors.orange.shade200,
+          color: accent.withValues(alpha: isDarkMode ? 0.3 : 0.25),
           width: 1,
         ),
       ),
-      child: Text(
-        phrase,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: isDarkMode ? Colors.grey[300] : Colors.grey[800],
-          height: 1.35,
-        ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: accent, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              phrase,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: isDarkMode ? Colors.grey[300] : Colors.grey[800],
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
