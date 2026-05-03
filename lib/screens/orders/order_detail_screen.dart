@@ -3710,7 +3710,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
         String successMessage;
         if (isEditedQuote) {
-          successMessage = 'Orçamento atualizado rejeitado. O valor original foi restaurado e está pronto para pagamento.';
+          successMessage = 'Orçamento adicional rejeitado. O orçamento original foi restaurado e o serviço continua normalmente.';
         } else if (hasDiagnostic) {
           successMessage = 'Orçamento rejeitado. Você precisará pagar apenas o valor do diagnóstico.';
         } else {
