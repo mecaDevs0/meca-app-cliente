@@ -1227,8 +1227,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 const SizedBox(height: 10),
 
                 // Service
-                if ((booking['service_name'] ?? booking['service']?['name'] ?? '').toString().isNotEmpty)
-                  Padding(
+                Builder(builder: (context) {
+                  final svcName = (booking['service_name'] ?? booking['service']?['name'] ?? '').toString().trim();
+                  final isGeneric = svcName.isEmpty ||
+                      svcName.toLowerCase() == 'serviço automotivo' ||
+                      svcName.toLowerCase() == 'serviço' ||
+                      svcName.toLowerCase() == 'servico';
+                  if (isGeneric) return const SizedBox.shrink();
+                  return Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Row(
                       children: [
@@ -1236,7 +1242,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            (booking['service_name'] ?? booking['service']?['name'] ?? '').toString(),
+                            svcName,
                             style: TextStyle(
                               color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
                               fontWeight: FontWeight.w500,
@@ -1247,7 +1253,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                         ),
                       ],
                     ),
-                  ),
+                  );
+                }),
 
                 // Vehicle
                 Row(
