@@ -936,13 +936,33 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     );
   }
 
+  String _buildFullAddress() {
+    final address = (_workshop?['address_text'] ?? _workshop?['address'] ?? '').toString().trim();
+    final city = (_workshop?['city'] ?? '').toString().trim();
+    final state = (_workshop?['state'] ?? '').toString().trim();
+    final parts = [address, city, state].where((s) => s.isNotEmpty).toList();
+    return parts.join(', ');
+  }
+
   Future<void> _launchGoogleMaps(double lat, double lng) async {
-    final googleUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
+    final fullAddress = _buildFullAddress();
+    final Uri googleUrl;
+    if (fullAddress.isNotEmpty) {
+      googleUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(fullAddress)}&travelmode=driving');
+    } else {
+      googleUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
+    }
     await _launchExternalUrl(googleUrl);
   }
 
   Future<void> _launchWaze(double lat, double lng) async {
-    final wazeUrl = Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes');
+    final fullAddress = _buildFullAddress();
+    final Uri wazeUrl;
+    if (fullAddress.isNotEmpty) {
+      wazeUrl = Uri.parse('https://waze.com/ul?q=${Uri.encodeComponent(fullAddress)}&navigate=yes');
+    } else {
+      wazeUrl = Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes');
+    }
     await _launchExternalUrl(wazeUrl);
   }
 

@@ -1924,15 +1924,20 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     }
 
     final plans = _installmentPlans ?? _fallbackInstallmentPlan();
+    final isDark = theme.brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final borderColor = isDark ? Colors.white12 : Colors.black12;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subTextColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+    final fillColor = isDark ? const Color(0xFF252525) : const Color(0xFFF7F7F7);
+    final dropdownBg = isDark ? const Color(0xFF252525) : Colors.white;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant
-            .withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.95),
+        color: cardBg,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-            color: theme.dividerColor
-                .withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.15)),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1941,64 +1946,192 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             children: [
               Text(
                 'Parcelamento',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                ),
               ),
               const SizedBox(width: 8),
-              Text(
-                'até ${_maxInstallmentsFromApi ?? widget.workshopMaxInstallments}x',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w600,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C977).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'até ${_maxInstallmentsFromApi ?? widget.workshopMaxInstallments}x',
+                  style: const TextStyle(
+                    color: Color(0xFF00C977),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 2),
           Text(
-            'Valores e juros dinâmicos',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
-            ),
+            'Valores e juros calculados dinamicamente',
+            style: TextStyle(fontSize: 12, color: subTextColor),
           ),
           if (plans.isNotEmpty &&
-              plans.length <
-                  (_maxInstallmentsFromApi ?? widget.workshopMaxInstallments))
+              plans.length < (_maxInstallmentsFromApi ?? widget.workshopMaxInstallments))
             Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 4),
               child: Text(
                 'Para este valor, até ${plans.length}x disponíveis (mín. R\$ 5,00 por parcela).',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.65),
-                  fontSize: 12,
-                ),
+                style: TextStyle(fontSize: 11, color: subTextColor.withOpacity(0.8)),
               ),
             ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           DropdownButtonFormField<Map<String, dynamic>>(
             value: plans.firstWhere(
               (p) => (p['installments'] as int?) == _selectedInstallments,
               orElse: () => plans.first,
             ),
-            items: plans.map(
-              (plan) {
+            icon: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: const Color(0xFF00C977),
+              size: 24,
+            ),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: fillColor,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: const Color(0xFF00C977).withOpacity(0.4),
+                  width: 1.5,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF00C977), width: 1.5),
+              ),
+            ),
+            dropdownColor: dropdownBg,
+            borderRadius: BorderRadius.circular(14),
+            menuMaxHeight: 350,
+            style: TextStyle(color: textColor, fontSize: 14),
+            isExpanded: true,
+            selectedItemBuilder: (context) {
+              return plans.map((plan) {
                 final n = (plan['installments'] as int?) ?? 1;
-                final installmentCents =
-                    (plan['installment_value_cents'] as int?) ?? 0;
+                final cents = (plan['installment_value_cents'] as int?) ?? 0;
                 final totalCents = (plan['total_cents'] as int?) ?? 0;
-                final interestFree = plan['interest_free'] == true;
-                final parcelValue = installmentCents / 100.0;
-                final totalValue = totalCents / 100.0;
-                final label = n == 1
-                    ? 'À vista (${_currencyFormatter.format(totalValue)})'
-                    : interestFree
-                        ? '${n}x de ${_currencyFormatter.format(parcelValue)} sem juros'
-                        : '${n}x de ${_currencyFormatter.format(parcelValue)} (total ${_currencyFormatter.format(totalValue)} com juros)';
-                return DropdownMenuItem<Map<String, dynamic>>(
-                  value: plan,
-                  child: Text(label),
+                final free = plan['interest_free'] == true;
+                final parcel = cents / 100.0;
+                final total = totalCents / 100.0;
+                String label;
+                if (n == 1) {
+                  label = 'À vista — ${_currencyFormatter.format(total)}';
+                } else if (free) {
+                  label = '${n}x de ${_currencyFormatter.format(parcel)} sem juros';
+                } else {
+                  label = '${n}x de ${_currencyFormatter.format(parcel)} com juros';
+                }
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    label,
+                    style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
                 );
-              },
-            ).toList(),
+              }).toList();
+            },
+            items: plans.map((plan) {
+              final n = (plan['installments'] as int?) ?? 1;
+              final installmentCents = (plan['installment_value_cents'] as int?) ?? 0;
+              final totalCents = (plan['total_cents'] as int?) ?? 0;
+              final interestFree = plan['interest_free'] == true;
+              final parcelValue = installmentCents / 100.0;
+              final totalValue = totalCents / 100.0;
+              final isSelected = n == _selectedInstallments;
+
+              String title;
+              String? subtitle;
+              if (n == 1) {
+                title = 'À vista';
+                subtitle = _currencyFormatter.format(totalValue);
+              } else if (interestFree) {
+                title = '${n}x de ${_currencyFormatter.format(parcelValue)}';
+                subtitle = 'Sem juros';
+              } else {
+                title = '${n}x de ${_currencyFormatter.format(parcelValue)}';
+                subtitle = 'Total ${_currencyFormatter.format(totalValue)}';
+              }
+
+              return DropdownMenuItem<Map<String, dynamic>>(
+                value: plan,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF00C977)
+                              : const Color(0xFF00C977).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${n}x',
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : const Color(0xFF00C977),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              title,
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (subtitle != null)
+                              Text(
+                                subtitle,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: interestFree || n == 1
+                                      ? const Color(0xFF00C977)
+                                      : Colors.orange[400],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (isSelected)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Icon(Icons.check_circle_rounded, color: Color(0xFF00C977), size: 18),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
             onChanged: (plan) {
               if (plan != null) {
                 final n = (plan['installments'] as int?) ?? 1;
@@ -2008,11 +2141,6 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                 });
               }
             },
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              contentPadding:
-                  EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            ),
           ),
         ],
       ),

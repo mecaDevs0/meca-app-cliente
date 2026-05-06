@@ -692,7 +692,8 @@ class _ScheduleNegotiationScreenState extends State<ScheduleNegotiationScreen> {
   String _formatDate(String? dateString) {
     if (dateString == null) return 'N/A';
     try {
-      final date = DateTime.parse(dateString);
+      final parsed = DateTime.parse(dateString);
+      final date = DateTime(parsed.year, parsed.month, parsed.day, parsed.hour, parsed.minute);
       return DateFormat('dd/MM/yyyy').format(date);
     } catch (e) {
       return 'N/A';

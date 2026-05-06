@@ -1892,7 +1892,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _formatDate(String? dateString) {
     if (dateString == null || dateString.isEmpty) return 'Data não informada';
     try {
-      final date = DateTime.parse(dateString);
+      final parsed = DateTime.parse(dateString);
+      final date = DateTime(parsed.year, parsed.month, parsed.day, parsed.hour, parsed.minute);
       return '${date.day}/${date.month}/${date.year} às ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       return dateString;

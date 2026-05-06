@@ -436,7 +436,8 @@ class _BookingEvidenceScreenState extends State<BookingEvidenceScreen> {
   String _formatDate(String? dateString) {
     if (dateString == null) return 'N/A';
     try {
-      final date = DateTime.parse(dateString);
+      final parsed = DateTime.parse(dateString);
+      final date = DateTime(parsed.year, parsed.month, parsed.day, parsed.hour, parsed.minute);
       return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
     } catch (e) {
       return 'N/A';

@@ -418,8 +418,9 @@ class _VehicleHistoryScreenState extends State<VehicleHistoryScreen> {
   String _formatDate(String? date) {
     if (date == null || date.isEmpty) return 'Data não informada';
     try {
-      final parsed = DateTime.parse(date).toLocal();
-      return DateFormat('dd/MM/yyyy HH:mm').format(parsed);
+      final parsed = DateTime.parse(date);
+      final local = DateTime(parsed.year, parsed.month, parsed.day, parsed.hour, parsed.minute);
+      return DateFormat('dd/MM/yyyy HH:mm').format(local);
     } catch (_) {
       return date;
     }

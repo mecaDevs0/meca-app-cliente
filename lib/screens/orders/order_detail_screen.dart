@@ -2394,8 +2394,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     } else if (rawStatus == 'aguardando_aprovacao_orcamento' || finalNormalizedStatus == 'awaiting_quote_approval') {
       final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
       phrase = hasCompletedAt
-          ? 'O serviço foi concluído e o orçamento final está pronto. Revise os valores e aprove para liberar o pagamento.'
-          : 'A oficina enviou o orçamento detalhado. Revise os itens e valores, e aprove ou rejeite para prosseguir.';
+          ? 'O serviço foi concluído e o orçamento final está pronto. Revise os valores abaixo e aprove para liberar o pagamento.'
+          : 'A oficina enviou o orçamento detalhado. Revise os itens e valores abaixo e aprove ou rejeite para prosseguir.';
       icon = Icons.receipt_long_rounded;
       accent = Colors.orange.shade600;
     } else if (rawStatus == 'veiculo_na_oficina' || finalNormalizedStatus == 'vehicle_at_workshop') {
@@ -2429,8 +2429,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       } else {
         final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
         phrase = hasCompletedAt
-            ? 'O serviço foi concluído e o orçamento final está pronto. Revise os valores e aprove para liberar o pagamento.'
-            : 'A oficina enviou o orçamento detalhado. Revise os itens e valores, e aprove ou rejeite para prosseguir.';
+            ? 'O serviço foi concluído e o orçamento final está pronto. Revise os valores abaixo e aprove para liberar o pagamento.'
+            : 'A oficina enviou o orçamento detalhado. Revise os itens e valores abaixo e aprove ou rejeite para prosseguir.';
         icon = Icons.receipt_long_rounded;
         accent = Colors.orange.shade600;
       }
@@ -2443,7 +2443,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       icon = Icons.payments_rounded;
       accent = const Color(0xFF4A90D9);
     } else if (finalNormalizedStatus == 'completed' || finalNormalizedStatus == 'paid' || rawStatus == 'pago') {
-      phrase = 'Tudo certo! Pagamento confirmado com sucesso. Obrigado por usar o MECA!';
+      phrase = 'Seu pagamento foi confirmado! Agora você pode buscar seu veículo na oficina ou agendar um guincho para a retirada.';
       icon = Icons.check_circle_rounded;
       accent = const Color(0xFF00C977);
     }
@@ -2532,12 +2532,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       actionWidgets.add(const SizedBox(height: 20));
     }
     
-    // 1. Card de sugestão de horário
+    // 1. Botão para abrir sugestão de horário como bottom sheet (evita overflow no bottom nav)
     if (hasTimeSuggestionCard) {
       final currentStatus = (merged['status'] ?? '').toString().toLowerCase().trim();
       if (currentStatus != 'confirmado' && currentStatus != 'confirmed') {
-        actionWidgets.add(_buildTimeSuggestionCard(merged));
-        actionWidgets.add(const SizedBox(height: 20));
+        actionWidgets.add(_buildTimeSuggestionButton(merged));
+        actionWidgets.add(const SizedBox(height: 8));
       }
     }
     
@@ -3065,9 +3065,76 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
-  Widget _buildTimeSuggestionCard(Map<String, dynamic> merged) {
+  Widget _buildTimeSuggestionButton(Map<String, dynamic> merged) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: () => _showTimeSuggestionSheet(merged),
+        icon: const Icon(Icons.schedule_rounded, size: 20, color: Colors.white),
+        label: const Text(
+          'Ver sugestão de horário da oficina',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFF59E0B),
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          elevation: 0,
+        ),
+      ),
+    );
+  }
+
+  void _showTimeSuggestionSheet(Map<String, dynamic> merged) {
+    showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.85,
+          expand: false,
+          builder: (_, scrollController) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final bg = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+            return Container(
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      child: _buildTimeSuggestionCard(merged, onAction: () => Navigator.of(sheetContext).pop()),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTimeSuggestionCard(Map<String, dynamic> merged, {VoidCallback? onAction}) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+
     // IMPORTANTE: Não exibir card se já está confirmado
     final status = (merged['status'] ?? '').toString().toLowerCase().trim();
     if (status == 'confirmado' || status == 'confirmed') {
@@ -3360,7 +3427,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _rejectTimeSuggestion,
+                        onPressed: () { onAction?.call(); _rejectTimeSuggestion(); },
                         icon: const Icon(Icons.close_rounded, size: 20),
                         label: const Text(
                           'Recusar',
@@ -3382,7 +3449,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: _acceptTimeSuggestion,
+                        onPressed: () { onAction?.call(); _acceptTimeSuggestion(); },
                         icon: const Icon(Icons.check_circle_rounded, size: 22),
                         label: const Text(
                           'Aceitar',

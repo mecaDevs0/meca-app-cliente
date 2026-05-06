@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -637,7 +638,6 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildServiceSelectionCard(bool isDarkMode) {
-    // Ordenar para colocar "Mecânica Geral" no topo
     final sortedServices = List<Map<String, dynamic>>.from(_workshopServices);
     sortedServices.sort((a, b) {
       final aName = (a['name'] ?? '').toString().toLowerCase();
@@ -646,12 +646,18 @@ class _BookingScreenState extends State<BookingScreen> {
       if (bName.contains('mecânica geral')) return 1;
       return 0;
     });
-    
+
+    final cardBg = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final fillColor = isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF7F7F7);
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final hintColor = isDarkMode ? Colors.grey[500]! : Colors.grey[400]!;
+    final dropdownBg = isDarkMode ? const Color(0xFF252525) : Colors.white;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -666,46 +672,52 @@ class _BookingScreenState extends State<BookingScreen> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.build,
-                color: const Color(0xFF00C977),
-                size: 24,
-              ),
+              const Icon(Icons.build, color: Color(0xFF00C977), size: 24),
               const SizedBox(width: 12),
               const Text(
                 'Selecionar Serviço',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
             ],
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<Map<String, dynamic>>(
             value: _selectedService,
+            icon: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: _selectedService != null ? const Color(0xFF00C977) : Colors.grey[500],
+              size: 24,
+            ),
             decoration: InputDecoration(
               hintText: 'Escolha um serviço',
-              hintStyle: TextStyle(color: Colors.grey[500]),
-              fillColor: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[50],
+              hintStyle: TextStyle(color: hintColor, fontSize: 15, fontWeight: FontWeight.w400),
               filled: true,
+              fillColor: fillColor,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey[600]!),
+                borderSide: BorderSide(
+                  color: _selectedService != null
+                      ? const Color(0xFF00C977)
+                      : (isDarkMode ? Colors.white10 : Colors.black.withOpacity(0.06)),
+                  width: _selectedService != null ? 1.5 : 1,
+                ),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF00C977), width: 1.5),
+              ),
             ),
-            dropdownColor: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
-            style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.black87,
-              fontSize: 16,
-            ),
+            dropdownColor: dropdownBg,
+            borderRadius: BorderRadius.circular(14),
+            menuMaxHeight: 320,
+            style: TextStyle(color: textColor, fontSize: 15),
             isExpanded: true,
             selectedItemBuilder: (context) {
-              final textColor = isDarkMode ? Colors.white : Colors.black87;
               return sortedServices.map((service) {
                 final name = service['name'] ?? 'Serviço';
                 return Align(
@@ -714,37 +726,76 @@ class _BookingScreenState extends State<BookingScreen> {
                     name,
                     style: TextStyle(
                       color: textColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
                     ),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
-                    softWrap: false,
                   ),
                 );
               }).toList();
             },
             items: sortedServices.map((service) {
               final serviceName = service['name'] ?? 'Serviço';
-              final isMecanicaGeral = serviceName.toLowerCase().contains('mecânica geral');
-              final textColor = isDarkMode ? Colors.white : Colors.black87;
-              
+              final isGeral = serviceName.toString().toLowerCase().contains('mecânica geral');
+              final isSelected = _selectedService != null &&
+                  (_selectedService!['id']?.toString() == service['id']?.toString() ||
+                   _selectedService!['service_id']?.toString() == service['service_id']?.toString());
+
               return DropdownMenuItem<Map<String, dynamic>>(
                 value: service,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    vertical: isMecanicaGeral ? 10 : 4,
-                  ),
-                  child: Text(
-                    serviceName,
-                    style: TextStyle(
-                      color: textColor,
-                      fontWeight: isMecanicaGeral ? FontWeight.w700 : FontWeight.w400,
-                      fontSize: isMecanicaGeral ? 17 : 16,
-                      height: 1.3,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF00C977)
+                              : const Color(0xFF00C977).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          isGeral ? Icons.build_rounded : Icons.car_repair_rounded,
+                          color: isSelected ? Colors.white : const Color(0xFF00C977),
+                          size: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              serviceName,
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: isGeral ? 15 : 14,
+                                fontWeight: isGeral ? FontWeight.w700 : FontWeight.w500,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                            if (isGeral)
+                              Text(
+                                'Recomendado quando não sabe o problema',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDarkMode ? Colors.grey[500] : Colors.grey[500],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (isSelected)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Icon(Icons.check_circle_rounded, color: Color(0xFF00C977), size: 20),
+                        ),
+                    ],
                   ),
                 ),
               );
@@ -758,11 +809,7 @@ class _BookingScreenState extends State<BookingScreen> {
           const SizedBox(height: 8),
           Text(
             'Se não souber o problema do carro, selecione Mecânica geral e descreva no campo Observações.',
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey[500],
-              height: 1.3,
-            ),
+            style: TextStyle(fontSize: 11, color: Colors.grey[500], height: 1.3),
           ),
         ],
       ),
@@ -1524,28 +1571,154 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  Future<void> _selectTimeWindowStart() async {
-    final selectedTime = await showTimePicker(
+  Future<TimeOfDay?> _showWheelTimePicker({TimeOfDay? initialTime}) async {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final initial = initialTime ?? TimeOfDay.now();
+    int selectedHour = initial.hour;
+    int selectedMinute = (initial.minute / 5).round() * 5;
+    if (selectedMinute >= 60) selectedMinute = 55;
+
+    final result = await showModalBottomSheet<TimeOfDay>(
       context: context,
-      initialTime: _selectedTime ?? const TimeOfDay(hour: 14, minute: 0),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF00C977),
-            ),
-          ),
-          child: child!,
+      backgroundColor: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: SizedBox(
+                height: 320,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Selecione o horário',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            icon: Icon(Icons.close, color: isDarkMode ? Colors.grey : Colors.black54),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 40),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Text('Hora', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isDarkMode ? Colors.grey[400] : Colors.grey[600])),
+                                const SizedBox(height: 4),
+                                Expanded(
+                                  child: CupertinoPicker(
+                                    scrollController: FixedExtentScrollController(initialItem: selectedHour),
+                                    itemExtent: 40,
+                                    selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
+                                      background: const Color(0xFF00C977).withOpacity(0.12),
+                                    ),
+                                    onSelectedItemChanged: (index) {
+                                      setSheetState(() => selectedHour = index);
+                                    },
+                                    children: List.generate(24, (i) => Center(
+                                      child: Text(
+                                        i.toString().padLeft(2, '0'),
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDarkMode ? Colors.white : Colors.black87,
+                                        ),
+                                      ),
+                                    )),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(':', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black87)),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Text('Minuto', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isDarkMode ? Colors.grey[400] : Colors.grey[600])),
+                                const SizedBox(height: 4),
+                                Expanded(
+                                  child: CupertinoPicker(
+                                    scrollController: FixedExtentScrollController(initialItem: selectedMinute ~/ 5),
+                                    itemExtent: 40,
+                                    selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
+                                      background: const Color(0xFF00C977).withOpacity(0.12),
+                                    ),
+                                    onSelectedItemChanged: (index) {
+                                      setSheetState(() => selectedMinute = index * 5);
+                                    },
+                                    children: List.generate(12, (i) => Center(
+                                      child: Text(
+                                        (i * 5).toString().padLeft(2, '0'),
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDarkMode ? Colors.white : Colors.black87,
+                                        ),
+                                      ),
+                                    )),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 40),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, TimeOfDay(hour: selectedHour, minute: selectedMinute)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00C977),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            elevation: 0,
+                          ),
+                          child: const Text('Confirmar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
+    );
+
+    return result;
+  }
+
+  Future<void> _selectTimeWindowStart() async {
+    final selectedTime = await _showWheelTimePicker(
+      initialTime: _selectedTime ?? const TimeOfDay(hour: 14, minute: 0),
     );
 
     if (selectedTime != null) {
       setState(() {
         _selectedTime = selectedTime;
-        // Se o horário de fim já está definido e é menor que o início, limpar
-        if (_selectedTimeEnd != null && 
-            (selectedTime.hour > _selectedTimeEnd!.hour || 
+        if (_selectedTimeEnd != null &&
+            (selectedTime.hour > _selectedTimeEnd!.hour ||
              (selectedTime.hour == _selectedTimeEnd!.hour && selectedTime.minute >= _selectedTimeEnd!.minute))) {
           _selectedTimeEnd = null;
         }
@@ -1554,41 +1727,27 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _selectTimeWindowEnd() async {
-    final initialTime = _selectedTimeEnd ?? 
-                       (_selectedTime != null 
+    final initialTime = _selectedTimeEnd ??
+                       (_selectedTime != null
                            ? TimeOfDay(
                                hour: _selectedTime!.hour + 2,
                                minute: _selectedTime!.minute,
                              )
                            : const TimeOfDay(hour: 18, minute: 0));
-    
-    final selectedTime = await showTimePicker(
-      context: context,
-      initialTime: initialTime,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF00C977),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
+
+    final selectedTime = await _showWheelTimePicker(initialTime: initialTime);
 
     if (selectedTime != null) {
-      // Validar que o horário de fim é depois do início
       if (_selectedTime != null) {
         final startMinutes = _selectedTime!.hour * 60 + _selectedTime!.minute;
         final endMinutes = selectedTime.hour * 60 + selectedTime.minute;
-        
+
         if (endMinutes <= startMinutes) {
           await _showSnackBar('O horário de fim deve ser depois do horário de início', isError: true);
           return;
         }
       }
-      
+
       setState(() {
         _selectedTimeEnd = selectedTime;
       });
