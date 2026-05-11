@@ -34,6 +34,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _isLoadingDetails = false;
   bool _shownInProgressPopup = false;
 
+  // Interactive quote selection state
+  final Map<int, bool> _quoteSelectedItems = {};
+  final Map<int, String?> _quoteSelectedOptions = {};
+  bool _quoteSelectionInitialized = false;
+
   List<Map<String, dynamic>> _coerceUploads(dynamic raw) {
     if (raw == null) return const [];
 
@@ -70,6 +75,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             'file_name': item['file_name']?.toString() ?? item['fileName']?.toString() ?? 'imagem.jpg',
             's3_key': key,
             'uploaded_by': item['uploaded_by']?.toString() ?? item['uploadedBy']?.toString() ?? 'unknown',
+            if (item['comment'] != null) 'comment': item['comment'].toString(),
           };
         }
         if (item is Map) {
@@ -138,6 +144,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 'file_name': img['file_name'] ?? img['fileName'] ?? 'imagem.jpg',
                 's3_key': img['s3_key'] ?? img['s3Key'] ?? img['key'] ?? '',
                 'uploaded_by': img['uploaded_by'] ?? img['uploadedBy'] ?? 'unknown',
+                if (img['comment'] != null) 'comment': img['comment'].toString(),
               });
             } else {
               debugPrint('⚠️ [OrderDetail] Imagem em booking_images sem URL válida');
@@ -385,10 +392,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       color: Colors.black.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(
-                      fileName,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                      textAlign: TextAlign.center,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          fileName,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          textAlign: TextAlign.center,
+                        ),
+                        if (upload['comment'] != null && upload['comment'].toString().isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            upload['comment'].toString(),
+                            style: const TextStyle(color: Colors.white70, fontSize: 13),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
@@ -1162,106 +1182,240 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     builder: (context) {
                       final allImages = _getAllBookingImages();
                       if (allImages.isEmpty) return const SizedBox.shrink();
-                      
+
+                      final clientImages = <Map<String, dynamic>>[];
+                      final workshopImages = <Map<String, dynamic>>[];
+                      for (final img in allImages) {
+                        final url = img['url']?.toString();
+                        if (url == null || url.isEmpty) continue;
+                        final uploadedBy = img['uploaded_by']?.toString() ?? '';
+                        final s3Key = img['s3_key']?.toString() ?? img['key']?.toString() ?? '';
+                        final isWs = uploadedBy == 'workshop' ||
+                            s3Key.contains('/workshop/') ||
+                            s3Key.contains('workshop');
+                        if (isWs) {
+                          workshopImages.add(img);
+                        } else {
+                          clientImages.add(img);
+                        }
+                      }
+
+                      Widget buildThumbGrid(List<Map<String, dynamic>> images) {
+                        return Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: images.map((img) {
+                            final url = img['url']!.toString();
+                            return GestureDetector(
+                              onTap: () => _openUploadPreview(img),
+                              child: Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+                                    width: 1,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.08),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(13),
+                                  child: CachedNetworkImage(
+                                    imageUrl: url,
+                                    fit: BoxFit.cover,
+                                    width: 80,
+                                    height: 80,
+                                    memCacheWidth: 160,
+                                    memCacheHeight: 160,
+                                    httpHeaders: const {'Accept': 'image/*'},
+                                    placeholder: (context, url) => Container(
+                                      color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
+                                      alignment: Alignment.center,
+                                      child: const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                                    ),
+                                    errorWidget: (context, url, error) => Container(
+                                      color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
+                                      alignment: Alignment.center,
+                                      child: Icon(Icons.broken_image, size: 20, color: Colors.grey.shade500),
+                                    ),
+                                    fadeInDuration: const Duration(milliseconds: 200),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      }
+
+                      Widget buildEvidenceCard(Map<String, dynamic> img) {
+                        final url = img['url']!.toString();
+                        final comment = img['comment']?.toString();
+                        final hasComment = comment != null && comment.isNotEmpty;
+                        return GestureDetector(
+                          onTap: () => _openUploadPreview(img),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(isDarkMode ? 0.35 : 0.10),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.vertical(
+                                    top: const Radius.circular(16),
+                                    bottom: hasComment ? Radius.zero : const Radius.circular(16),
+                                  ),
+                                  child: Stack(
+                                    children: [
+                                      CachedNetworkImage(
+                                        imageUrl: url,
+                                        fit: BoxFit.cover,
+                                        width: double.infinity,
+                                        height: 200,
+                                        memCacheWidth: 600,
+                                        memCacheHeight: 400,
+                                        httpHeaders: const {'Accept': 'image/*'},
+                                        placeholder: (context, url) => Container(
+                                          height: 200,
+                                          color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
+                                          alignment: Alignment.center,
+                                          child: const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+                                        ),
+                                        errorWidget: (context, url, error) => Container(
+                                          height: 200,
+                                          color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
+                                          alignment: Alignment.center,
+                                          child: Icon(Icons.broken_image, color: Colors.grey.shade500),
+                                        ),
+                                        fadeInDuration: const Duration(milliseconds: 200),
+                                      ),
+                                      Positioned(
+                                        top: 8, right: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF00C977),
+                                            borderRadius: BorderRadius.circular(10),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFF00C977).withOpacity(0.4),
+                                                blurRadius: 6,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: const [
+                                              Icon(Icons.build_rounded, size: 10, color: Colors.white),
+                                              SizedBox(width: 3),
+                                              Text('Oficina', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (hasComment)
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                                    decoration: BoxDecoration(
+                                      color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+                                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          margin: const EdgeInsets.only(top: 2),
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF00C977).withOpacity(0.12),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: const Icon(Icons.chat_bubble_outline_rounded, size: 14, color: Color(0xFF00C977)),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Justificativa da oficina',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isDarkMode ? Colors.grey[500] : Colors.grey[500],
+                                                  letterSpacing: 0.3,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                comment!,
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: isDarkMode ? Colors.grey[200] : Colors.grey[800],
+                                                  height: 1.35,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SizedBox(height: 20),
-                          Text(
-                            'Imagens do Agendamento',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: isDarkMode ? Colors.white : const Color(0xFF252940),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: allImages.map((img) {
-                              final url = img['url']?.toString();
-                              if (url == null || url.isEmpty) return const SizedBox.shrink();
-                              
-                              // Determinar se é imagem do cliente ou da oficina
-                              final uploadedBy = img['uploaded_by']?.toString() ?? '';
-                              final s3Key = img['s3_key']?.toString() ?? img['key']?.toString() ?? '';
-                              final isFromWorkshop = uploadedBy == 'workshop' || 
-                                                    s3Key.contains('/workshop/') ||
-                                                    s3Key.contains('workshop');
-                              
-                              return GestureDetector(
-                                onTap: () => _openUploadPreview(img),
-                                child: Stack(
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Container(
-                                        width: 90,
-                                        height: 90,
-                                        color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
-                                        child: CachedNetworkImage(
-                                          imageUrl: url,
-                                          fit: BoxFit.cover,
-                                          width: 90,
-                                          height: 90,
-                                          // Cache de alta qualidade - 2x para retina
-                                          memCacheWidth: 180,
-                                          memCacheHeight: 180,
-                                          // Headers para garantir que a imagem seja carregada corretamente
-                                          httpHeaders: {
-                                            'Accept': 'image/*',
-                                          },
-                                          // Placeholder enquanto carrega
-                                          placeholder: (context, url) => const Center(
-                                            child: SizedBox(
-                                              width: 24,
-                                              height: 24,
-                                              child: CircularProgressIndicator(strokeWidth: 2),
-                                            ),
-                                          ),
-                                          // Erro ao carregar
-                                          errorWidget: (context, url, error) {
-                                            debugPrint('❌ [OrderDetail] Erro ao carregar imagem: $error');
-                                            debugPrint('❌ [OrderDetail] URL: $url');
-                                            return Container(
-                                              color: Colors.grey.shade300,
-                                              alignment: Alignment.center,
-                                              child: Icon(Icons.broken_image, color: Colors.grey.shade600),
-                                            );
-                                          },
-                                          // Fade in suave quando carregar
-                                          fadeInDuration: const Duration(milliseconds: 200),
-                                          fadeOutDuration: const Duration(milliseconds: 100),
-                                        ),
-                                      ),
-                                    ),
-                                    // Badge indicando origem da imagem
-                                    if (isFromWorkshop)
-                                      Positioned(
-                                        top: 4,
-                                        right: 4,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF00C977),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: const Text(
-                                            'Oficina',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Icon(Icons.photo_library_outlined, size: 18, color: isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Imagens do Agendamento',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDarkMode ? Colors.white : const Color(0xFF252940),
                                 ),
-                              );
-                            }).toList(),
+                              ),
+                            ],
                           ),
+                          if (clientImages.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            buildThumbGrid(clientImages),
+                          ],
+                          if (workshopImages.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            ...workshopImages.map((img) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: buildEvidenceCard(img),
+                            )),
+                          ],
                         ],
                       );
                     },
@@ -1405,34 +1559,300 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       // Ignorar erro de parsing
     }
 
-    // Verificar se há orçamento pendente de aprovação
-    final isQuotePending = normalizedStatus == 'pending' || 
-                          normalizedStatus == 'pendente_cliente' ||
-                          (merged['quote_status'] ?? widget.booking['quote_status']) == 'pending';
+    final currentQuoteStatus = (merged['quote_status'] ?? widget.booking['quote_status'])?.toString().toLowerCase() ?? '';
+    final isQuotePending =
+        currentQuoteStatus == 'pending' &&
+        (normalizedStatus == 'awaiting_quote_approval' ||
+         normalizedStatus == 'pending' ||
+         normalizedStatus == 'pendente_cliente');
 
-    // PDF: deixar evidente que pode modificar orçamento; texto do chefe
     if (isQuotePending && isEditedQuote && title == 'Orçamento Detalhado') {
-      title = 'Aperte aqui caso deseje modificar algo no orçamento';
-      subtitle = 'A oficina alterou o orçamento durante o serviço. Revise o novo valor e aprove ou rejeite.';
-    } else if (isEditedQuote && normalizedStatus == 'em_andamento' && title == 'Orçamento Detalhado') {
-      title = 'Aperte aqui caso deseje modificar algo no orçamento';
-      subtitle = 'Você aprovou o novo orçamento. O serviço continua com o valor atualizado.';
+      title = 'Revise o orçamento atualizado';
+      subtitle = 'A oficina alterou o orçamento durante o serviço. Revise e aprove ou rejeite.';
     }
-    
-    return GestureDetector(
-      onTap: hasDetailedQuote && isQuotePending ? () {
-        // Abrir tela de detalhes do orçamento para seleção de peças
-        _showQuoteDetailModal(merged, quoteItems, diagnosticValue, isDarkMode);
-      } : null,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF00C977), Color(0xFF00B369)],
+
+    // ── INTERACTIVE QUOTE VIEW (when pending + has detailed items) ──
+    if (isQuotePending && hasDetailedQuote) {
+      _initQuoteSelection(quoteItems!);
+      final selectedTotal = _calculateQuoteSelectedTotal(quoteItems, diagnosticValue);
+
+      return Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [Color(0xFF00C977), Color(0xFF00B369)]),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Revisar Orçamento', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text('Selecione os itens e opções desejados', style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          borderRadius: BorderRadius.circular(15),
+          // Items
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDarkMode ? const Color(0xFF1C1C1E) : Colors.white,
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
+              border: Border.all(color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!),
+            ),
+            child: Column(
+              children: [
+                ...quoteItems.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  final isSelected = _quoteSelectedItems[index] ?? false;
+                  final isRequired = _isItemRequired(item);
+                  final priority = _parsePriority(item['priority']);
+                  final pInfo = _priorityConfig[priority] ?? _priorityConfig[3]!;
+                  final description = item['description'] ?? 'Item sem descrição';
+                  final q = item['quantity'] is int ? item['quantity'] : (int.tryParse(item['quantity']?.toString() ?? '1') ?? 1);
+                  final itemPrice = _getQuoteItemPrice(item, index);
+                  final totalItem = itemPrice * q;
+                  final options = item['options'] as List? ?? [];
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFF00C977) : (isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (isRequired)
+                                const Padding(
+                                  padding: EdgeInsets.only(left: 4, right: 4, top: 4),
+                                  child: Icon(Icons.lock, color: Color(0xFFFF3B30), size: 20),
+                                )
+                              else
+                                SizedBox(
+                                  width: 32, height: 32,
+                                  child: Checkbox(
+                                    value: isSelected,
+                                    onChanged: (_) async {
+                                      if (isSelected && priority == 4) {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text('Remover item?'),
+                                            content: const Text('Este item é muito importante para o funcionamento do veículo. Tem certeza que deseja removê-lo?'),
+                                            actions: [
+                                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Manter')),
+                                              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remover', style: TextStyle(color: Colors.red))),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirm != true) return;
+                                      }
+                                      setState(() => _quoteSelectedItems[index] = !isSelected);
+                                    },
+                                    activeColor: const Color(0xFF00C977),
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(description, style: TextStyle(
+                                            fontSize: 15, fontWeight: FontWeight.w600,
+                                            color: isSelected
+                                                ? (isDarkMode ? Colors.white : Colors.black87)
+                                                : Colors.grey,
+                                            decoration: isSelected ? null : TextDecoration.lineThrough,
+                                          )),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: pInfo.color.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(pInfo.label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: pInfo.color)),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Qtd: $q × ${PriceUtils.formatCurrency(itemPrice)}',
+                                      style: TextStyle(fontSize: 12, color: isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black87),
+                              ),
+                            ],
+                          ),
+                          // Options radio buttons
+                          if (options.isNotEmpty && isSelected) ...[
+                            const Divider(height: 16),
+                            Text('Escolha uma opção:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[500])),
+                            const SizedBox(height: 6),
+                            ...options.map<Widget>((opt) {
+                              final optId = opt['id']?.toString() ?? '';
+                              final optDesc = opt['description']?.toString() ?? '';
+                              final optPriceRaw = opt['unit_price'] ?? 0;
+                              final optPrice = (optPriceRaw is num ? optPriceRaw.toDouble() : (optPriceRaw is String ? double.tryParse(optPriceRaw) ?? 0 : 0)) / 100.0;
+                              final isOptSelected = _quoteSelectedOptions[index] == optId;
+                              return InkWell(
+                                onTap: () => setState(() => _quoteSelectedOptions[index] = optId),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isOptSelected ? const Color(0xFF00C977).withValues(alpha: 0.1) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: isOptSelected ? const Color(0xFF00C977) : Colors.grey.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Radio<String>(
+                                        value: optId,
+                                        groupValue: _quoteSelectedOptions[index],
+                                        activeColor: const Color(0xFF00C977),
+                                        onChanged: (v) => setState(() => _quoteSelectedOptions[index] = v),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(child: Text(optDesc, style: TextStyle(fontSize: 13, color: isDarkMode ? Colors.white : Colors.black87))),
+                                      Text(PriceUtils.formatCurrency(optPrice) ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+
+                // Diagnostic
+                if (diagnosticValue != null && diagnosticValue > 0)
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(children: [
+                          Icon(Icons.search, size: 16, color: isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                          const SizedBox(width: 6),
+                          Text('Diagnóstico', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black87)),
+                        ]),
+                        Text(PriceUtils.formatCurrency(_diagnosticValueInReais(diagnosticValue)) ?? 'R\$ 0,00', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black87)),
+                      ],
+                    ),
+                  ),
+
+                const SizedBox(height: 12),
+                // Total bar
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [const Color(0xFF00C977).withValues(alpha: 0.1), const Color(0xFF00B369).withValues(alpha: 0.1)]),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF00C977).withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Total Selecionado:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black87)),
+                      Text(PriceUtils.formatCurrency(selectedTotal) ?? 'R\$ 0,00', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF00C977))),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Approve/Reject buttons inline
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _quoteSelectedItems.values.any((v) => v) ? () {
+                      final responseItems = _buildQuoteResponseItems(quoteItems);
+                      _approveQuoteWithItems(responseItems);
+                    } : null,
+                    icon: const Icon(Icons.check_circle, color: Colors.white),
+                    label: Text(
+                      _quoteSelectedItems.values.every((v) => v)
+                          ? 'Aprovar Orçamento Completo'
+                          : 'Enviar Resposta — ${PriceUtils.formatCurrency(selectedTotal)}',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C977),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _rejectQuote(),
+                    icon: const Icon(Icons.cancel, color: Colors.red),
+                    label: const Text('Rejeitar Orçamento', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.red, width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    // ── STATIC QUOTE VIEW (non-pending states — read-only) ──
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF00C977), Color(0xFF00B369)],
         ),
-        child: Column(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -1461,18 +1881,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           Text(
             subtitle,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.85),
+              color: Colors.white.withValues(alpha: 0.85),
               fontSize: 14,
             ),
           ),
-          
+
           // Mostrar breakdown detalhado se houver items
           if (hasDetailedQuote) ...[
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Column(
@@ -1486,33 +1906,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Builder(builder: (_) {
-                    final reason = merged['quote_reason']?.toString() ?? widget.booking['quote_reason']?.toString();
-                    if (reason == null || reason.trim().isEmpty) return const SizedBox.shrink();
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8, bottom: 4),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.message_rounded, size: 14, color: Colors.white.withValues(alpha: 0.8)),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              reason.trim(),
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.9),
-                                fontSize: 13,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
                   const SizedBox(height: 12),
-                  // Items do orçamento
-                  ...List<Widget>.from(quoteItems.asMap().entries.map<Widget>((entry) {
+                  ...List<Widget>.from(quoteItems!.asMap().entries.map<Widget>((entry) {
                     final index = entry.key;
                     final item = entry.value;
                     final description = item['description'] ?? 'Item sem descrição';
@@ -1526,9 +1921,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       margin: EdgeInsets.only(bottom: index < quoteItems.length - 1 ? 12 : 0),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1537,7 +1932,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.white.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Center(
@@ -1565,156 +1960,59 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 6),
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 6,
-                                  children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.shopping_cart_outlined, size: 12, color: Colors.white.withOpacity(0.8)),
-                                        const SizedBox(width: 4),
-                                        Flexible(
-                                          child: Text(
-                                            'Quantidade: $quantity',
-                                            style: TextStyle(
-                                              color: Colors.white.withOpacity(0.9),
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.attach_money, size: 12, color: Colors.white.withOpacity(0.8)),
-                                        const SizedBox(width: 4),
-                                        Flexible(
-                                          child: Text(
-                                            'Unitário: ${PriceUtils.formatCurrency(unitPrice)}',
-                                            style: TextStyle(
-                                              color: Colors.white.withOpacity(0.9),
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                Text(
+                                  'Qtd: $quantity × ${PriceUtils.formatCurrency(unitPrice)}',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
                           Text(
                             PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
                             style: const TextStyle(
                               color: Colors.white,
-                                  fontSize: 16,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
-                              ),
-                              Text(
-                                'Subtotal',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),
                     );
                   })),
-                  
+
                   // Valor do diagnóstico (se houver)
                   if (diagnosticValue != null && diagnosticValue > 0) ...[
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(
-                            child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.search, color: Colors.white.withOpacity(0.9), size: 16),
-                                    const SizedBox(width: 6),
-                              const Text(
-                                'Diagnóstico',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                              Text(
-                                  'Análise inicial do veículo para identificar problemas',
-                                style: TextStyle(
-                                    color: Colors.white.withOpacity(0.85),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                          ),
-                          const SizedBox(width: 12),
+                          Expanded(child: Text('Diagnóstico', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold))),
                           Text(
                             PriceUtils.formatCurrency(_diagnosticValueInReais(diagnosticValue)) ?? 'R\$ 0,00',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
                     ),
                   ],
-                  
+
                   const Divider(color: Colors.white38, height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Total',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          _formatPriceLabel() ?? '—',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                        ),
-                      ),
+                      const Text('Total', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text(_formatPriceLabel() ?? '—', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ],
@@ -1722,7 +2020,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
           ],
         ],
-      ),
       ),
     );
   }
@@ -2541,10 +2838,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       }
     }
     
-    // 2. Botões de aprovação de orçamento
+    // 2. Botões de aprovação de orçamento (skip if interactive view has inline buttons)
     if (hasQuoteApproval && hasQuote) {
-      actionWidgets.add(_buildQuoteApprovalButtons());
-      actionWidgets.add(const SizedBox(height: 20));
+      final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
+      final hasInteractiveInline = (quoteItemsRaw is List && quoteItemsRaw.isNotEmpty) &&
+          (rawStatusForActions == 'aguardando_aprovacao_orcamento' ||
+           _normalizeStatusKey(merged['status'] ?? status) == 'awaiting_quote_approval' ||
+           (merged['quote_status'] ?? widget.booking['quote_status']) == 'sent' ||
+           (merged['quote_status'] ?? widget.booking['quote_status']) == 'pending');
+      if (!hasInteractiveInline) {
+        actionWidgets.add(_buildQuoteApprovalButtons());
+        actionWidgets.add(const SizedBox(height: 20));
+      }
     }
     
     // 4. Botão de pagar (status aguardando pagamento)
@@ -2557,7 +2862,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (hasRateButton) {
       actionWidgets.add(_buildRateButton());
     }
-    
+
+    // 6. Botão Ver Nota Fiscal (status paid/completed)
+    if (statusAllowsRate) {
+      actionWidgets.add(const SizedBox(height: 12));
+      actionWidgets.add(_buildInvoiceButton());
+    }
+
     // Só renderizar o Container se houver pelo menos 1 widget de ação
     if (actionWidgets.isEmpty) {
       return const SizedBox.shrink();
@@ -2702,7 +3013,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: isAwaitingFinalizationApproval ? _approveFinalization : _approveQuote,
+                onTap: isAwaitingFinalizationApproval ? _approveFinalization : _openInteractiveQuoteOrApprove,
                 borderRadius: BorderRadius.circular(12),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -2749,6 +3060,47 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildInvoiceButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _viewInvoice,
+        icon: const Icon(Icons.receipt_long, color: Color(0xFF00C977)),
+        label: const Text('Ver Nota Fiscal', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF00C977))),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Color(0xFF00C977), width: 1.5),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _viewInvoice() async {
+    final bookingId = widget.booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) return;
+    final result = await _apiService.getInvoice(bookingId);
+    if (!mounted) return;
+    if (result['success'] == true && result['data'] != null) {
+      final data = result['data'] as Map<String, dynamic>;
+      final available = data['available'] == true;
+      final url = data['url']?.toString();
+      final status = data['status']?.toString() ?? '';
+      if (available && url != null && url.isNotEmpty) {
+        final uri = Uri.tryParse(url);
+        if (uri != null) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      } else if (status == 'ERROR' || status == 'CANCELED') {
+        MecaToast.showWarning(context, 'Erro na emissão da NF. Entre em contato com a oficina.');
+      } else {
+        MecaToast.showWarning(context, 'Nota Fiscal ainda não disponível.');
+      }
+    } else {
+      MecaToast.showWarning(context, 'NF não disponível — emissão manual pela oficina.');
+    }
   }
 
   Widget _buildPaymentButton() {
@@ -2838,6 +3190,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   
+  void _openInteractiveQuoteOrApprove() {
+    final merged = _mergeBookingData();
+    final quoteItemsRaw = merged['quote_items'] ?? widget.booking['quote_items'];
+    final quoteItems = quoteItemsRaw is List ? quoteItemsRaw : null;
+    final diagnosticValue = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    if (quoteItems != null && quoteItems.isNotEmpty) {
+      _showQuoteDetailModal(merged, quoteItems, diagnosticValue, isDarkMode);
+    } else {
+      _approveQuote();
+    }
+  }
+
   void _showQuoteDetailModal(Map<String, dynamic> merged, List quoteItems, dynamic diagnosticValue, bool isDarkMode) {
     showModalBottomSheet(
       context: context,
@@ -2855,7 +3221,37 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _approveQuoteWithItems(List<Map<String, dynamic>>? selectedItems) async {
-    // Por enquanto, aprovar tudo - depois podemos implementar seleção parcial
+    if (selectedItems != null && selectedItems.isNotEmpty && selectedItems.first.containsKey('quote_item_id')) {
+      final bookingId = widget.booking['id']?.toString() ?? '';
+      if (bookingId.isEmpty) return;
+      final result = await _apiService.respondQuote(bookingId, items: selectedItems);
+      if (!mounted) return;
+      if (result['success'] == true) {
+        _apiService.invalidateBookingsCache();
+        _apiService.invalidateBookingCache(bookingId);
+        final newStatus = result['data']?['status']?.toString() ?? 'em_andamento';
+        final newQuoteStatus = result['data']?['quote_status']?.toString() ?? 'approved';
+
+        if (!mounted) return;
+        setState(() {
+          _quoteSelectionInitialized = false;
+          _quoteSelectedItems.clear();
+          _quoteSelectedOptions.clear();
+          widget.booking['quote_status'] = newQuoteStatus;
+          widget.booking['status'] = newStatus;
+          if (_bookingDetails != null) {
+            _bookingDetails!['quote_status'] = newQuoteStatus;
+            _bookingDetails!['status'] = newStatus;
+          }
+        });
+
+        MecaToast.showSuccess(context, 'Orçamento aprovado com sucesso!');
+        _loadBookingDetails(forceRefresh: true);
+      } else {
+        AppAlerts.showError(context, message: result['error']?.toString() ?? 'Erro ao enviar resposta.');
+      }
+      return;
+    }
     await _approveQuote();
   }
 
@@ -3019,13 +3415,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (!mounted) return;
 
       if (result['success'] == true) {
-        // IMPORTANTE: Invalidar cache de bookings para forçar reload
         _apiService.invalidateBookingsCache();
         _apiService.invalidateBookingCache(bookingId);
-        
-        // Recarregar detalhes do agendamento
-        await _loadBookingDetails(forceRefresh: true);
-        
+
         final hasCompletedAt = _bookingDetails?['completed_at'] != null || widget.booking['completed_at'] != null;
         final newStatus = result['data']?['status']?.toString().toLowerCase() ??
                          (hasCompletedAt ? 'aguardando_pagamento' : 'em_andamento');
@@ -3039,10 +3431,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               : 'Orçamento aprovado! A oficina continuará o serviço e você será notificado quando finalizar.';
         }
 
-        MecaToast.showSuccess(context, message);
-
         if (!mounted) return;
         setState(() {
+          _quoteSelectionInitialized = false;
+          _quoteSelectedItems.clear();
+          _quoteSelectedOptions.clear();
           widget.booking['status'] = newStatus;
           widget.booking['quote_status'] = 'approved';
           if (_bookingDetails != null) {
@@ -3050,6 +3443,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             _bookingDetails!['quote_status'] = 'approved';
           }
         });
+
+        MecaToast.showSuccess(context, message);
+        _loadBookingDetails(forceRefresh: true);
       } else {
         AppAlerts.showError(
           context,
@@ -4090,6 +4486,87 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     return v / 100.0;
   }
 
+  // ── Interactive quote helpers ──
+
+  static const _priorityConfig = <int, ({String label, Color color})>{
+    5: (label: 'Essencial', color: Color(0xFFFF3B30)),
+    4: (label: 'Muito importante', color: Color(0xFFFF9500)),
+    3: (label: 'Importante', color: Color(0xFFFFCC00)),
+    2: (label: 'Recomendado', color: Color(0xFF007AFF)),
+    1: (label: 'Opcional', color: Color(0xFF8E8E93)),
+  };
+
+  int _parsePriority(dynamic raw) {
+    if (raw is int) return raw.clamp(1, 5);
+    if (raw is String) return int.tryParse(raw)?.clamp(1, 5) ?? 3;
+    return 3;
+  }
+
+  bool _isItemRequired(dynamic item) {
+    if (item['is_required'] == true) return true;
+    return _parsePriority(item['priority']) == 5;
+  }
+
+  void _initQuoteSelection(List quoteItems) {
+    if (_quoteSelectionInitialized) return;
+    _quoteSelectionInitialized = true;
+    for (var i = 0; i < quoteItems.length; i++) {
+      final priority = _parsePriority(quoteItems[i]['priority']);
+      _quoteSelectedItems[i] = priority > 1;
+      final options = quoteItems[i]['options'] as List?;
+      if (options != null && options.isNotEmpty) {
+        final defaultOpt = options.firstWhere((o) => o['is_default'] == true, orElse: () => options.first);
+        _quoteSelectedOptions[i] = defaultOpt['id']?.toString();
+      }
+    }
+  }
+
+  double _getQuoteItemPrice(dynamic item, int index) {
+    final options = item['options'] as List?;
+    if (options != null && options.isNotEmpty && _quoteSelectedOptions[index] != null) {
+      final selectedOpt = options.firstWhere(
+        (o) => o['id']?.toString() == _quoteSelectedOptions[index],
+        orElse: () => null,
+      );
+      if (selectedOpt != null) {
+        final raw = selectedOpt['unit_price'] ?? 0;
+        return (raw is num ? raw.toDouble() : (raw is String ? double.tryParse(raw) ?? 0 : 0)) / 100.0;
+      }
+    }
+    final raw = item['unit_price'] ?? 0;
+    return (raw is num ? raw.toDouble() : (raw is String ? double.tryParse(raw) ?? 0 : 0)) / 100.0;
+  }
+
+  double _calculateQuoteSelectedTotal(List quoteItems, dynamic diagnosticRaw) {
+    double total = 0;
+    for (var i = 0; i < quoteItems.length; i++) {
+      if (_quoteSelectedItems[i] != true) continue;
+      final item = quoteItems[i];
+      final q = item['quantity'] is int ? item['quantity'] : (int.tryParse(item['quantity']?.toString() ?? '1') ?? 1);
+      total += _getQuoteItemPrice(item, i) * q;
+    }
+    final dv = _parseDiagnosticValue(diagnosticRaw);
+    if (dv != null && dv > 0) total += dv / 100.0;
+    return total;
+  }
+
+  List<Map<String, dynamic>> _buildQuoteResponseItems(List quoteItems) {
+    final items = <Map<String, dynamic>>[];
+    for (var i = 0; i < quoteItems.length; i++) {
+      final itemId = quoteItems[i]['id']?.toString();
+      if (itemId == null) continue;
+      final payload = <String, dynamic>{
+        'quote_item_id': itemId,
+        'selected': _quoteSelectedItems[i] ?? false,
+      };
+      if (_quoteSelectedOptions[i] != null && (_quoteSelectedItems[i] ?? false)) {
+        payload['selected_option_id'] = _quoteSelectedOptions[i];
+      }
+      items.add(payload);
+    }
+    return items;
+  }
+
   double? _parseBackendPrice(dynamic raw) {
     if (raw == null) return null;
 
@@ -4462,7 +4939,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 }
 
-// Widget Modal para detalhes do orçamento com seleção de peças
+// Widget Modal para detalhes do orçamento com seleção de peças e opções
 class QuoteDetailModal extends StatefulWidget {
   final Map<String, dynamic> booking;
   final List quoteItems;
@@ -4486,74 +4963,83 @@ class QuoteDetailModal extends StatefulWidget {
 }
 
 class _QuoteDetailModalState extends State<QuoteDetailModal> {
-  final Map<String, bool> _selectedItems = {};
-  bool _allSelected = true;
+  final Map<int, bool> _selectedItems = {};
+  final Map<int, String?> _selectedOptionIds = {};
+
+  static const _priorityConfig = <int, _PriorityInfo>{
+    5: _PriorityInfo('Essencial', Color(0xFFFF3B30)),
+    4: _PriorityInfo('Muito importante', Color(0xFFFF9500)),
+    3: _PriorityInfo('Importante', Color(0xFFFFCC00)),
+    2: _PriorityInfo('Recomendado', Color(0xFF007AFF)),
+    1: _PriorityInfo('Opcional', Color(0xFF8E8E93)),
+  };
 
   @override
   void initState() {
     super.initState();
-    // Inicializar todos os itens como selecionados
     for (var i = 0; i < widget.quoteItems.length; i++) {
-      _selectedItems[i.toString()] = true;
+      final item = widget.quoteItems[i];
+      final priority = _parsePriority(item['priority']);
+      _selectedItems[i] = true;
+      final options = item['options'] as List?;
+      if (options != null && options.isNotEmpty) {
+        final defaultOpt = options.firstWhere((o) => o['is_default'] == true, orElse: () => options.first);
+        _selectedOptionIds[i] = defaultOpt['id']?.toString();
+      }
     }
+  }
+
+  int _parsePriority(dynamic raw) {
+    if (raw is int) return raw.clamp(1, 5);
+    if (raw is String) return int.tryParse(raw)?.clamp(1, 5) ?? 3;
+    return 3;
+  }
+
+  bool _isRequired(dynamic item) {
+    if (item['is_required'] == true) return true;
+    return _parsePriority(item['priority']) == 5;
   }
 
   void _toggleItem(int index) {
+    final item = widget.quoteItems[index];
+    if (_isRequired(item)) return;
     setState(() {
-      _selectedItems[index.toString()] = !(_selectedItems[index.toString()] ?? false);
-      _allSelected = _selectedItems.values.every((selected) => selected);
+      _selectedItems[index] = !(_selectedItems[index] ?? false);
     });
   }
 
-  void _toggleAll() {
-    setState(() {
-      _allSelected = !_allSelected;
-      for (var i = 0; i < widget.quoteItems.length; i++) {
-        _selectedItems[i.toString()] = _allSelected;
-      }
-    });
-  }
-
-  List<Map<String, dynamic>> _getSelectedItems() {
-    final selected = <Map<String, dynamic>>[];
-    for (var entry in _selectedItems.entries) {
-      if (entry.value) {
-        final index = int.parse(entry.key);
-        if (index < widget.quoteItems.length) {
-          selected.add(Map<String, dynamic>.from(widget.quoteItems[index]));
-        }
+  double _getItemPrice(dynamic item, int index) {
+    final options = item['options'] as List?;
+    if (options != null && options.isNotEmpty && _selectedOptionIds[index] != null) {
+      final selectedOpt = options.firstWhere(
+        (o) => o['id']?.toString() == _selectedOptionIds[index],
+        orElse: () => null,
+      );
+      if (selectedOpt != null) {
+        final raw = selectedOpt['unit_price'] ?? 0;
+        return (raw is int ? raw : (raw is String ? int.tryParse(raw) ?? 0 : (raw is double ? raw.toInt() : 0))) / 100.0;
       }
     }
-    return selected;
+    final unitPriceRaw = item['unit_price'] ?? 0;
+    return (unitPriceRaw is int ? unitPriceRaw : (unitPriceRaw is String ? int.tryParse(unitPriceRaw) ?? 0 : (unitPriceRaw is double ? unitPriceRaw.toInt() : 0))) / 100.0;
   }
 
   double? _parseDiagnosticValue(dynamic raw) {
     if (raw == null) return null;
-    if (raw is String) {
-      return double.tryParse(raw);
-    } else if (raw is int) {
-      return raw.toDouble();
-    } else if (raw is double) {
-      return raw;
-    }
+    if (raw is String) return double.tryParse(raw);
+    if (raw is int) return raw.toDouble();
+    if (raw is double) return raw;
     return null;
   }
 
   double _calculateSelectedTotal() {
     double total = 0;
-    for (var entry in _selectedItems.entries) {
-      if (entry.value) {
-        final index = int.parse(entry.key);
-        if (index < widget.quoteItems.length) {
-          final item = widget.quoteItems[index];
-          final quantityRaw = item['quantity'] ?? 1;
-          final quantity = quantityRaw is int ? quantityRaw : (quantityRaw is String ? int.tryParse(quantityRaw) ?? 1 : 1);
-          final unitPriceRaw = item['unit_price'] ?? 0;
-          final unitPriceCents = unitPriceRaw is int ? unitPriceRaw : (unitPriceRaw is String ? int.tryParse(unitPriceRaw) ?? 0 : (unitPriceRaw is double ? unitPriceRaw.toInt() : 0));
-          final unitPrice = unitPriceCents / 100.0;
-          total += unitPrice * quantity;
-        }
-      }
+    for (var i = 0; i < widget.quoteItems.length; i++) {
+      if (_selectedItems[i] != true) continue;
+      final item = widget.quoteItems[i];
+      final quantityRaw = item['quantity'] ?? 1;
+      final quantity = quantityRaw is int ? quantityRaw : (quantityRaw is String ? int.tryParse(quantityRaw) ?? 1 : 1);
+      total += _getItemPrice(item, i) * quantity;
     }
     final diagnosticValue = _parseDiagnosticValue(widget.diagnosticValue);
     if (diagnosticValue != null && diagnosticValue > 0) {
@@ -4562,11 +5048,29 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
     return total;
   }
 
+  List<Map<String, dynamic>> _buildResponseItems() {
+    final items = <Map<String, dynamic>>[];
+    for (var i = 0; i < widget.quoteItems.length; i++) {
+      final item = widget.quoteItems[i];
+      final itemId = item['id']?.toString();
+      if (itemId == null) continue;
+      final payload = <String, dynamic>{
+        'quote_item_id': itemId,
+        'selected': _selectedItems[i] ?? false,
+      };
+      if (_selectedOptionIds[i] != null && (_selectedItems[i] ?? false)) {
+        payload['selected_option_id'] = _selectedOptionIds[i];
+      }
+      items.add(payload);
+    }
+    return items;
+  }
+
   @override
   Widget build(BuildContext context) {
     final selectedTotal = _calculateSelectedTotal();
-    final allSelected = _selectedItems.values.every((selected) => selected);
-    final hasSelection = _selectedItems.values.any((selected) => selected);
+    final hasSelection = _selectedItems.values.any((v) => v);
+    final allSelected = _selectedItems.values.every((v) => v);
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
@@ -4576,14 +5080,11 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
       ),
       child: Column(
         children: [
-          // Header
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF00C977), Color(0xFF00B369)],
-              ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [Color(0xFF00C977), Color(0xFF00B369)]),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Row(
               children: [
@@ -4591,80 +5092,33 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Detalhes do Orçamento',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      const Text('Revisar Orçamento', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      Text(
-                        'Selecione os itens que deseja aprovar',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 14,
-                        ),
-                      ),
+                      Text('Selecione os itens e opções desejados', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14)),
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
+                IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.of(context).pop()),
               ],
             ),
           ),
-          // Lista de itens
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                // Checkbox para selecionar todos
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: widget.isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Checkbox(
-                        value: _allSelected,
-                        onChanged: (_) => _toggleAll(),
-                        activeColor: const Color(0xFF00C977),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Selecionar todos',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: widget.isDarkMode ? Colors.white : Colors.black87,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Lista de itens do orçamento
                 ...widget.quoteItems.asMap().entries.map((entry) {
                   final index = entry.key;
                   final item = entry.value;
-                  final isSelected = _selectedItems[index.toString()] ?? false;
+                  final isSelected = _selectedItems[index] ?? false;
+                  final isRequired = _isRequired(item);
+                  final priority = _parsePriority(item['priority']);
+                  final pInfo = _priorityConfig[priority] ?? _priorityConfig[3]!;
                   final description = item['description'] ?? 'Item sem descrição';
                   final quantityRaw = item['quantity'] ?? 1;
                   final quantity = quantityRaw is int ? quantityRaw : (quantityRaw is String ? int.tryParse(quantityRaw) ?? 1 : 1);
-                  final unitPriceRaw = item['unit_price'] ?? 0;
-                  final unitPriceCents = unitPriceRaw is int ? unitPriceRaw : (unitPriceRaw is String ? int.tryParse(unitPriceRaw) ?? 0 : (unitPriceRaw is double ? unitPriceRaw.toInt() : 0));
-                  final unitPrice = unitPriceCents / 100.0;
-                  final totalItem = unitPrice * quantity;
-                  final reason = item['reason'] ?? item['motivo'] ?? '';
-                  final importance = item['importance'] ?? item['importancia'] ?? '';
+                  final itemPrice = _getItemPrice(item, index);
+                  final totalItem = itemPrice * quantity;
+                  final options = item['options'] as List? ?? [];
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -4672,242 +5126,169 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
                       color: widget.isDarkMode ? const Color(0xFF2C2C2E) : Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isSelected 
-                            ? const Color(0xFF00C977) 
-                            : (widget.isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
+                        color: isSelected ? const Color(0xFF00C977) : (widget.isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
                         width: isSelected ? 2 : 1,
                       ),
-                      boxShadow: isSelected ? [
-                        BoxShadow(
-                          color: const Color(0xFF00C977).withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ] : null,
+                      boxShadow: isSelected ? [BoxShadow(color: const Color(0xFF00C977).withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 2))] : null,
                     ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => _toggleItem(index),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Checkbox(
-                                value: isSelected,
-                                onChanged: (_) => _toggleItem(index),
-                                activeColor: const Color(0xFF00C977),
-                              ),
-                              const SizedBox(width: 12),
+                              if (!isRequired)
+                                Checkbox(
+                                  value: isSelected,
+                                  onChanged: (_) => _toggleItem(index),
+                                  activeColor: const Color(0xFF00C977),
+                                )
+                              else
+                                const Padding(
+                                  padding: EdgeInsets.all(4),
+                                  child: Icon(Icons.lock, color: Color(0xFFFF3B30), size: 20),
+                                ),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      description,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: widget.isDarkMode ? Colors.white : Colors.black87,
-                                      ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(description, style: TextStyle(
+                                            fontSize: 15, fontWeight: FontWeight.w600,
+                                            color: isSelected ? (widget.isDarkMode ? Colors.white : Colors.black87) : Colors.grey,
+                                            decoration: isSelected ? null : TextDecoration.lineThrough,
+                                          )),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: pInfo.color.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(pInfo.label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: pInfo.color)),
+                                        ),
+                                      ],
                                     ),
-                                    if (reason.isNotEmpty) ...[
-                                      const SizedBox(height: 6),
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.info_outline,
-                                            size: 14,
-                                            color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Expanded(
-                                            child: Text(
-                                              'Motivo: $reason',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                    if (importance.isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: importance.toLowerCase() == 'alta' || importance.toLowerCase() == 'high'
-                                              ? Colors.red.withOpacity(0.1)
-                                              : importance.toLowerCase() == 'média' || importance.toLowerCase() == 'medium'
-                                                  ? Colors.orange.withOpacity(0.1)
-                                                  : Colors.green.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          'Importância: $importance',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                            color: importance.toLowerCase() == 'alta' || importance.toLowerCase() == 'high'
-                                                ? Colors.red[700]
-                                                : importance.toLowerCase() == 'média' || importance.toLowerCase() == 'medium'
-                                                    ? Colors.orange[700]
-                                                    : Colors.green[700],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     Text(
-                                      'Quantidade: $quantity × ${PriceUtils.formatCurrency(unitPrice)}',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                                      ),
+                                      'Qtd: $quantity × ${PriceUtils.formatCurrency(itemPrice)}',
+                                      style: TextStyle(fontSize: 13, color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600]),
                                     ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
                               Text(
                                 PriceUtils.formatCurrency(totalItem) ?? 'R\$ 0,00',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: widget.isDarkMode ? Colors.white : Colors.black87,
-                                ),
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white : Colors.black87),
                               ),
                             ],
                           ),
-                        ),
+                          if (options.isNotEmpty && isSelected) ...[
+                            const Divider(height: 20),
+                            Text('Escolha uma opção:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[500])),
+                            const SizedBox(height: 6),
+                            ...options.map<Widget>((opt) {
+                              final optId = opt['id']?.toString() ?? '';
+                              final optDesc = opt['description']?.toString() ?? '';
+                              final optPriceRaw = opt['unit_price'] ?? 0;
+                              final optPrice = (optPriceRaw is int ? optPriceRaw : (optPriceRaw is String ? int.tryParse(optPriceRaw) ?? 0 : (optPriceRaw is double ? optPriceRaw.toInt() : 0))) / 100.0;
+                              final isOptSelected = _selectedOptionIds[index] == optId;
+                              return InkWell(
+                                onTap: () => setState(() => _selectedOptionIds[index] = optId),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isOptSelected ? const Color(0xFF00C977).withOpacity(0.1) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: isOptSelected ? const Color(0xFF00C977) : Colors.grey.withOpacity(0.2)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Radio<String>(
+                                        value: optId,
+                                        groupValue: _selectedOptionIds[index],
+                                        activeColor: const Color(0xFF00C977),
+                                        onChanged: (v) => setState(() => _selectedOptionIds[index] = v),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(child: Text(optDesc, style: TextStyle(fontSize: 13, color: widget.isDarkMode ? Colors.white : Colors.black87))),
+                                      Text(PriceUtils.formatCurrency(optPrice) ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ],
                       ),
                     ),
                   );
                 }),
-                // Valor do diagnóstico
                 Builder(
                   builder: (context) {
                     final diagnosticValue = _parseDiagnosticValue(widget.diagnosticValue);
-                    if (diagnosticValue == null || diagnosticValue <= 0) {
-                      return const SizedBox.shrink();
-                    }
+                    if (diagnosticValue == null || diagnosticValue <= 0) return const SizedBox.shrink();
                     final diagnosticInReais = diagnosticValue / 100.0;
                     return Column(
                       children: [
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: widget.isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                              color: widget.isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-                              width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                      Row(
-                                        children: [
-                                        Icon(Icons.search, size: 16, color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                                        const SizedBox(width: 6),
-                                    Text(
-                                          'Diagnóstico',
-                                      style: TextStyle(
-                                            fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: widget.isDarkMode ? Colors.white : Colors.black87,
-                                ),
-                              ),
-                            ],
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: widget.isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: widget.isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
                           ),
-                                    const SizedBox(height: 4),
-                            Text(
-                                      'Análise inicial do veículo para identificar problemas',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                              ),
-                              const SizedBox(width: 12),
-                        Text(
-                                PriceUtils.formatCurrency(diagnosticInReais) ?? 'R\$ 0,00',
-                          style: TextStyle(
-                                  fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: widget.isDarkMode ? Colors.white : Colors.black87,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(children: [
+                                Icon(Icons.search, size: 16, color: widget.isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                                const SizedBox(width: 6),
+                                Text('Diagnóstico', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white : Colors.black87)),
+                              ]),
+                              Text(PriceUtils.formatCurrency(diagnosticInReais) ?? 'R\$ 0,00', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white : Colors.black87)),
+                            ],
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                ],
                     );
                   },
                 ),
                 const SizedBox(height: 20),
-                // Total selecionado
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF00C977).withOpacity(0.1),
-                        const Color(0xFF00B369).withOpacity(0.1),
-                      ],
-                    ),
+                    gradient: LinearGradient(colors: [const Color(0xFF00C977).withOpacity(0.1), const Color(0xFF00B369).withOpacity(0.1)]),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFF00C977).withOpacity(0.3),
-                    ),
+                    border: Border.all(color: const Color(0xFF00C977).withOpacity(0.3)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Total Selecionado:',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: widget.isDarkMode ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                      Text(
-                        PriceUtils.formatCurrency(selectedTotal) ?? 'R\$ 0,00',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF00C977),
-                        ),
-                      ),
+                      Text('Total Selecionado:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white : Colors.black87)),
+                      Text(PriceUtils.formatCurrency(selectedTotal) ?? 'R\$ 0,00', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF00C977))),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          // Botões de ação
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: widget.isDarkMode ? const Color(0xFF1C1C1E) : Colors.white,
-              border: Border(
-                top: BorderSide(
-                  color: widget.isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-                ),
-              ),
+              border: Border(top: BorderSide(color: widget.isDarkMode ? Colors.grey[800]! : Colors.grey[300]!)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -4917,24 +5298,18 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
                   child: ElevatedButton.icon(
                     onPressed: hasSelection ? () {
                       Navigator.of(context).pop();
-                      final selected = _getSelectedItems();
-                      widget.onApprove(allSelected ? null : selected);
+                      final responseItems = _buildResponseItems();
+                      widget.onApprove(allSelected ? null : responseItems);
                     } : null,
                     icon: const Icon(Icons.check_circle, color: Colors.white),
                     label: Text(
-                      allSelected ? 'Confirmar Orçamento Completo' : 'Confirmar Itens Selecionados',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                      allSelected ? 'Aprovar Orçamento Completo' : 'Enviar Resposta — ${PriceUtils.formatCurrency(selectedTotal)}',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00C977),
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -4947,20 +5322,11 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
                       widget.onReject();
                     },
                     icon: const Icon(Icons.cancel, color: Colors.red),
-                    label: const Text(
-                      'Rejeitar Orçamento',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red,
-                      ),
-                    ),
+                    label: const Text('Rejeitar Orçamento', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red)),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.red, width: 2),
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -4971,5 +5337,11 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
       ),
     );
   }
+}
+
+class _PriorityInfo {
+  final String label;
+  final Color color;
+  const _PriorityInfo(this.label, this.color);
 }
 
