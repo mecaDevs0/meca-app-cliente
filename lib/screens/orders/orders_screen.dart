@@ -703,12 +703,13 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       case 'finalizado':
       case 'concluido':
       case 'concluído':
-      case 'completed':
         return 'awaiting_payment';
       case 'pago':
       case 'paid':
       case 'finalizado_cliente':
         return 'paid';
+      case 'completed':
+        return 'completed';
       case 'cancelado':
       case 'cancelled':
       case 'nao_compareceu':
@@ -720,7 +721,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
 
   String _bucketForStatus(String rawStatus) {
     final normalized = _normalizeStatusKeyForList(rawStatus);
-    if (normalized == 'paid') return 'completed';
+    if (normalized == 'paid' || normalized == 'completed' || normalized == 'cancelled') return 'completed';
     if (normalized == 'confirmed' || normalized == 'in_progress') return 'confirmed';
     return 'pending';
   }
@@ -1766,6 +1767,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   }
 
   bool _isBookingExpired(Map<String, dynamic> booking, DateTime reference) {
+    if (booking['check_in_at'] != null) return false;
     final bookingDate = _parseBookingDate(booking);
     if (bookingDate == null) return false;
     final dayStart = DateTime(reference.year, reference.month, reference.day);
@@ -1811,6 +1813,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       'pendente_cliente': 'pending_customer',
       'pendente': 'pending',
       'pending': 'pending',
+      'pending_oficina': 'pending',
       'aguardando_aprovacao_orcamento': 'pending_customer',
       'aguardando_autorizacao_inicio': 'pending_customer',
       'aguardando_aprovacao_finalizacao': 'pending_customer',
@@ -1820,15 +1823,20 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       'em_andamento': 'in_progress',
       'em andamento': 'in_progress',
       'in_progress': 'in_progress',
+      'aguardando_pagamento': 'awaiting_payment',
+      'awaiting_payment': 'awaiting_payment',
       'finalizado_aguardando_pagamento': 'awaiting_payment',
-      'finalizado_cliente': 'completed',
       'finalizado': 'awaiting_payment',
       'concluido': 'awaiting_payment',
       'concluído': 'awaiting_payment',
-      'completed': 'awaiting_payment',
-      'pago': 'completed',
+      'finalizado_cliente': 'completed',
+      'completed': 'completed',
+      'pago': 'paid',
+      'paid': 'paid',
       'cancelado': 'cancelled',
       'cancelled': 'cancelled',
+      'em_disputa': 'in_dispute',
+      'in_dispute': 'in_dispute',
     };
     
     final mappedStatus = statusMap[normalizedStatus] ?? normalizedStatus;
@@ -1860,10 +1868,20 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         'color': isDarkMode ? const Color(0xFF1A2338) : const Color(0xFFE0F2FF),
         'textColor': isDarkMode ? const Color(0xFF5BA3FF) : const Color(0xFF1B6DC1),
       },
+      'paid': {
+        'label': 'Pago',
+        'color': isDarkMode ? const Color(0xFF1A2E1F) : const Color(0xFFE8FFEE),
+        'textColor': isDarkMode ? const Color(0xFF4ADE80) : const Color(0xFF2FD65C),
+      },
       'completed': {
         'label': 'Concluído',
         'color': isDarkMode ? const Color(0xFF1A2E1F) : const Color(0xFFE8FFEE),
         'textColor': isDarkMode ? const Color(0xFF4ADE80) : const Color(0xFF2FD65C),
+      },
+      'in_dispute': {
+        'label': 'Em Disputa',
+        'color': isDarkMode ? const Color(0xFF3D1F1F) : const Color(0xFFFEE2E2),
+        'textColor': isDarkMode ? const Color(0xFFFF6B6B) : const Color(0xFFE8867C),
       },
       'cancelled': {
         'label': 'Cancelado',

@@ -1594,7 +1594,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     if (interestFree) {
       return '${_selectedInstallments}x de ${_currencyFormatter.format(parcel)} sem juros';
     }
-    return '${_selectedInstallments}x de ${_currencyFormatter.format(parcel)} (total ${_currencyFormatter.format(total)} com juros)';
+    final interestCents = (_selectedInstallmentPlan!['interest_cents'] as int?) ?? 0;
+    final interest = interestCents / 100.0;
+    return '${_selectedInstallments}x de ${_currencyFormatter.format(parcel)} — Total ${_currencyFormatter.format(total)} (+${_currencyFormatter.format(interest)} juros)';
   }
 
   Widget _buildSummaryRow(ThemeData theme, String label, String value,
@@ -2056,6 +2058,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               final totalValue = totalCents / 100.0;
               final isSelected = n == _selectedInstallments;
 
+              final interestCents = (plan['interest_cents'] as int?) ?? 0;
+              final interestValue = interestCents / 100.0;
               String title;
               String? subtitle;
               if (n == 1) {
@@ -2066,7 +2070,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                 subtitle = 'Sem juros';
               } else {
                 title = '${n}x de ${_currencyFormatter.format(parcelValue)}';
-                subtitle = 'Total ${_currencyFormatter.format(totalValue)}';
+                subtitle = 'Total ${_currencyFormatter.format(totalValue)} (+${_currencyFormatter.format(interestValue)} juros)';
               }
 
               return DropdownMenuItem<Map<String, dynamic>>(
@@ -2141,6 +2145,44 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                 });
               }
             },
+          ),
+          if (_selectedInstallmentPlan != null &&
+              _selectedInstallmentPlan!['interest_free'] != true &&
+              _selectedInstallments > 1) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(isDark ? 0.15 : 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline, color: Colors.orange[isDark ? 300 : 700], size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'O parcelamento inclui juros do cartão. '
+                      'O valor total será ${_currencyFormatter.format((_selectedInstallmentPlan!['total_cents'] as int? ?? 0) / 100.0)} '
+                      'em vez de ${_currencyFormatter.format(widget.totalAmount)} à vista.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.orange[isDark ? 300 : 800],
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            'Pagamento à vista ou PIX: sem juros.',
+            style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: subTextColor),
           ),
         ],
       ),

@@ -2513,12 +2513,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       case 'finalizado':
       case 'concluido':
       case 'concluído':
-      case 'completed':
         return 'awaiting_payment';
       case 'pago':
       case 'paid':
       case 'finalizado_cliente':
         return 'paid';
+      case 'completed':
+        return 'completed';
       case 'cancelado':
       case 'cancelled':
       case 'nao_compareceu':
@@ -2773,9 +2774,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       phrase = 'O serviço foi finalizado e o orçamento aprovado. Realize o pagamento para concluir.';
       icon = Icons.payments_rounded;
       accent = const Color(0xFF4A90D9);
-    } else if (finalNormalizedStatus == 'completed' || finalNormalizedStatus == 'paid' || rawStatus == 'pago') {
-      phrase = 'Seu pagamento foi confirmado! Agora você pode buscar seu veículo na oficina ou agendar um guincho para a retirada.';
-      icon = Icons.check_circle_rounded;
+    } else if (finalNormalizedStatus == 'paid' || rawStatus == 'pago') {
+      phrase = 'Pagamento confirmado! Aguarde a oficina liberar seu veículo. Você será notificado quando estiver pronto.';
+      icon = Icons.payments_rounded;
+      accent = const Color(0xFF00C977);
+    } else if (finalNormalizedStatus == 'completed' || rawStatus == 'completed') {
+      phrase = 'Seu veículo foi liberado! Busque na oficina ou agende um guincho para a retirada.';
+      icon = Icons.directions_car_filled;
       accent = const Color(0xFF00C977);
     }
 
