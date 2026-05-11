@@ -4549,8 +4549,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _quoteSelectedItems[i] = priority > 1;
       final options = quoteItems[i]['options'] as List?;
       if (options != null && options.isNotEmpty) {
-        final defaultOpt = options.firstWhere((o) => o['is_default'] == true, orElse: () => null);
-        _quoteSelectedOptions[i] = defaultOpt != null ? defaultOpt['id']?.toString() : 'original';
+        _quoteSelectedOptions[i] = 'original';
       }
     }
   }
