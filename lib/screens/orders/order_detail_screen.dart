@@ -1714,11 +1714,45 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               ),
                             ],
                           ),
-                          // Options radio buttons
+                          // Options radio buttons (original item + alternatives)
                           if (options.isNotEmpty && isSelected) ...[
                             const Divider(height: 16),
                             Text('Escolha uma opção:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[500])),
                             const SizedBox(height: 6),
+                            // Original item as first radio option
+                            Builder(builder: (_) {
+                              final origPriceRaw = item['unit_price'] ?? 0;
+                              final origPrice = (origPriceRaw is num ? origPriceRaw.toDouble() : (origPriceRaw is String ? double.tryParse(origPriceRaw) ?? 0 : 0)) / 100.0;
+                              final isOrigSelected = _quoteSelectedOptions[index] == 'original';
+                              return InkWell(
+                                onTap: () => setState(() => _quoteSelectedOptions[index] = 'original'),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isOrigSelected ? const Color(0xFF00C977).withValues(alpha: 0.1) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: isOrigSelected ? const Color(0xFF00C977) : Colors.grey.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Radio<String>(
+                                        value: 'original',
+                                        groupValue: _quoteSelectedOptions[index],
+                                        activeColor: const Color(0xFF00C977),
+                                        onChanged: (v) => setState(() => _quoteSelectedOptions[index] = v),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(child: Text('$description (original)', style: TextStyle(fontSize: 13, color: isDarkMode ? Colors.white : Colors.black87))),
+                                      Text(PriceUtils.formatCurrency(origPrice) ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                            // Alternative options
                             ...options.map<Widget>((opt) {
                               final optId = opt['id']?.toString() ?? '';
                               final optDesc = opt['description']?.toString() ?? '';
@@ -4515,17 +4549,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _quoteSelectedItems[i] = priority > 1;
       final options = quoteItems[i]['options'] as List?;
       if (options != null && options.isNotEmpty) {
-        final defaultOpt = options.firstWhere((o) => o['is_default'] == true, orElse: () => options.first);
-        _quoteSelectedOptions[i] = defaultOpt['id']?.toString();
+        final defaultOpt = options.firstWhere((o) => o['is_default'] == true, orElse: () => null);
+        _quoteSelectedOptions[i] = defaultOpt != null ? defaultOpt['id']?.toString() : 'original';
       }
     }
   }
 
   double _getQuoteItemPrice(dynamic item, int index) {
     final options = item['options'] as List?;
-    if (options != null && options.isNotEmpty && _quoteSelectedOptions[index] != null) {
+    final selectedOptId = _quoteSelectedOptions[index];
+    if (options != null && options.isNotEmpty && selectedOptId != null && selectedOptId != 'original') {
       final selectedOpt = options.firstWhere(
-        (o) => o['id']?.toString() == _quoteSelectedOptions[index],
+        (o) => o['id']?.toString() == selectedOptId,
         orElse: () => null,
       );
       if (selectedOpt != null) {
@@ -4559,8 +4594,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         'quote_item_id': itemId,
         'selected': _quoteSelectedItems[i] ?? false,
       };
-      if (_quoteSelectedOptions[i] != null && (_quoteSelectedItems[i] ?? false)) {
-        payload['selected_option_id'] = _quoteSelectedOptions[i];
+      final optId = _quoteSelectedOptions[i];
+      if (optId != null && optId != 'original' && (_quoteSelectedItems[i] ?? false)) {
+        payload['selected_option_id'] = optId;
       }
       items.add(payload);
     }
