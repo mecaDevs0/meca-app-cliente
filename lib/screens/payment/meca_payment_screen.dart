@@ -9,6 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:flutter_svg/flutter_svg.dart';
+
 import '../../services/api_service.dart';
 import '../../services/asaas_payment_service.dart';
 import '../../widgets/app_alerts.dart';
@@ -1450,6 +1452,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                 const SizedBox(height: 24),
                 _buildResultSection(theme),
               ],
+              const SizedBox(height: 24),
+              _buildAsaasSeal(theme),
             ],
           ),
         ),
@@ -1486,6 +1490,24 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildAsaasSeal(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    final sealUrl = isDark
+        ? 'https://baas.asaas.com/selos/Servicos_financeiros_Asaas-Reduzida-Negativo-Branco.svg?id=2a6ee772-f63f-424d-9d0e-1a3811b0f64c'
+        : 'https://baas.asaas.com/selos/Servicos_financeiros_Asaas-Reduzida-Positivo.svg?id=2a6ee772-f63f-424d-9d0e-1a3811b0f64c';
+    return Center(
+      child: Opacity(
+        opacity: 0.5,
+        child: SvgPicture.network(
+          sealUrl,
+          height: 32,
+          fit: BoxFit.contain,
+          placeholderBuilder: (_) => const SizedBox.shrink(),
+        ),
+      ),
     );
   }
 

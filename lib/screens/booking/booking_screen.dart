@@ -383,9 +383,16 @@ class _BookingScreenState extends State<BookingScreen> {
             );
           }
           
+          final resolvedServiceName = _selectedService?['name'] ?? widget.serviceName;
+          final safeServiceName = (resolvedServiceName == null ||
+                  resolvedServiceName.toString().trim().isEmpty ||
+                  resolvedServiceName.toString().toLowerCase().contains('selecione'))
+              ? 'Serviço Automotivo'
+              : resolvedServiceName.toString();
+
           await _notificationService.scheduleBookingReminders(
             workshopName: widget.workshopName,
-            serviceName: widget.serviceName,
+            serviceName: safeServiceName,
             scheduledDate: scheduledDate,
           );
         } catch (e) {

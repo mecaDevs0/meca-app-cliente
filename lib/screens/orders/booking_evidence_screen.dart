@@ -361,16 +361,28 @@ class _BookingEvidenceScreenState extends State<BookingEvidenceScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        evidence['fileName'] ?? evidence['file_name'] ?? 'Evidência',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                      if (evidence['comment'] != null && evidence['comment'].toString().isNotEmpty)
+                        Text(
+                          evidence['comment'].toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      else
+                        Text(
+                          evidence['fileName'] ?? evidence['file_name'] ?? 'Evidência',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
                       if (evidence['uploadedAt'] != null || evidence['uploaded_at'] != null) ...[
                         const SizedBox(height: 4),
                         Row(

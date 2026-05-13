@@ -634,6 +634,10 @@ class ApiService {
     return getProfile(forceRefresh: forceRefresh);
   }
 
+  Future<Map<String, dynamic>> updateBillingData(Map<String, dynamic> data) async {
+    return put('/auth/billing-data', data);
+  }
+
   // Obter agendamentos do usuário
   Future<Map<String, dynamic>> getBookings() async {
     try {
@@ -991,6 +995,14 @@ class ApiService {
     } catch (e) {
       return {'success': false, 'error': _getErrorMessage(e)};
     }
+  }
+
+  Future<Map<String, dynamic>> respondQuote(String bookingId, {required List<Map<String, dynamic>> items}) async {
+    return put('/bookings/$bookingId/respond-quote', {'items': items});
+  }
+
+  Future<Map<String, dynamic>> getInvoice(String bookingId) async {
+    return get('/bookings/$bookingId/invoice', skipCache: true);
   }
 
   /// Aprovar finalização do serviço (cliente)

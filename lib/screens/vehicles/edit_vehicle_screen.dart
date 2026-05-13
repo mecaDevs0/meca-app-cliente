@@ -20,6 +20,7 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
   final _modelController = TextEditingController();
   final _yearController = TextEditingController();
   final _colorController = TextEditingController();
+  final _mileageController = TextEditingController();
   final _fuelController = TextEditingController();
   final ApiService _apiService = ApiService();
   bool _loading = false;
@@ -34,6 +35,7 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
     _modelController.text = widget.vehicle['model'] ?? '';
     _yearController.text = widget.vehicle['year']?.toString() ?? '';
     _colorController.text = widget.vehicle['color'] ?? '';
+    _mileageController.text = widget.vehicle['mileage_km']?.toString() ?? '';
     _selectedFuel = widget.vehicle['fuel'] ?? widget.vehicle['fuel_type'];
   }
 
@@ -44,6 +46,7 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
     _modelController.dispose();
     _yearController.dispose();
     _colorController.dispose();
+    _mileageController.dispose();
     _fuelController.dispose();
     super.dispose();
   }
@@ -81,6 +84,7 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
       'model': _modelController.text,
       'year': int.tryParse(_yearController.text),
       'color': _colorController.text,
+      'mileage_km': int.tryParse(_mileageController.text.replaceAll('.', '').replaceAll(',', '')),
     };
 
     final result = await _apiService.updateVehicle(
@@ -224,7 +228,23 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
                 },
               ),
               const SizedBox(height: 20),
-              
+
+              // Quilometragem
+              TextFormField(
+                controller: _mileageController,
+                decoration: const InputDecoration(
+                  labelText: 'Quilometragem (km)',
+                  hintText: 'Ex: 45000',
+                  prefixIcon: Icon(Icons.speed),
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+              ),
+              const SizedBox(height: 20),
+
               // Combustível
               DropdownButtonFormField<String>(
                 value: _selectedFuel,

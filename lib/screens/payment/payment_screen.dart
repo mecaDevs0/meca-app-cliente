@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../config/app_config.dart';
+import '../../services/api_service.dart';
 import '../../utils/price_utils.dart';
+import '../../widgets/billing_data_sheet.dart';
 import 'meca_payment_screen.dart';
 
-class PaymentScreen extends StatelessWidget {
+class PaymentScreen extends StatefulWidget {
   final Map<String, dynamic> service;
   final Map<String, dynamic> workshop;
   final Map<String, dynamic> booking;
@@ -15,6 +17,51 @@ class PaymentScreen extends StatelessWidget {
     required this.workshop,
     required this.booking,
   }) : super(key: key);
+
+  @override
+  State<PaymentScreen> createState() => _PaymentScreenState();
+}
+
+class _PaymentScreenState extends State<PaymentScreen> {
+  final ApiService _apiService = ApiService();
+  bool _billingChecked = false;
+  bool _checkingBilling = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBillingData();
+  }
+
+  Future<void> _checkBillingData() async {
+    try {
+      final profileResult = await _apiService.getProfile(forceRefresh: true);
+      if (!mounted) return;
+
+      Map<String, dynamic>? profile;
+      if (profileResult['success'] == true && profileResult['data'] != null) {
+        profile = profileResult['data'] as Map<String, dynamic>;
+      }
+
+      final completed = await BillingDataSheet.showIfNeeded(context, profile);
+      if (!mounted) return;
+
+      if (completed) {
+        setState(() {
+          _billingChecked = true;
+          _checkingBilling = false;
+        });
+      } else {
+        if (mounted) Navigator.pop(context);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _billingChecked = true;
+        _checkingBilling = false;
+      });
+    }
+  }
 
   static bool _parseAcceptsInstallment(dynamic value, {bool defaultValue = true}) {
     if (value == null) return defaultValue;
@@ -35,116 +82,63 @@ class PaymentScreen extends StatelessWidget {
     return n != null ? n.clamp(1, 24) : defaultValue;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final quoteAmount = _extractQuoteAmount(booking, service) ?? 0.0;
-    final mecaFee = quoteAmount > 0 ? quoteAmount * AppConfig.mecaPlatformFee : 0.0;
-    return MecaPaymentScreen(
-      bookingData: booking,
-      totalAmount: quoteAmount,
-      mecaFee: mecaFee,
-      serviceAmount: quoteAmount,
-      installments: 1,
-      workshopAcceptsInstallment: _parseAcceptsInstallment(workshop['accepts_installment'], defaultValue: true),
-      workshopMaxInstallments: _parseMaxInstallments(workshop['max_installments'], 12),
-    );
-  }
-
   double? _extractQuoteAmount(Map<String, dynamic> booking, Map<String, dynamic> service) {
-    print('💰 [PaymentScreen] Extraindo valor do booking: ${booking.keys.join(", ")}');
-    
-    final candidateKeys = [
-      'final_price',
-      'finalPrice',
-      'final_amount',
-      'finalAmount',
-      'approved_amount',
-      'approvedAmount',
-      'fin_price_cents',
-    ];
-
+    final candidateKeys = ['final_price', 'finalPrice', 'final_amount', 'finalAmount', 'approved_amount', 'approvedAmount', 'fin_price_cents'];
     for (final key in candidateKeys) {
       if (!booking.containsKey(key)) continue;
-      final rawValue = booking[key];
-      print('💰 [PaymentScreen] Tentando key=$key, raw=$rawValue, type=${rawValue.runtimeType}');
-      final parsed = _parseBackendPrice(rawValue);
-      if (parsed != null && parsed > 0) {
-        print('✅ [PaymentScreen] Valor extraído de "$key": R\$ $parsed');
-        return parsed;
-      }
+      final parsed = _parseBackendPrice(booking[key]);
+      if (parsed != null && parsed > 0) return parsed;
     }
-
     final total = _parseBackendPrice(booking['total']);
-    if (total != null && total > 0) {
-      print('✅ [PaymentScreen] Valor extraído de "total": R\$ $total');
-      return total;
-    }
-
+    if (total != null && total > 0) return total;
     final servicePrice = PriceUtils.extractPrice(service['price']);
-    if (servicePrice != null && servicePrice > 0) {
-      print('✅ [PaymentScreen] Valor extraído de service price: R\$ $servicePrice');
-      return servicePrice;
-    }
-
-    print('⚠️ [PaymentScreen] Nenhum valor válido found');
+    if (servicePrice != null && servicePrice > 0) return servicePrice;
     return null;
   }
 
   double? _parseBackendPrice(dynamic raw) {
     if (raw == null) return null;
-
     if (raw is num) {
       final value = raw.toDouble();
-      print('💰 [PaymentScreen] parseBackendPrice: num value=$value');
       if (value == 0) return null;
-      // API RDS usa centavos (int). 100=R$1, 125=R$1,25. Inteiro => centavos.
-      if (value % 1 == 0) {
-        final converted = value / 100;
-        print('💰 [PaymentScreen] parseBackendPrice: $value centavos -> R\$ $converted');
-        return converted;
-      }
-      print('💰 [PaymentScreen] parseBackendPrice: R\$ $value (decimal)');
+      if (value % 1 == 0) return value / 100;
       return value;
     }
-
     if (raw is String) {
       final cleaned = raw.trim();
       if (cleaned.isEmpty) return null;
       final parsed = double.tryParse(cleaned.replaceAll(',', '.'));
       if (parsed == null || parsed == 0) return null;
-      print('💰 [PaymentScreen] parseBackendPrice: string parsed=$parsed, hasDecimal=${cleaned.contains('.') ||cleaned.contains(',')}');
-      
-      // Se já tem ponto/vírgula, é valor em reais
-      if (cleaned.contains('.') || cleaned.contains(',')) {
-        print('💰 [PaymentScreen] parseBackendPrice: string com decimal, R\$ $parsed');
-        return parsed;
-      }
-      // String inteira => centavos
-      if (parsed % 1 == 0) {
-        final converted = parsed / 100;
-        print('💰 [PaymentScreen] parseBackendPrice: string convertendo $parsed centavos -> R\$ $converted');
-        return converted;
-      }
-      print('💰 [PaymentScreen] parseBackendPrice: string usando valor direto (reais) R\$ $parsed');
+      if (cleaned.contains('.') || cleaned.contains(',')) return parsed;
+      if (parsed % 1 == 0) return parsed / 100;
       return parsed;
     }
-
     return null;
   }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_checkingBilling && !_billingChecked) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Pagamento'),
+          backgroundColor: const Color(0xFF00C977),
+          foregroundColor: Colors.white,
+        ),
+        body: const Center(child: CircularProgressIndicator(color: Color(0xFF00C977))),
+      );
+    }
+
+    final quoteAmount = _extractQuoteAmount(widget.booking, widget.service) ?? 0.0;
+    final mecaFee = quoteAmount > 0 ? quoteAmount * AppConfig.mecaPlatformFee : 0.0;
+    return MecaPaymentScreen(
+      bookingData: widget.booking,
+      totalAmount: quoteAmount,
+      mecaFee: mecaFee,
+      serviceAmount: quoteAmount,
+      installments: 1,
+      workshopAcceptsInstallment: _parseAcceptsInstallment(widget.workshop['accepts_installment'], defaultValue: true),
+      workshopMaxInstallments: _parseMaxInstallments(widget.workshop['max_installments'], 12),
+    );
+  }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -863,6 +863,298 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Conteúdo acionável (prioridade alta) ──
+
+                  // Serviço
+                  Text(
+                    'Serviço',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode ? Colors.white : const Color(0xFF252940),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  Builder(
+                    builder: (context) {
+                      final serviceName =
+                          (_bookingDetails?['service_name'] ?? widget.booking['service_name'] ?? widget.booking['product_id'] ?? 'Serviço')
+                              .toString();
+
+                      final serviceDurationRaw = _bookingDetails?['service_duration'] ?? widget.booking['service_duration'];
+                      double? serviceDuration;
+                      if (serviceDurationRaw is num) {
+                        serviceDuration = serviceDurationRaw.toDouble();
+                      } else if (serviceDurationRaw is String) {
+                        serviceDuration = double.tryParse(serviceDurationRaw);
+                      }
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? const Color(0xFF1E1E1E) : const Color(0xFFFAFAFA),
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00C977).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(Icons.build, color: Color(0xFF00C977), size: 20),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          serviceName,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: isDarkMode ? Colors.white : Colors.black,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        if (serviceDuration != null && serviceDuration > 0)
+                                          Text(
+                                            '${serviceDuration.toStringAsFixed(serviceDuration % 1 == 0 ? 0 : 1)} minutos',
+                                            style: TextStyle(
+                                              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  if (_shouldShowEstimateNotice()) ...[
+                    _buildEstimateInfoCard(isDarkMode),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_shouldShowPrice()) ...[
+                    _buildQuoteCard(isDarkMode),
+                  ],
+                  if (bookingNotes != null && bookingNotes.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    Text(
+                      'Observações',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode ? Colors.white : const Color(0xFF252940),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? const Color(0xFF1E1E1E) : const Color(0xFFFAFAFA),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Text(
+                        bookingNotes,
+                        style: TextStyle(
+                          color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                  // Imagens do agendamento
+                  Builder(
+                    builder: (context) {
+                      final allImages = _getAllBookingImages();
+                      if (allImages.isEmpty) return const SizedBox.shrink();
+
+                      final clientImages = <Map<String, dynamic>>[];
+                      final workshopImages = <Map<String, dynamic>>[];
+                      for (final img in allImages) {
+                        final url = img['url']?.toString();
+                        if (url == null || url.isEmpty) continue;
+                        final uploadedBy = img['uploaded_by']?.toString() ?? '';
+                        final s3Key = img['s3_key']?.toString() ?? img['key']?.toString() ?? '';
+                        final isWs = uploadedBy == 'workshop' ||
+                            s3Key.contains('/workshop/') ||
+                            s3Key.contains('workshop');
+                        if (isWs) {
+                          workshopImages.add(img);
+                        } else {
+                          clientImages.add(img);
+                        }
+                      }
+
+                      Widget buildThumbGrid(List<Map<String, dynamic>> images) {
+                        return Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: images.map((img) {
+                            final url = img['url']!.toString();
+                            return GestureDetector(
+                              onTap: () => _openUploadPreview(img),
+                              child: Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+                                    width: 1,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.08),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(13),
+                                  child: CachedNetworkImage(
+                                    imageUrl: url,
+                                    fit: BoxFit.cover,
+                                    width: 80,
+                                    height: 80,
+                                    placeholder: (_, __) => Container(color: isDarkMode ? Colors.grey[800] : Colors.grey[200]),
+                                    errorWidget: (_, __, ___) => const Icon(Icons.broken_image, size: 24),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Icon(Icons.photo_library_outlined, size: 18, color: isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Imagens do Agendamento',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDarkMode ? Colors.white : const Color(0xFF252940),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (clientImages.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            buildThumbGrid(clientImages),
+                          ],
+                          if (workshopImages.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            ...workshopImages.map((img) {
+                              final comment = img['comment']?.toString();
+                              final hasComment = comment != null && comment.isNotEmpty;
+                              final url = img['url']!.toString();
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(isDarkMode ? 0.25 : 0.06),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () => _openUploadPreview(img),
+                                        child: Stack(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.vertical(
+                                                top: const Radius.circular(16),
+                                                bottom: hasComment ? Radius.zero : const Radius.circular(16),
+                                              ),
+                                              child: CachedNetworkImage(
+                                                imageUrl: url,
+                                                width: double.infinity,
+                                                height: 200,
+                                                fit: BoxFit.cover,
+                                                placeholder: (_, __) => Container(height: 200, color: isDarkMode ? Colors.grey[800] : Colors.grey[200]),
+                                                errorWidget: (_, __, ___) => Container(height: 200, color: Colors.grey[300], child: const Icon(Icons.broken_image)),
+                                              ),
+                                            ),
+                                            Positioned(
+                                              top: 8,
+                                              right: 8,
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF00C977),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: const [
+                                                    Icon(Icons.build_rounded, size: 10, color: Colors.white),
+                                                    SizedBox(width: 3),
+                                                    Text('Oficina', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (hasComment)
+                                        Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                                          decoration: BoxDecoration(
+                                            color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+                                            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                                          ),
+                                          child: Text(
+                                            comment!,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: isDarkMode ? Colors.grey[200] : Colors.grey[800],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+
+                  // ── Informações de referência (prioridade baixa) ──
+                  const SizedBox(height: 20),
                   _buildSection(
                     'Oficina',
                     [
@@ -1061,365 +1353,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Serviço',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isDarkMode ? Colors.white : const Color(0xFF252940),
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                  Builder(
-                    builder: (context) {
-                      final serviceName =
-                          (_bookingDetails?['service_name'] ?? widget.booking['service_name'] ?? widget.booking['product_id'] ?? 'Serviço')
-                              .toString();
-                      // Removido: cálculo de servicePriceLabel
-                      // O preço total já é exibido no card "Total" abaixo
-
-                      final serviceDurationRaw = _bookingDetails?['service_duration'] ?? widget.booking['service_duration'];
-                      double? serviceDuration;
-                      if (serviceDurationRaw is num) {
-                        serviceDuration = serviceDurationRaw.toDouble();
-                      } else if (serviceDurationRaw is String) {
-                        serviceDuration = double.tryParse(serviceDurationRaw);
-                      }
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                          color: isDarkMode ? const Color(0xFF1E1E1E) : const Color(0xFFFAFAFA),
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF00C977).withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Icon(Icons.build, color: Color(0xFF00C977), size: 20),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          serviceName,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: isDarkMode ? Colors.white : Colors.black,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        if (serviceDuration != null && serviceDuration > 0)
-                                          Text(
-                                            '${serviceDuration.toStringAsFixed(serviceDuration % 1 == 0 ? 0 : 1)} minutos',
-                                            style: TextStyle(
-                                              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Removido: exibição de preço no card de serviço
-                            // O preço total já é exibido no card "Total" abaixo
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  if (_shouldShowEstimateNotice()) ...[
-                    _buildEstimateInfoCard(isDarkMode),
-                    const SizedBox(height: 16),
-                  ],
-                  if (_shouldShowPrice()) ...[
-                    _buildQuoteCard(isDarkMode),
-                  ],
-                  if (bookingNotes != null && bookingNotes.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    Text(
-                      'Observações',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDarkMode ? Colors.white : const Color(0xFF252940),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                        color: isDarkMode ? const Color(0xFF1E1E1E) : const Color(0xFFFAFAFA),
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: Text(
-                        bookingNotes,
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
-                        ),
-                      ),
-                    ),
-                  ],
-                  // Exibir todas as imagens do agendamento (em todos os status)
-                  Builder(
-                    builder: (context) {
-                      final allImages = _getAllBookingImages();
-                      if (allImages.isEmpty) return const SizedBox.shrink();
-
-                      final clientImages = <Map<String, dynamic>>[];
-                      final workshopImages = <Map<String, dynamic>>[];
-                      for (final img in allImages) {
-                        final url = img['url']?.toString();
-                        if (url == null || url.isEmpty) continue;
-                        final uploadedBy = img['uploaded_by']?.toString() ?? '';
-                        final s3Key = img['s3_key']?.toString() ?? img['key']?.toString() ?? '';
-                        final isWs = uploadedBy == 'workshop' ||
-                            s3Key.contains('/workshop/') ||
-                            s3Key.contains('workshop');
-                        if (isWs) {
-                          workshopImages.add(img);
-                        } else {
-                          clientImages.add(img);
-                        }
-                      }
-
-                      Widget buildThumbGrid(List<Map<String, dynamic>> images) {
-                        return Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: images.map((img) {
-                            final url = img['url']!.toString();
-                            return GestureDetector(
-                              onTap: () => _openUploadPreview(img),
-                              child: Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
-                                    width: 1,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.08),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(13),
-                                  child: CachedNetworkImage(
-                                    imageUrl: url,
-                                    fit: BoxFit.cover,
-                                    width: 80,
-                                    height: 80,
-                                    memCacheWidth: 160,
-                                    memCacheHeight: 160,
-                                    httpHeaders: const {'Accept': 'image/*'},
-                                    placeholder: (context, url) => Container(
-                                      color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
-                                      alignment: Alignment.center,
-                                      child: const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                                    ),
-                                    errorWidget: (context, url, error) => Container(
-                                      color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
-                                      alignment: Alignment.center,
-                                      child: Icon(Icons.broken_image, size: 20, color: Colors.grey.shade500),
-                                    ),
-                                    fadeInDuration: const Duration(milliseconds: 200),
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        );
-                      }
-
-                      Widget buildEvidenceCard(Map<String, dynamic> img) {
-                        final url = img['url']!.toString();
-                        final comment = img['comment']?.toString();
-                        final hasComment = comment != null && comment.isNotEmpty;
-                        return GestureDetector(
-                          onTap: () => _openUploadPreview(img),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(isDarkMode ? 0.35 : 0.10),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.vertical(
-                                    top: const Radius.circular(16),
-                                    bottom: hasComment ? Radius.zero : const Radius.circular(16),
-                                  ),
-                                  child: Stack(
-                                    children: [
-                                      CachedNetworkImage(
-                                        imageUrl: url,
-                                        fit: BoxFit.cover,
-                                        width: double.infinity,
-                                        height: 200,
-                                        memCacheWidth: 600,
-                                        memCacheHeight: 400,
-                                        httpHeaders: const {'Accept': 'image/*'},
-                                        placeholder: (context, url) => Container(
-                                          height: 200,
-                                          color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
-                                          alignment: Alignment.center,
-                                          child: const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
-                                        ),
-                                        errorWidget: (context, url, error) => Container(
-                                          height: 200,
-                                          color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
-                                          alignment: Alignment.center,
-                                          child: Icon(Icons.broken_image, color: Colors.grey.shade500),
-                                        ),
-                                        fadeInDuration: const Duration(milliseconds: 200),
-                                      ),
-                                      Positioned(
-                                        top: 8, right: 8,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF00C977),
-                                            borderRadius: BorderRadius.circular(10),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: const Color(0xFF00C977).withOpacity(0.4),
-                                                blurRadius: 6,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: const [
-                                              Icon(Icons.build_rounded, size: 10, color: Colors.white),
-                                              SizedBox(width: 3),
-                                              Text('Oficina', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (hasComment)
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                                    decoration: BoxDecoration(
-                                      color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-                                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-                                    ),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Container(
-                                          margin: const EdgeInsets.only(top: 2),
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF00C977).withOpacity(0.12),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: const Icon(Icons.chat_bubble_outline_rounded, size: 14, color: Color(0xFF00C977)),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                'Justificativa da oficina',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: isDarkMode ? Colors.grey[500] : Colors.grey[500],
-                                                  letterSpacing: 0.3,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 3),
-                                              Text(
-                                                comment!,
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: isDarkMode ? Colors.grey[200] : Colors.grey[800],
-                                                  height: 1.35,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Icon(Icons.photo_library_outlined, size: 18, color: isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Imagens do Agendamento',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDarkMode ? Colors.white : const Color(0xFF252940),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (clientImages.isNotEmpty) ...[
-                            const SizedBox(height: 14),
-                            buildThumbGrid(clientImages),
-                          ],
-                          if (workshopImages.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            ...workshopImages.map((img) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: buildEvidenceCard(img),
-                            )),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
+                  // (Serviço, Orçamento, Observações, Imagens já estão no topo)
                 ],
               ),
             ),
@@ -4551,7 +4485,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _quoteSelectionInitialized = true;
     for (var i = 0; i < quoteItems.length; i++) {
       final priority = _parsePriority(quoteItems[i]['priority']);
-      _quoteSelectedItems[i] = priority > 1;
+      _quoteSelectedItems[i] = true;
       final options = quoteItems[i]['options'] as List?;
       if (options != null && options.isNotEmpty) {
         _quoteSelectedOptions[i] = 'original';
@@ -5384,4 +5318,5 @@ class _PriorityInfo {
   final Color color;
   const _PriorityInfo(this.label, this.color);
 }
+
 

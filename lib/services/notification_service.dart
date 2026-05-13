@@ -222,12 +222,21 @@ class NotificationService {
     final payload = bookingId != null 
         ? createNavigationPayload('booking', bookingId)
         : null;
+    final safeName = _sanitizeServiceName(serviceName);
     await showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: 'Agendamento Confirmado! 🎉',
-      body: 'Seu agendamento de $serviceName na $workshopName foi confirmado para ${_formatDate(scheduledDate)}',
+      body: 'Seu agendamento de $safeName na $workshopName foi confirmado para ${_formatDate(scheduledDate)}',
       payload: payload,
     );
+  }
+
+  String _sanitizeServiceName(String serviceName) {
+    final name = serviceName.trim();
+    if (name.isEmpty || name.toLowerCase().contains('selecione')) {
+      return 'Serviço Automotivo';
+    }
+    return name;
   }
 
   Future<void> showBookingReminder({
@@ -236,13 +245,14 @@ class NotificationService {
     required DateTime scheduledDate,
     String? bookingId,
   }) async {
-    final payload = bookingId != null 
+    final safeName = _sanitizeServiceName(serviceName);
+    final payload = bookingId != null
         ? createNavigationPayload('booking', bookingId)
         : null;
     await showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: 'Lembrete de Agendamento ⏰',
-      body: 'Você tem um agendamento de $serviceName na $workshopName em 1 hora!',
+      body: 'Você tem um agendamento de $safeName na $workshopName em 1 hora!',
       payload: payload,
     );
   }
@@ -252,13 +262,14 @@ class NotificationService {
     required String serviceName,
     String? bookingId,
   }) async {
-    final payload = bookingId != null 
+    final safeName = _sanitizeServiceName(serviceName);
+    final payload = bookingId != null
         ? createNavigationPayload('booking', bookingId)
         : null;
     await showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: 'Serviço Iniciado! 🔧',
-      body: 'O serviço $serviceName foi iniciado na $workshopName',
+      body: 'O serviço $safeName foi iniciado na $workshopName',
       payload: payload,
     );
   }
@@ -268,13 +279,14 @@ class NotificationService {
     required String serviceName,
     String? bookingId,
   }) async {
-    final payload = bookingId != null 
+    final safeName = _sanitizeServiceName(serviceName);
+    final payload = bookingId != null
         ? createNavigationPayload('booking', bookingId)
         : null;
     await showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: 'Serviço Finalizado! ✅',
-      body: 'O serviço $serviceName foi finalizado na $workshopName. Abra o app MECA para confirmar e realizar o pagamento.',
+      body: 'O serviço $safeName foi finalizado na $workshopName. Abra o app MECA para confirmar e realizar o pagamento.',
       payload: payload,
     );
   }
@@ -285,13 +297,14 @@ class NotificationService {
     required double amount,
     String? bookingId,
   }) async {
-    final payload = bookingId != null 
+    final safeName = _sanitizeServiceName(serviceName);
+    final payload = bookingId != null
         ? createNavigationPayload('booking', bookingId)
         : null;
     await showLocalNotification(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: 'Pagamento Confirmado! 💳',
-      body: 'Pagamento de R\$ ${amount.toStringAsFixed(2)} confirmado para $serviceName na $workshopName',
+      body: 'Pagamento de R\$ ${amount.toStringAsFixed(2)} confirmado para $safeName na $workshopName',
       payload: payload,
     );
   }
@@ -301,24 +314,24 @@ class NotificationService {
     required String serviceName,
     required DateTime scheduledDate,
   }) async {
-    // Lembrete 1 dia antes
+    final safeName = _sanitizeServiceName(serviceName);
+
     final oneDayBefore = scheduledDate.subtract(const Duration(days: 1));
     if (oneDayBefore.isAfter(DateTime.now())) {
       await scheduleNotification(
         id: scheduledDate.millisecondsSinceEpoch ~/ 1000 + 1,
         title: 'Lembrete de Agendamento 📅',
-        body: 'Você tem um agendamento de $serviceName na $workshopName amanhã!',
+        body: 'Você tem um agendamento de $safeName na $workshopName amanhã!',
         scheduledDate: oneDayBefore,
       );
     }
 
-    // Lembrete 1 hora antes
     final oneHourBefore = scheduledDate.subtract(const Duration(hours: 1));
     if (oneHourBefore.isAfter(DateTime.now())) {
       await scheduleNotification(
         id: scheduledDate.millisecondsSinceEpoch ~/ 1000 + 2,
         title: 'Lembrete de Agendamento ⏰',
-        body: 'Você tem um agendamento de $serviceName na $workshopName em 1 hora!',
+        body: 'Você tem um agendamento de $safeName na $workshopName em 1 hora!',
         scheduledDate: oneHourBefore,
       );
     }
