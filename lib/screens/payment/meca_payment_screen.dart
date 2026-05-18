@@ -152,7 +152,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     if (msg.isNotEmpty) {
       return '$msg\n\nO que fazer: tente outro cartão, verifique limite/dados do cartão, ou use PIX.';
     }
-    return 'O gateway de pagamento não autorizou a transação.\n\nO que fazer: tente outro cartão, verifique limite/dados do cartão, ou use PIX.';
+    return 'A instituição financeira não autorizou a transação.\n\nO que fazer: tente outro cartão, verifique limite/dados do cartão, ou use PIX.';
   }
 
   String? _pickFirstNonEmpty(List<dynamic> values) {
@@ -572,7 +572,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                 builder: (context) => AlertDialog(
                   title: const Text('Cartão inválido removido'),
                   content: const Text(
-                    'Removemos este cartão da sua lista porque ele não pôde ser validado pelo gateway de pagamento.\n\n'
+                    'Removemos este cartão da sua lista porque ele não pôde ser validado pela instituição financeira.\n\n'
                     'Para continuar, use outro cartão agora. Se quiser, marque "Salvar cartão" no pagamento para salvar novamente.',
                   ),
                   actions: [
@@ -688,7 +688,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           message: gatewayMessage.isNotEmpty
               ? gatewayMessage
               : (isDeclined
-                  ? 'O gateway de pagamento não autorizou o pagamento. Tente outro cartão.'
+                  ? 'A instituição financeira não autorizou o pagamento. Tente outro cartão.'
                   : 'O pagamento foi cancelado.'),
         );
         setState(() {});
@@ -707,7 +707,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           context,
           title: 'Pagamento em análise',
           message:
-              'O gateway de pagamento está processando seu pagamento. Avisaremos assim que for confirmado.',
+              'A instituição financeira está processando seu pagamento. Avisaremos assim que for confirmado.',
         );
       }
 
@@ -1040,7 +1040,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         context,
         title: 'Pagamento em análise',
         message:
-            'O gateway de pagamento está processando seu pagamento. Você pode acompanhar o status aqui.',
+            'A instituição financeira está processando seu pagamento. Você pode acompanhar o status aqui.',
       );
       _startStatusPolling();
       setState(() {});
@@ -1151,7 +1151,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           context,
           title: 'Status atualizado',
           message: status == 'pending'
-              ? 'Ainda em análise pelo gateway de pagamento.'
+              ? 'Ainda em análise pela instituição financeira.'
               : 'Status atual: ${_statusLabel(status)}',
         );
       } else if (!silent && status == 'cancelled') {
@@ -2271,7 +2271,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           const SizedBox(height: 16),
           if (isDeclined) ...[
             Text(
-              'Motivo: ${gatewayMessage.isNotEmpty ? gatewayMessage : 'Não autorizado pelo gateway de pagamento'}',
+              'Motivo: ${gatewayMessage.isNotEmpty ? gatewayMessage : 'Não autorizado pela instituição financeira'}',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.textTheme.bodyMedium?.color?.withOpacity(0.85),
               ),
