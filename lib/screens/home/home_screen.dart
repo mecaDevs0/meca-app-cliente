@@ -330,26 +330,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       padding: const EdgeInsets.fromLTRB(20.0, 16.0, 16.0, 16.0),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(24),
-                        gradient: const LinearGradient(
+                        gradient: LinearGradient(
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
-                          colors: [
-                            Color(0xFF121212),
-                            Color(0xFF0A2415),
-                          ],
+                          colors: isDark
+                              ? [const Color(0xFF121212), const Color(0xFF0A2415)]
+                              : [const Color(0xFFF5FFF9), const Color(0xFFE8F9F0)],
                         ),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.1),
+                          color: isDark ? Colors.white.withOpacity(0.1) : const Color(0xFF00C977).withOpacity(0.2),
                           width: 1.5,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF00C977).withOpacity(0.04),
+                            color: const Color(0xFF00C977).withOpacity(isDark ? 0.04 : 0.08),
                             blurRadius: 20,
                             offset: const Offset(0, 4),
                           ),
                           BoxShadow(
-                            color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
+                            color: Colors.black.withOpacity(isDark ? 0.4 : 0.06),
                             blurRadius: 16,
                             offset: const Offset(0, 2),
                           ),
@@ -377,10 +376,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         child: Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                           decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.08),
+                                            color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFF00C977).withOpacity(0.1),
                                             borderRadius: BorderRadius.circular(8),
                                             border: Border.all(
-                                              color: Colors.greenAccent.withOpacity(0.6),
+                                              color: isDark ? Colors.greenAccent.withOpacity(0.6) : const Color(0xFF00C977).withOpacity(0.5),
                                               width: 1,
                                             ),
                                           ),
@@ -402,7 +401,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                       style: TextStyle(
                                         fontSize: titleSize,
                                         fontWeight: FontWeight.w800,
-                                        color: Colors.white,
+                                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                                         height: 1.15,
                                         letterSpacing: -0.8,
                                       ),
@@ -414,7 +413,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                       style: TextStyle(
                                         fontSize: descSize,
                                         fontWeight: FontWeight.w500,
-                                        color: Colors.white70,
+                                        color: isDark ? Colors.white70 : const Color(0xFF555555),
                                         height: 1.35,
                                       ),
                                       softWrap: true,
@@ -442,8 +441,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               center: Alignment.center,
                               radius: 0.5,
                               colors: [
-                                Colors.greenAccent.withOpacity(0.35),
-                                Colors.greenAccent.withOpacity(0.08),
+                                Colors.greenAccent.withOpacity(isDark ? 0.35 : 0.15),
+                                Colors.greenAccent.withOpacity(isDark ? 0.08 : 0.04),
                                 Colors.transparent,
                               ],
                               stops: const [0.0, 0.25, 0.6],
@@ -463,11 +462,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           'assets/images/MIA.svg',
                           fit: BoxFit.contain,
                           alignment: Alignment.bottomCenter,
-                          placeholderBuilder: (_) => const Icon(
-                            Icons.smart_toy_rounded,
-                            size: 100,
-                            color: Color(0xFF00C977),
-                          ),
                         ),
                       ),
                     ),
