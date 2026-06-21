@@ -36,7 +36,6 @@ class CustomBottomNav extends StatelessWidget {
     final borderColor = isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0);
     
     return Container(
-      height: 100,
       decoration: BoxDecoration(
         color: navBgColor,
         border: Border(
@@ -53,15 +52,18 @@ class CustomBottomNav extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: items.asMap().entries.map((entry) {
-            final index = entry.key;
-            final item = entry.value;
-            return _buildNavItem(context, index, item);
-          }).toList(),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: items.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+              return _buildNavItem(context, index, item);
+            }).toList(),
+          ),
         ),
       ),
     );

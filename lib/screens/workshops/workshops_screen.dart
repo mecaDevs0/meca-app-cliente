@@ -376,26 +376,20 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
       backgroundColor: isDarkMode ? const Color(0xFF0A0A0A) : const Color(0xFFF8F9FA),
       body: CustomScrollView(
         slivers: [
-          // AppBar melhorado com título na mesma linha dos botões
           SliverAppBar(
             pinned: true,
-            backgroundColor: const Color(0xFF00C977),
+            backgroundColor: isDarkMode ? const Color(0xFF111111) : Colors.white,
+            surfaceTintColor: Colors.transparent,
             elevation: 0,
+            scrolledUnderElevation: 0,
             automaticallyImplyLeading: false,
             title: Text(
               'Oficinas Próximas',
               style: TextStyle(
-                color: Colors.white,
+                color: isDarkMode ? Colors.white : const Color(0xFF1A1A1A),
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
-                letterSpacing: 0.3,
-                shadows: [
-                  Shadow(
-                    color: Colors.black.withOpacity(0.25),
-                    offset: const Offset(0, 1),
-                    blurRadius: 2,
-                  ),
-                ],
+                letterSpacing: -0.3,
               ),
             ),
             centerTitle: true,
@@ -403,7 +397,11 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
               Stack(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 22),
+                    icon: Icon(
+                      Icons.tune_rounded,
+                      color: isDarkMode ? const Color(0xFF00C977) : const Color(0xFF00C977),
+                      size: 22,
+                    ),
                     onPressed: _showFilterModal,
                   ),
                   if (_hasActiveFilters)
@@ -411,12 +409,11 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                       right: 10,
                       top: 10,
                       child: Container(
-                        width: 9,
-                        height: 9,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF00C977),
                           shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFF00C977), width: 1.5),
                         ),
                       ),
                     ),
@@ -424,29 +421,13 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
               ),
               const SizedBox(width: 4),
             ],
-            flexibleSpace: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF00C977),
-                    Color(0xFF00B369),
-                    Color(0xFF00A85C),
-                  ],
-                ),
-              ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
               child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.white.withOpacity(0.15),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
+                height: 1,
+                color: isDarkMode
+                    ? Colors.white.withOpacity(0.06)
+                    : Colors.black.withOpacity(0.06),
               ),
             ),
           ),
@@ -564,14 +545,37 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
               ),
             ),
           ),
+          // Warning banner de localização
+          if (_locationWarning != null && !_loading && _error.isEmpty)
+            SliverToBoxAdapter(
+              child: _buildWarningBanner(_locationWarning!),
+            ),
           // Conteúdo
-          SliverFillRemaining(
-            child: _loading
-                ? const MecaApiLoadingWidget(message: 'Buscando oficinas...')
-                : _error.isNotEmpty
-                    ? _buildErrorView()
-                    : _buildWorkshopsList(),
-          ),
+          if (_loading)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: MecaApiLoadingWidget(message: 'Buscando oficinas...'),
+            )
+          else if (_error.isNotEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _buildErrorView(),
+            )
+          else if (_filteredWorkshops.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _buildEmptyState(),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _buildWorkshopCard(_filteredWorkshops[index]),
+                  childCount: _filteredWorkshops.length,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -617,84 +621,61 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     );
   }
 
-  Widget _buildWorkshopsList() {
-    Widget listBody;
-    if (_filteredWorkshops.isEmpty) {
-      listBody = Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.build_circle_outlined,
-                size: 100,
-                color: Theme.of(context).brightness == Brightness.dark 
-                    ? Colors.grey.shade600 
-                    : Colors.grey.shade400,
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.build_circle_outlined,
+              size: 100,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey.shade600
+                  : Colors.grey.shade400,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Nenhuma oficina encontrada',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.grey.shade900,
               ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _searchController.text.trim().isNotEmpty
+                  ? 'Não encontramos oficinas com o termo "${_searchController.text.trim()}"'
+                  : 'Não há oficinas disponíveis próximas a você no momento.\n\nTente ajustar os filtros de distância ou verifique sua localização.',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade600,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (_searchController.text.trim().isEmpty) ...[
               const SizedBox(height: 24),
-              Text(
-                'Nenhuma oficina encontrada',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).brightness == Brightness.dark 
-                      ? Colors.white 
-                      : Colors.grey.shade900,
+              ElevatedButton.icon(
+                onPressed: _loadNearbyWorkshops,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Atualizar'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00C977),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 ),
-                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
-              Text(
-                _searchController.text.trim().isNotEmpty
-                    ? 'Não encontramos oficinas com o termo "${_searchController.text.trim()}"'
-                    : 'Não há oficinas disponíveis próximas a você no momento.\n\nTente ajustar os filtros de distância ou verifique sua localização.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey.shade600,
-                  height: 1.5,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (_searchController.text.trim().isEmpty) ...[
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: _loadNearbyWorkshops,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Atualizar'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C977),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                ),
-              ],
             ],
-          ),
+          ],
         ),
-      );
-    } else {
-      listBody = ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _filteredWorkshops.length,
-      itemBuilder: (context, index) {
-        final workshop = _filteredWorkshops[index];
-        return _buildWorkshopCard(workshop);
-      },
-      );
-    }
-
-    if (_locationWarning != null) {
-      return Column(
-        children: [
-          _buildWarningBanner(_locationWarning!),
-          Expanded(child: listBody),
-        ],
-      );
-    }
-
-    return listBody;
+      ),
+    );
   }
 
   Widget _buildWarningBanner(String message) {
