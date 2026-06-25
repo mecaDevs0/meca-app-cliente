@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
+import '../../widgets/booking_timeline_widget.dart';
 import '../../utils/formatters.dart';
 import '../../utils/price_utils.dart';
 import '../../widgets/app_alerts.dart';
@@ -38,6 +39,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   final Map<int, bool> _quoteSelectedItems = {};
   final Map<int, String?> _quoteSelectedOptions = {};
   bool _quoteSelectionInitialized = false;
+
+  // Timeline state
+  List<Map<String, dynamic>> _timelineEvents = [];
+  bool _timelineExpanded = false;
+  bool _timelineLoading = false;
 
   List<Map<String, dynamic>> _coerceUploads(dynamic raw) {
     if (raw == null) return const [];
@@ -431,6 +437,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
     _checkBookingStatus();
     _setupBookingStatusListener();
+    _loadTimeline();
   }
 
   Future<void> _loadBookingDetailsFromId() async {
@@ -538,6 +545,112 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     } catch (e) {
       debugPrint('Erro ao carregar detalhes do agendamento: $e');
     }
+  }
+
+  Future<void> _loadTimeline() async {
+    final bookingId = widget.booking['id'];
+    if (bookingId == null) return;
+
+    final id = bookingId is int ? bookingId : int.tryParse(bookingId.toString());
+    if (id == null) return;
+
+    setState(() => _timelineLoading = true);
+
+    try {
+      final result = await _apiService.getBookingTimeline(id);
+      if (!mounted) return;
+
+      if (result is Map<String, dynamic>) {
+        final events = result['data'] ?? result['timeline'] ?? result['events'];
+        if (events is List) {
+          setState(() {
+            _timelineEvents = events
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+            _timelineLoading = false;
+          });
+          return;
+        }
+      }
+      setState(() => _timelineLoading = false);
+    } catch (e) {
+      if (mounted) setState(() => _timelineLoading = false);
+    }
+  }
+
+  Widget _buildTimelineSection(bool isDarkMode) {
+    if (_timelineEvents.isEmpty && !_timelineLoading) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDarkMode ? const Color(0xFF1E1E1E) : const Color(0xFFFAFAFA),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(
+            color: isDarkMode ? Colors.grey[800]! : Colors.grey[200]!,
+          ),
+        ),
+        child: Column(
+          children: [
+            InkWell(
+              onTap: () {
+                setState(() => _timelineExpanded = !_timelineExpanded);
+              },
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.timeline,
+                      color: const Color(0xFF00C977),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Acompanhamento',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: isDarkMode ? Colors.white : const Color(0xFF252940),
+                        ),
+                      ),
+                    ),
+                    if (_timelineLoading)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF00C977),
+                        ),
+                      )
+                    else
+                      Icon(
+                        _timelineExpanded ? Icons.expand_less : Icons.expand_more,
+                        color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            if (_timelineExpanded && _timelineEvents.isNotEmpty) ...[
+              Divider(
+                height: 1,
+                color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                child: BookingTimelineWidget(events: _timelineEvents),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   void _checkBookingStatus() {
@@ -798,6 +911,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
               child: _buildStatusInfoCard(status, normalizedStatus),
             ),
+            // Timeline de acompanhamento
+            _buildTimelineSection(isDarkMode),
             // Motivo de cancelamento/recusa
             Builder(
               builder: (context) {

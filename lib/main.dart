@@ -15,6 +15,7 @@ import 'screens/vehicles/add_vehicle_screen.dart';
 import 'screens/vehicles/edit_vehicle_screen.dart';
 import 'screens/vehicles/my_vehicles_screen.dart';
 import 'screens/workshops/workshop_detail_screen.dart';
+import 'screens/workshops/favorite_workshops_screen.dart';
 import 'screens/mia/mia_chat_screen.dart';
 import 'screens/payment/payment_history_screen.dart';
 import 'screens/pre_compra/pre_compra_detail_screen.dart';
@@ -92,6 +93,15 @@ void main() async {
             break;
           case 'orders':
             navigatorKey.currentState?.pushNamed('/orders');
+            break;
+          case 'maintenance_reminder':
+            // Navigate to booking flow or services screen
+            final serviceId = data['service_id']?.toString();
+            if (serviceId != null && serviceId.isNotEmpty) {
+              navigatorKey.currentState?.pushNamed('/services');
+            } else {
+              navigatorKey.currentState?.pushNamed('/home');
+            }
             break;
           default:
             break;
@@ -283,6 +293,8 @@ class MecaClienteApp extends StatelessWidget {
                   return MaterialPageRoute(builder: (_) => const HelpCenterScreen());
                 case '/mia-chat':
                   return MaterialPageRoute(builder: (_) => const MiaChatScreen());
+                case '/favorite-workshops':
+                  return MaterialPageRoute(builder: (_) => const FavoriteWorkshopsScreen());
                 default:
                   return MaterialPageRoute(builder: (_) => const SplashScreen());
               }

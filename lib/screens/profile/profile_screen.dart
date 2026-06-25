@@ -127,20 +127,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final isDark = themeService.isDarkMode;
 
         return Scaffold(
+          backgroundColor: isDark ? const Color(0xFF0A0A0A) : Colors.white,
           appBar: AppBar(
             elevation: 0,
-            backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+            scrolledUnderElevation: 0,
+            surfaceTintColor: Colors.transparent,
+            backgroundColor: isDark ? const Color(0xFF111111) : Colors.white,
             title: Text(
               'Meu Perfil',
               style: TextStyle(
-                color: isDark ? Colors.white : const Color(0xFF252940),
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
+                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                letterSpacing: -0.3,
               ),
             ),
+            centerTitle: true,
             actions: [
               _buildNotificationButton(context, themeService, notificationProvider),
             ],
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(
+                height: 1,
+                color: isDark
+                    ? Colors.white.withOpacity(0.06)
+                    : Colors.black.withOpacity(0.06),
+              ),
+            ),
           ),
           body: SafeArea(
             child: _isLoading
@@ -224,7 +238,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: _buildHeader(isDark),
+          ),
           const SizedBox(height: 24),
           _buildProfileCard(),
           const SizedBox(height: 24),
@@ -289,50 +306,93 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isDark) {
+    final firstName = _customerData?['firstName'] ?? _customerData?['first_name'] ?? '';
+    final lastName = _customerData?['lastName'] ?? _customerData?['last_name'] ?? '';
+    final fullName = '$firstName $lastName'.trim();
+    final initials = fullName
+        .split(' ')
+        .where((w) => w.isNotEmpty)
+        .take(2)
+        .map((w) => w[0].toUpperCase())
+        .join();
+
     return Row(
       children: [
         Container(
-          width: 60,
-          height: 60,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
-            color: const Color(0xFF00C977).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(30),
+            color: const Color(0xFF00C977).withOpacity(isDark ? 0.15 : 0.10),
+            borderRadius: BorderRadius.circular(14),
           ),
-          child: const Icon(
-            Icons.person,
-            color: Color(0xFF00C977),
-            size: 30,
+          child: Center(
+            child: Text(
+              initials.isNotEmpty ? initials : '?',
+              style: const TextStyle(
+                color: Color(0xFF00C977),
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${_customerData?['firstName'] ?? _customerData?['first_name'] ?? ''} ${_customerData?['lastName'] ?? _customerData?['last_name'] ?? ''}',
+                fullName,
                 style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                  letterSpacing: -0.3,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 _customerData?['email'] ?? '',
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  fontSize: 16,
+                  color: isDark
+                      ? Colors.white.withOpacity(0.45)
+                      : Colors.black.withOpacity(0.45),
+                  fontSize: 14,
                 ),
               ),
             ],
           ),
         ),
-        IconButton(
-          onPressed: _editProfile,
-          icon: const Icon(Icons.edit),
-          color: const Color(0xFF00C977),
+        GestureDetector(
+          onTap: _editProfile,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withOpacity(0.10)
+                    : Colors.black.withOpacity(0.10),
+              ),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.edit_outlined, size: 14, color: Color(0xFF00C977)),
+                SizedBox(width: 5),
+                Text(
+                  'Editar',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF00C977),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -416,6 +476,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           title: 'Meus Veículos',
           subtitle: 'Gerenciar veículos cadastrados',
           onTap: () => Navigator.pushNamed(context, '/my-vehicles'),
+        ),
+        _buildSettingTile(
+          icon: Icons.favorite,
+          title: 'Minhas Oficinas',
+          subtitle: 'Oficinas favoritadas',
+          onTap: () => Navigator.pushNamed(context, '/favorite-workshops'),
         ),
         _buildSettingTile(
           icon: Icons.receipt_long,
@@ -578,7 +644,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         IconButton(
           icon: Icon(
             Icons.notifications,
-            color: themeService.isDarkMode ? Colors.white : const Color(0xFF252940),
+            color: const Color(0xFF00C977),
           ),
           onPressed: () async {
             await Navigator.push(

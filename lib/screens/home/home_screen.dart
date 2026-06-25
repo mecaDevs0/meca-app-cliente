@@ -35,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<Map<String, dynamic>> _upcomingBookings = [];
   List<Map<String, dynamic>> _inProgressBookings = [];
   List<Map<String, dynamic>> _nearbyWorkshops = [];
+  List<dynamic> _maintenanceReminders = [];
   final ApiService _apiService = ApiService();
   final LocationService _locationService = LocationService.instance;
   Position? _currentPosition;
@@ -78,17 +79,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _upcomingBookings = [];
       _inProgressBookings = [];
       _nearbyWorkshops = [];
+      _maintenanceReminders = [];
       _usedFallbackLocationForNearby = false;
     });
 
     if (forceRefresh) _apiService.invalidateBookingsCache();
 
     try {
-      // Paralelizar: agendamentos e localização+oficinas ao mesmo tempo (resposta muito mais rápida)
+      // Paralelizar: agendamentos, lembretes e localização+oficinas ao mesmo tempo
       final futureBookings = _apiService.getBookings();
       final futureLocationAndNearby = _loadLocationAndNearby();
+      final futureReminders = _apiService.getMaintenanceReminders();
 
-      await Future.wait([futureBookings, futureLocationAndNearby]);
+      await Future.wait([futureBookings, futureLocationAndNearby, futureReminders]);
+
+      // Load maintenance reminders (non-blocking)
+      if (mounted) {
+        try {
+          final reminders = await futureReminders;
+          if (mounted) {
+            setState(() {
+              _maintenanceReminders = reminders.take(3).toList();
+            });
+          }
+        } catch (_) {
+          // Silently ignore maintenance reminders errors
+        }
+      }
 
       if (!mounted) return;
       final bookingsResponse = await futureBookings;
@@ -226,6 +243,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: _buildQuickActions(),
           ),
           const SizedBox(height: 24),
+          if (_maintenanceReminders.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _buildMaintenanceRemindersCard(),
+            ),
+            const SizedBox(height: 24),
+          ],
           if (_inProgressBookings.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1951,6 +1975,144 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     };
     
     return statusMap[status] ?? 'Pendente';
+  }
+
+  Widget _buildMaintenanceRemindersCard() {
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        final isDark = themeService.isDarkMode;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.notifications_active,
+                    color: Color(0xFFF59E0B),
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Manutenções Próximas',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...(_maintenanceReminders.take(3).map((reminder) {
+              final serviceName = (reminder['service_name'] ?? reminder['name'] ?? 'Manutenção').toString();
+              final vehicleName = (reminder['vehicle_name'] ?? reminder['vehicle'] ?? '').toString();
+              final daysAgo = reminder['days_since'] ?? reminder['days_ago'];
+              final dueText = _formatReminderDue(daysAgo);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withOpacity(0.3),
+                  ),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.pushNamed(context, '/services');
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.build_circle,
+                              color: Color(0xFFF59E0B),
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  serviceName,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (vehicleName.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    vehicleName,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                                const SizedBox(height: 2),
+                                Text(
+                                  dueText,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFFF59E0B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 14,
+                            color: isDark ? Colors.grey[500] : Colors.grey[400],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            })),
+          ],
+        );
+      },
+    );
+  }
+
+  String _formatReminderDue(dynamic daysValue) {
+    if (daysValue == null) return 'Manutenção pendente';
+    final days = daysValue is int ? daysValue : int.tryParse(daysValue.toString()) ?? 0;
+    if (days <= 0) return 'Manutenção pendente';
+    if (days < 30) return 'Há $days ${days == 1 ? 'dia' : 'dias'}';
+    final months = (days / 30).floor();
+    return 'Há $months ${months == 1 ? 'mês' : 'meses'}';
   }
 
   Widget _buildInProgressServices() {

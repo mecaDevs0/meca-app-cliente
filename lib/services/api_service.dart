@@ -2213,6 +2213,80 @@ class ApiService {
     }
   }
 
+  // ============================================================
+  // Favorite Workshops
+  // ============================================================
+
+  Future<Map<String, dynamic>> toggleWorkshopFavorite(int workshopId) async {
+    return await put('/customer/workshops/$workshopId/favorite', {});
+  }
+
+  Future<List<dynamic>> getFavoriteWorkshops() async {
+    try {
+      await loadToken();
+      final response = await _dio.get(
+        '/customer/workshops/favorites',
+        options: Options(extra: {'skipCache': true}),
+      );
+      final data = response.data;
+      if (data is Map && data['success'] == true) {
+        final inner = data['data'];
+        if (inner is List) return inner;
+        if (inner is Map && inner['workshops'] != null) return inner['workshops'] as List;
+        return [];
+      }
+      if (data is List) return data;
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ============================================================
+  // Booking Timeline
+  // ============================================================
+
+  Future<Map<String, dynamic>> getBookingTimeline(int bookingId) async {
+    return await get('/bookings/$bookingId/timeline', skipCache: true);
+  }
+
+  // ============================================================
+  // Maintenance Reminders
+  // ============================================================
+
+  Future<List<dynamic>> getMaintenanceReminders() async {
+    try {
+      await loadToken();
+      final response = await _dio.get(
+        '/customer/maintenance-reminders',
+        options: Options(extra: {'skipCache': true}),
+      );
+      final data = response.data;
+      if (data is Map && data['success'] == true) {
+        final inner = data['data'];
+        if (inner is List) return inner;
+        if (inner is Map && inner['reminders'] != null) return inner['reminders'] as List;
+        return [];
+      }
+      if (data is List) return data;
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getWorkshopGallery(String workshopId) async {
+    try {
+      final response = await _dio.get('/workshop/$workshopId/gallery');
+      final data = response.data;
+      if (data is Map && data['photos'] != null) return data['photos'] as List;
+      if (data is List) return data;
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<Map<String, dynamic>> getPaymentStatus(String paymentId) async {
     try {
       await loadToken();

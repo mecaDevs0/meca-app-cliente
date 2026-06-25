@@ -836,6 +836,28 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     );
   }
 
+  Future<void> _toggleWorkshopFavorite(Map<String, dynamic> workshop) async {
+    final workshopId = workshop['id'];
+    final id = workshopId is int ? workshopId : int.tryParse(workshopId?.toString() ?? '');
+    if (id == null) return;
+
+    // Optimistic update
+    setState(() {
+      workshop['is_favorite'] = !(workshop['is_favorite'] == true);
+    });
+
+    try {
+      await _apiService.toggleWorkshopFavorite(id);
+    } catch (e) {
+      // Revert on error
+      if (mounted) {
+        setState(() {
+          workshop['is_favorite'] = !(workshop['is_favorite'] == true);
+        });
+      }
+    }
+  }
+
   Widget _buildWorkshopCard(Map<String, dynamic> workshop) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     // Usar distância real calculada (pode ser null se oficina não tem coordenadas)
@@ -1059,6 +1081,18 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                             ],
                           ),
                         ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Favorite heart icon
+                    GestureDetector(
+                      onTap: () => _toggleWorkshopFavorite(workshop),
+                      child: Icon(
+                        workshop['is_favorite'] == true ? Icons.favorite : Icons.favorite_border,
+                        color: workshop['is_favorite'] == true
+                            ? const Color(0xFF00C977)
+                            : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
+                        size: 22,
                       ),
                     ),
                   ],

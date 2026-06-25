@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../widgets/meca_toast.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/app_config.dart';
@@ -31,9 +32,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   final ApiService _apiService = ApiService();
   Map<String, dynamic>? _workshop;
   List<Map<String, dynamic>> _services = [];
+  List<dynamic> _galleryPhotos = [];
   bool _loading = false;
   String _error = '';
   bool _showAllServices = false;
+  bool _isFavorite = false;
 
   /// URL do logo sempre via proxy da API (evita 403 do S3). Nunca retorna URL S3 direta.
   String? get _safeWorkshopLogoUrl {
@@ -136,6 +139,38 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     });
   }
 
+  Future<void> _toggleFavorite() async {
+    final workshopId = int.tryParse(widget.workshopId);
+    if (workshopId == null) return;
+
+    // Optimistic update
+    setState(() {
+      _isFavorite = !_isFavorite;
+    });
+
+    try {
+      await _apiService.toggleWorkshopFavorite(workshopId);
+    } catch (e) {
+      // Revert on error
+      if (mounted) {
+        setState(() {
+          _isFavorite = !_isFavorite;
+        });
+      }
+    }
+  }
+
+  void _shareWorkshop() {
+    if (_workshop == null) return;
+    final name = (_workshop!['name'] ?? 'Oficina').toString();
+    final city = (_workshop!['city'] ?? '').toString();
+    final ratingVal = _getWorkshopRating();
+    final ratingText = ratingVal != null ? ' - Nota: ${ratingVal.toStringAsFixed(1)}' : '';
+    final cityText = city.isNotEmpty ? ' em $city' : '';
+    final text = 'Confira a oficina $name$cityText$ratingText no MECA! Baixe o app: https://mecabr.com';
+    Share.share(text);
+  }
+
   Future<void> _loadWorkshopDetails() async {
     setState(() {
       _loading = true;
@@ -180,6 +215,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
           _loading = false;
           _error = '';
           _showAllServices = false;
+          _isFavorite = normalizedWorkshop['is_favorite'] == true || normalizedWorkshop['is_favorite'] == 1;
+        });
+
+        _apiService.getWorkshopGallery(widget.workshopId).then((photos) {
+          if (mounted) setState(() => _galleryPhotos = photos);
         });
       } else {
         setState(() {
@@ -430,6 +470,21 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
           expandedHeight: 280,
           pinned: true,
           backgroundColor: const Color(0xFF121E29), // Mesma cor do gradiente final
+          actions: [
+            IconButton(
+              icon: Icon(
+                _isFavorite ? Icons.favorite : Icons.favorite_border,
+                color: _isFavorite ? const Color(0xFF00C977) : Colors.white,
+              ),
+              onPressed: _toggleFavorite,
+              tooltip: _isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos',
+            ),
+            IconButton(
+              icon: const Icon(Icons.share, color: Colors.white),
+              onPressed: _shareWorkshop,
+              tooltip: 'Compartilhar oficina',
+            ),
+          ],
           flexibleSpace: FlexibleSpaceBar(
             background: _buildDeepTechHeader(workshopName, rating, logoUrl),
           ),
@@ -456,6 +511,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 
                 // Serviços oferecidos melhorados
                 _buildServicesCard(),
+                const SizedBox(height: 20),
+
+                // Portfólio de fotos da oficina
+                if (_galleryPhotos.isNotEmpty) _buildPortfolioSection(),
                 const SizedBox(height: 80), // Espaço para o botão fixo
               ],
             ),
@@ -1424,6 +1483,237 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   }
   
   
+  Widget _buildPortfolioSection() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C977).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.photo_library, color: Color(0xFF00C977), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Portfólio',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${_galleryPhotos.length} foto${_galleryPhotos.length != 1 ? 's' : ''}',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDarkMode ? Colors.white54 : Colors.black45,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _galleryPhotos.length,
+              itemBuilder: (context, index) {
+                final photo = _galleryPhotos[index];
+                final imageUrl = photo['image_url']?.toString() ?? '';
+                final caption = photo['caption']?.toString();
+                return GestureDetector(
+                  onTap: () => _showPhotoViewer(index),
+                  child: Container(
+                    width: 160,
+                    margin: EdgeInsets.only(right: index < _galleryPhotos.length - 1 ? 12 : 0),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (ctx, child, progress) {
+                              if (progress == null) return child;
+                              return Container(
+                                color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[200],
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation(Color(0xFF00C977)),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            errorBuilder: (ctx, err, stack) => Container(
+                              color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[200],
+                              child: Icon(Icons.broken_image, color: Colors.grey[400], size: 32),
+                            ),
+                          ),
+                          if (caption != null && caption.isNotEmpty)
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      Colors.black.withOpacity(0.7),
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                ),
+                                child: Text(
+                                  caption,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPhotoViewer(int initialIndex) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        int currentIndex = initialIndex;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final photo = _galleryPhotos[currentIndex];
+            final imageUrl = photo['image_url']?.toString() ?? '';
+            final caption = photo['caption']?.toString();
+            return Dialog(
+              backgroundColor: Colors.black,
+              insetPadding: EdgeInsets.zero,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  GestureDetector(
+                    onHorizontalDragEnd: (details) {
+                      if (details.primaryVelocity == null) return;
+                      if (details.primaryVelocity! < -100 && currentIndex < _galleryPhotos.length - 1) {
+                        setDialogState(() => currentIndex++);
+                      } else if (details.primaryVelocity! > 100 && currentIndex > 0) {
+                        setDialogState(() => currentIndex--);
+                      }
+                    },
+                    child: InteractiveViewer(
+                      child: Center(
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.contain,
+                          errorBuilder: (ctx, err, stack) => const Icon(
+                            Icons.broken_image,
+                            color: Colors.white54,
+                            size: 64,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: MediaQuery.of(ctx).padding.top + 8,
+                    right: 8,
+                    child: IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ),
+                  if (caption != null && caption.isNotEmpty)
+                    Positioned(
+                      bottom: MediaQuery.of(ctx).padding.bottom + 16,
+                      left: 16,
+                      right: 16,
+                      child: Text(
+                        caption,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                      ),
+                    ),
+                  Positioned(
+                    bottom: MediaQuery.of(ctx).padding.bottom + 40,
+                    left: 0,
+                    right: 0,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(_galleryPhotos.length, (i) {
+                        return Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: i == currentIndex
+                                ? const Color(0xFF00C977)
+                                : Colors.white38,
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildBookingButton() {
     return Container(
       width: double.infinity,
