@@ -2217,7 +2217,7 @@ class ApiService {
   // Favorite Workshops
   // ============================================================
 
-  Future<Map<String, dynamic>> toggleWorkshopFavorite(int workshopId) async {
+  Future<Map<String, dynamic>> toggleWorkshopFavorite(String workshopId) async {
     return await put('/customer/workshops/$workshopId/favorite', {});
   }
 
@@ -2229,11 +2229,12 @@ class ApiService {
         options: Options(extra: {'skipCache': true}),
       );
       final data = response.data;
-      if (data is Map && data['success'] == true) {
-        final inner = data['data'];
-        if (inner is List) return inner;
-        if (inner is Map && inner['workshops'] != null) return inner['workshops'] as List;
-        return [];
+      if (data is Map) {
+        if (data['workshops'] is List) return data['workshops'] as List;
+        if (data['data'] is List) return data['data'] as List;
+        if (data['data'] is Map && data['data']['workshops'] is List) {
+          return data['data']['workshops'] as List;
+        }
       }
       if (data is List) return data;
       return [];
@@ -2246,7 +2247,7 @@ class ApiService {
   // Booking Timeline
   // ============================================================
 
-  Future<Map<String, dynamic>> getBookingTimeline(int bookingId) async {
+  Future<Map<String, dynamic>> getBookingTimeline(dynamic bookingId) async {
     return await get('/bookings/$bookingId/timeline', skipCache: true);
   }
 
@@ -2279,6 +2280,7 @@ class ApiService {
     try {
       final response = await _dio.get('/workshop/$workshopId/gallery');
       final data = response.data;
+      if (data is Map && data['data'] != null && data['data'] is List) return data['data'] as List;
       if (data is Map && data['photos'] != null) return data['photos'] as List;
       if (data is List) return data;
       return [];
