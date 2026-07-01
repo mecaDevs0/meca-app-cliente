@@ -2110,10 +2110,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (daysValue == null) return 'Manutenção pendente';
     final days = daysValue is int ? daysValue : int.tryParse(daysValue.toString()) ?? 0;
     if (days <= 0) return 'Manutenção pendente';
-    if (days < 30) return 'Há $days ${days == 1 ? 'dia' : 'dias'}';
+    if (days < 30) return 'Último serviço há $days ${days == 1 ? 'dia' : 'dias'}';
     final months = (days / 30).floor();
-    return 'Há $months ${months == 1 ? 'mês' : 'meses'}';
+    return 'Último serviço há $months ${months == 1 ? 'mês' : 'meses'}';
   }
+
+
 
   Widget _buildInProgressServices() {
     if (_inProgressBookings.isEmpty) return const SizedBox.shrink();
