@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/meca_toast.dart';
 import 'package:provider/provider.dart';
@@ -247,49 +248,23 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       backgroundColor: isDarkMode ? const Color(0xFF0A0A0A) : Colors.white,
       body: CustomScrollView(
         slivers: [
-          // AppBar melhorado
           SliverAppBar(
-            expandedHeight: 60,
-            floating: false,
             pinned: true,
-            backgroundColor: const Color(0xFF00C977),
+            backgroundColor: isDarkMode ? const Color(0xFF111111) : Colors.white,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
             automaticallyImplyLeading: false,
-            flexibleSpace: FlexibleSpaceBar(
-              title: const Text(
-                'Meus Agendamentos',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 16,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF00C977),
-                      Color(0xFF00B369),
-                      Color(0xFF00A85C),
-                    ],
-                  ),
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.white.withOpacity(0.1),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
+            title: Text(
+              'Meus Agendamentos',
+              style: TextStyle(
+                color: isDarkMode ? Colors.white : const Color(0xFF1A1A1A),
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                letterSpacing: -0.3,
               ),
             ),
+            centerTitle: true,
           ),
           // TabBar com design moderno estilo iOS
           SliverPersistentHeader(
@@ -297,14 +272,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
             delegate: _SimpleTabBarDelegate(
               TabBar(
                 controller: _tabController,
-                labelColor: Colors.white,
+                labelColor: isDarkMode ? Colors.white : Colors.white,
                 unselectedLabelColor: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade600,
                 indicator: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  color: isDarkMode ? const Color(0xFF00B369).withOpacity(0.3) : const Color(0xFF00C977).withOpacity(0.2),
+                  color: isDarkMode ? const Color(0xFF00B369).withOpacity(0.3) : const Color(0xFF00895A),
                   boxShadow: [
                     BoxShadow(
-                      color: (isDarkMode ? const Color(0xFF00B369) : const Color(0xFF00C977)).withOpacity(0.3),
+                      color: (isDarkMode ? const Color(0xFF00B369) : const Color(0xFF00895A)).withOpacity(0.3),
                       blurRadius: 4,
                       offset: const Offset(0, 1),
                     ),
@@ -531,49 +506,13 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Aqui aparecem agendamentos que ainda têm alguma pendência — '
-                  'aguardando a oficina ou aguardando uma ação sua (aprovação, autorização ou pagamento).',
+                  'Agendamentos aguardando uma ação',
                   style: TextStyle(
                     color: textSecondary,
                     height: 1.35,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildPendingPillCompact(
-                        label: 'Oficina',
-                        value: awaitingWorkshop.toString(),
-                        icon: Icons.storefront_outlined,
-                        bg: isDarkMode ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
-                        fg: textSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildPendingPillCompact(
-                        label: 'Você',
-                        value: awaitingYou.toString(),
-                        icon: Icons.person_outline,
-                        bg: isDarkMode ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
-                        fg: textSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildPendingPillCompact(
-                        label: 'Pago',
-                        value: awaitingPayment.toString(),
-                        icon: Icons.payments_outlined,
-                        bg: isDarkMode ? const Color(0xFF1A2338) : const Color(0xFFE0F2FF),
-                        fg: isDarkMode ? Colors.white70 : const Color(0xFF1B6DC1),
-                        isMuted: awaitingPayment == 0,
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -1295,8 +1234,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                       const SizedBox(width: 8),
                       Text(
                         attachments.length == 1
-                            ? '1 foto anexada'
-                            : '${attachments.length} fotos anexadas',
+                            ? '1 foto em anexo'
+                            : '${attachments.length} fotos em anexo',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -1559,28 +1498,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                       children: [
                         const SizedBox(height: 16),
                         Container(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                const Color(0xFF25D366).withOpacity(isDarkMode ? 0.2 : 0.1),
-                                const Color(0xFF128C7E).withOpacity(isDarkMode ? 0.15 : 0.08),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(16),
+                            color: const Color(0xFF25D366).withOpacity(isDarkMode ? 0.1 : 0.06),
+                            borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: const Color(0xFF25D366).withOpacity(0.3),
-                              width: 1.5,
+                              color: const Color(0xFF25D366).withOpacity(0.2),
+                              width: 1,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF25D366).withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1594,33 +1519,20 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: const Icon(
-                                      Icons.chat_bubble_outline_rounded,
+                                      Icons.phone,
                                       color: Color(0xFF25D366),
-                                      size: 22,
+                                      size: 20,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  const SizedBox(width: 10),
                                   Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Contato com a Oficina',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: isDarkMode ? Colors.white : Colors.black87,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Entre em contato via WhatsApp',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
-                                          ),
-                                        ),
-                                      ],
+                                    child: Text(
+                                      'Caso precise, entre em contato',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDarkMode ? Colors.white : Colors.black87,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -1638,9 +1550,9 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                                         // ignore: unawaited_futures
                                         launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
                                       },
-                                      icon: const Icon(Icons.chat, size: 18),
+                                      icon: SvgPicture.asset('assets/images/whatsapp.svg', width: 18, height: 18, colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn)),
                                       label: const Text(
-                                        'Abrir WhatsApp',
+                                        'WhatsApp',
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,

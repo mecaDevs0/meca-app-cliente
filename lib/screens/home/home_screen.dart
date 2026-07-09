@@ -22,7 +22,9 @@ import '../workshops/workshop_detail_screen.dart';
 import '../workshops/workshops_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  final void Function(int)? onNavigateToTab;
+
+  const HomeScreen({Key? key, this.onNavigateToTab}) : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -216,7 +218,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _buildMiaCard(),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           // Card SOS Guincho (apenas para São Paulo Capital)
           Builder(
             builder: (context) {
@@ -329,156 +331,140 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               );
             }
           },
-          child: AnimatedScale(
-            scale: 1.0,
-            duration: const Duration(milliseconds: 150),
-            child: Builder(
-              builder: (context) {
-                final screenWidth = MediaQuery.of(context).size.width;
-                final miaHeight = screenWidth < 375 ? 220.0 : (screenWidth < 390 ? 270.0 : 340.0);
-                final miaRight = screenWidth < 375 ? -20.0 : (screenWidth < 390 ? -35.0 : -48.0);
-                final miaWidth = screenWidth < 375 ? miaHeight * 0.70 : miaHeight * 0.92;
-                // Espaço à direita só para não colidir com a arte da MIA; em telas estreitas prioriza largura do texto.
-                final reservedRight = screenWidth < 360
-                    ? 64.0
-                    : screenWidth < 400
-                        ? 76.0
-                        : (miaWidth + miaRight - 10).clamp(80.0, 150.0);
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // 1. Background do Card (glassmorphism profundo)
-                    Container(
-                      constraints: const BoxConstraints(minHeight: 152),
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(20.0, 16.0, 16.0, 16.0),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
-                        gradient: LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: isDark
-                              ? [const Color(0xFF121212), const Color(0xFF0A2415)]
-                              : [const Color(0xFFF5FFF9), const Color(0xFFE8F9F0)],
-                        ),
-                        border: Border.all(
-                          color: isDark ? Colors.white.withOpacity(0.1) : const Color(0xFF00C977).withOpacity(0.2),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00C977).withOpacity(isDark ? 0.04 : 0.08),
-                            blurRadius: 20,
-                            offset: const Offset(0, 4),
-                          ),
-                          BoxShadow(
-                            color: Colors.black.withOpacity(isDark ? 0.4 : 0.06),
-                            blurRadius: 16,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+          child: Builder(
+            builder: (context) {
+              final screenWidth = MediaQuery.of(context).size.width;
+              final isSmall = screenWidth < 375;
+              final isLarge = screenWidth >= 414;
+
+              final miaWidthFactor = isSmall ? 0.30 : (isLarge ? 0.38 : 0.34);
+              final contentLeftFactor = isSmall ? 0.20 : (isLarge ? 0.26 : 0.23);
+              final miaOffsetFactor = isSmall ? -0.04 : (isLarge ? -0.08 : -0.06);
+
+              final miaWidth = screenWidth * miaWidthFactor;
+              final miaHeight = miaWidth * 1.8;
+              final contentLeft = screenWidth * contentLeftFactor;
+
+              final titleFontSize = isSmall ? 16.0 : (isLarge ? 22.0 : 18.0);
+              final titleLetterSpacing = isSmall ? 1.0 : (isLarge ? 2.0 : 1.5);
+              final subtitleFontSize = isSmall ? 14.0 : 16.0;
+              final descFontSize = isSmall ? 12.0 : 13.0;
+              final arrowPadding = isSmall ? 8.0 : 10.0;
+              final arrowSize = isSmall ? 14.0 : 16.0;
+              final arrowGap = isSmall ? 4.0 : 8.0;
+
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.only(left: contentLeft, top: 14, bottom: 14, right: 16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: isDark
+                            ? [const Color(0xFF121212), const Color(0xFF0A2415), const Color(0xFF0D1F14)]
+                            : [const Color(0xFFF5FFF9), const Color(0xFFE8F9F0), const Color(0xFFDFF5EA)],
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          // 2. Lado Esquerdo (texto com quebra de linha; altura do card acompanha o conteúdo)
-                          Expanded(
-                            child: LayoutBuilder(
-                              builder: (ctx, constraints) {
-                                final w = constraints.maxWidth;
-                                final titleSize = w < 140 ? 17.0 : (w < 180 ? 19.0 : 22.0);
-                                final descSize = w < 140 ? 12.0 : (w < 180 ? 13.0 : 14.0);
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00C977).withOpacity(0.15),
+                          blurRadius: 12,
+                          spreadRadius: 2,
+                        ),
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDark ? 0.2 : 0.08),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                      border: Border.all(
+                        color: const Color(0xFF00C977).withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00C977).withOpacity(0.2),
                                       borderRadius: BorderRadius.circular(8),
-                                      child: BackdropFilter(
-                                        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFF00C977).withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(
-                                              color: isDark ? Colors.greenAccent.withOpacity(0.6) : const Color(0xFF00C977).withOpacity(0.5),
-                                              width: 1,
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            'IA',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF00C977),
-                                              letterSpacing: 1.2,
-                                            ),
-                                          ),
-                                        ),
+                                    ),
+                                    child: const Text(
+                                      'IA',
+                                      style: TextStyle(
+                                        color: Color(0xFF00C977),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                        letterSpacing: 1.2,
                                       ),
                                     ),
-                                    const SizedBox(height: 10),
-                                    Text(
-                                      'Diagnóstico Inteligente',
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      'DIAGNÓSTICO',
                                       style: TextStyle(
-                                        fontSize: titleSize,
+                                        fontSize: titleFontSize,
                                         fontWeight: FontWeight.w800,
-                                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                                        height: 1.15,
-                                        letterSpacing: -0.8,
+                                        letterSpacing: titleLetterSpacing,
+                                        color: const Color(0xFF00C977),
+                                        height: 1.1,
                                       ),
-                                      softWrap: true,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      'Descubra o problema do seu carro com a IA do Meca',
-                                      style: TextStyle(
-                                        fontSize: descSize,
-                                        fontWeight: FontWeight.w500,
-                                        color: isDark ? Colors.white70 : const Color(0xFF555555),
-                                        height: 1.35,
-                                      ),
-                                      softWrap: true,
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                          ),
-                          SizedBox(width: reservedRight),
-                        ],
-                      ),
-                    ),
-                    // 3. Halo de IA – luz volumétrica difusa (sem bordas duras)
-                    Positioned(
-                      bottom: -60,
-                      right: -80,
-                      child: IgnorePointer(
-                        child: Container(
-                          width: 300,
-                          height: 300,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              center: Alignment.center,
-                              radius: 0.5,
-                              colors: [
-                                Colors.greenAccent.withOpacity(isDark ? 0.35 : 0.15),
-                                Colors.greenAccent.withOpacity(isDark ? 0.08 : 0.04),
-                                Colors.transparent,
-                              ],
-                              stops: const [0.0, 0.25, 0.6],
-                            ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Diagnóstico Inteligente',
+                                style: TextStyle(
+                                  fontSize: subtitleFontSize,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Descubra o problema com a MIA',
+                                style: TextStyle(
+                                  fontSize: descFontSize,
+                                  color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
+                        SizedBox(width: arrowGap),
+                        Container(
+                          padding: EdgeInsets.all(arrowPadding),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00C977).withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.arrow_forward_ios,
+                            color: const Color(0xFF00C977),
+                            size: arrowSize,
+                          ),
+                        ),
+                      ],
                     ),
-                    // 4. MIA – base ancorada no fundo, vazando agressivamente pelo topo
-                    Positioned(
-                      bottom: 0,
-                      right: miaRight,
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    left: screenWidth * miaOffsetFactor,
+                    child: IgnorePointer(
                       child: SizedBox(
                         width: miaWidth,
                         height: miaHeight,
@@ -489,10 +475,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                       ),
                     ),
-                  ],
-                );
-              },
-            ),
+                  ),
+                ],
+              );
+            },
           ),
         );
       },
@@ -518,17 +504,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 builder: (context) {
                   final isDarkMode = Theme.of(context).brightness == Brightness.dark;
                   return _buildActionCard(
-                    icon: Icons.build,
-                    title: 'Oficinas',
-                    subtitle: 'Encontrar oficinas próximas',
-                    backgroundColor: isDarkMode 
-                        ? const Color(0xFF14241E) // Verde Profundo (tema escuro)
-                        : const Color(0xFFE8F5E9), // Verde Claro (tema claro)
+                    icon: Icons.receipt_long,
+                    title: 'Pagamentos',
+                    subtitle: 'Histórico de pagamentos',
+                    backgroundColor: isDarkMode
+                        ? const Color(0xFF1A1A2E)
+                        : const Color(0xFFEDE7F6),
                     iconColor: const Color(0xFF00C977),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const WorkshopsScreen()),
-                    ),
+                    onTap: () => Navigator.pushNamed(context, '/payment-history'),
                   );
                 },
               ),
@@ -647,7 +630,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF00C977).withOpacity(0.15),
+              color: const Color(0xFF5B9BD5).withOpacity(0.15),
               blurRadius: 12,
               offset: const Offset(0, 0),
               spreadRadius: 2,
@@ -660,8 +643,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ],
           border: Border.all(
-            color: const Color(0xFF00C977).withOpacity(0.3),
-            width: 1.5,
+            color: isDarkMode ? const Color(0xFF2A4A6B) : const Color(0xFF9BBDD4),
+            width: 1,
           ),
         ),
         child: Row(
@@ -1179,7 +1162,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   MaterialPageRoute(builder: (context) => const WorkshopsScreen()),
                 ),
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -1189,7 +1174,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   style: TextStyle(
                     color: Color(0xFF00C977),
                     fontWeight: FontWeight.w600,
-                    fontSize: 14,
+                    fontSize: 13,
                   ),
                 ),
               ),
@@ -1492,20 +1477,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
-                  blurRadius: 20,
-                  offset: const Offset(0, 4),
-                  spreadRadius: 0,
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                  spreadRadius: 0,
-                ),
-              ],
+              border: Border.all(
+                color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+                width: 0.5,
+              ),
             ),
             child: ClipRRect(
               clipBehavior: Clip.hardEdge,

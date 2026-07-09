@@ -36,6 +36,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   bool _loading = false;
   String _error = '';
   bool _showAllServices = false;
+  bool _hoursExpanded = false;
   bool _isFavorite = false;
 
   /// URL do logo sempre via proxy da API (evita 403 do S3). Nunca retorna URL S3 direta.
@@ -140,35 +141,46 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   }
 
   Future<void> _toggleFavorite() async {
-    final workshopId = int.tryParse(widget.workshopId);
-    if (workshopId == null) return;
-
-    // Optimistic update
+    final nowFavorite = !_isFavorite;
     setState(() {
-      _isFavorite = !_isFavorite;
+      _isFavorite = nowFavorite;
     });
 
     try {
-      await _apiService.toggleWorkshopFavorite(workshopId);
+      await _apiService.toggleWorkshopFavorite(widget.workshopId);
+      if (mounted) {
+        MecaToast.showSuccess(context, nowFavorite ? 'Adicionada aos favoritos' : 'Removida dos favoritos');
+      }
     } catch (e) {
-      // Revert on error
       if (mounted) {
         setState(() {
-          _isFavorite = !_isFavorite;
+          _isFavorite = !nowFavorite;
         });
+        MecaToast.show(context, 'Erro ao atualizar favorito');
       }
     }
   }
 
-  void _shareWorkshop() {
+  void _shareWorkshop() async {
     if (_workshop == null) return;
     final name = (_workshop!['name'] ?? 'Oficina').toString();
     final city = (_workshop!['city'] ?? '').toString();
+    final neighborhood = (_workshop!['neighborhood'] ?? '').toString();
     final ratingVal = _getWorkshopRating();
-    final ratingText = ratingVal != null ? ' - Nota: ${ratingVal.toStringAsFixed(1)}' : '';
-    final cityText = city.isNotEmpty ? ' em $city' : '';
-    final text = 'Confira a oficina $name$cityText$ratingText no MECA! Baixe o app: https://mecabr.com';
-    Share.share(text);
+    final stars = ratingVal != null ? '${'⭐' * ratingVal.round()} ${ratingVal.toStringAsFixed(1)}' : '';
+    final location = [neighborhood, city].where((s) => s.isNotEmpty).join(', ');
+    final locationLine = location.isNotEmpty ? '\n📍 $location' : '';
+    final shareUrl = 'https://api.mecabr.com/share/workshop/${widget.workshopId}';
+    final text = 'Achei essa oficina no MECA e recomendo!\n\n🔧 $name$locationLine${stars.isNotEmpty ? '\n$stars' : ''}\n\n$shareUrl';
+    try {
+      await SharePlus.instance.share(ShareParams(text: text));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível compartilhar. Tente novamente.')),
+        );
+      }
+    }
   }
 
   Future<void> _loadWorkshopDetails() async {
@@ -474,7 +486,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
             IconButton(
               icon: Icon(
                 _isFavorite ? Icons.favorite : Icons.favorite_border,
-                color: _isFavorite ? const Color(0xFF00C977) : Colors.white,
+                color: _isFavorite ? const Color(0xFFFF4B6E) : Colors.white,
               ),
               onPressed: _toggleFavorite,
               tooltip: _isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos',
@@ -513,8 +525,6 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 _buildServicesCard(),
                 const SizedBox(height: 20),
 
-                // Portfólio de fotos da oficina
-                if (_galleryPhotos.isNotEmpty) _buildPortfolioSection(),
                 const SizedBox(height: 80), // Espaço para o botão fixo
               ],
             ),
@@ -584,6 +594,33 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
             ),
             if (_workshop!['description'] != null && _workshop!['description'].isNotEmpty)
               _buildInfoRow(Icons.description, 'Descrição', _workshop!['description']),
+            if (_galleryPhotos.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: () => _openGalleryScreen(),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.camera_alt_outlined, size: 20, color: Color(0xFF00C977)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Fotos da oficina (${_galleryPhotos.length})',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: isDarkMode ? Colors.white70 : Colors.black54,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, size: 20, color: isDarkMode ? Colors.white38 : Colors.black26),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -776,54 +813,63 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                           ),
                         ),
                       ),
+                      if (hasCoords && latitude != null && longitude != null)
+                        Positioned(
+                          top: 16,
+                          right: 16,
+                          child: GestureDetector(
+                            onTap: () => _showMapOptions(latitude, longitude),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00C977),
+                                borderRadius: BorderRadius.circular(999),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.25),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.open_in_new, size: 14, color: Colors.white),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Abrir',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: hasCoords && latitude != null && longitude != null 
-                        ? () => _launchGoogleMaps(latitude, longitude) 
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C977),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            if (hasCoords && latitude != null && longitude != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.touch_app, size: 14, color: isDarkMode ? Colors.grey[500] : Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Toque no mapa para abrir rotas',
+                      style: TextStyle(fontSize: 12, color: isDarkMode ? Colors.grey[500] : Colors.grey[600]),
                     ),
-                    icon: const Icon(Icons.map),
-                    label: const Text(
-                      'Google Maps',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: hasCoords && latitude != null && longitude != null 
-                        ? () => _launchWaze(latitude, longitude) 
-                        : null,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: const Color(0xFF00C977).withOpacity(0.6)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    icon: const Icon(Icons.directions_car, color: Color(0xFF00C977)),
-                    label: Text(
-                      'Abrir no Waze',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF00C977).withOpacity(hasCoords ? 1 : 0.5),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
           ],
         ),
       ),
@@ -1108,7 +1154,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            GestureDetector(
+              onTap: () => setState(() => _hoursExpanded = !_hoursExpanded),
+              behavior: HitTestBehavior.opaque,
+              child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
@@ -1150,10 +1199,21 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                     ),
                   ),
                 ],
+                const Spacer(),
+                Icon(
+                  _hoursExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                  size: 24,
+                ),
               ],
             ),
-            const SizedBox(height: 16),
-            ...hours.entries.map((entry) {
+            ),
+            AnimatedCrossFade(
+              firstChild: const SizedBox.shrink(),
+              secondChild: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  ...hours.entries.map((entry) {
               final day = entry.key;
               final dayHours = entry.value;
               final isOpen = dayHours != null;
@@ -1203,6 +1263,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 ),
               );
             }).toList(),
+                ],
+              ),
+              crossFadeState: _hoursExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+              duration: const Duration(milliseconds: 250),
+            ),
           ],
         ),
       ),
@@ -1296,7 +1361,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               ...visibleServices.map<Widget>((service) => _buildServiceItem(service, isDarkMode)),
             ],
             if (hasMoreThanThree)
-              Padding(
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: TextButton(
                   onPressed: () {
@@ -1310,6 +1377,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                     ),
                   ),
                 ),
+              ),
               ),
           ],
         ),
@@ -1513,7 +1581,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               ),
               const SizedBox(width: 12),
               Text(
-                'Portfólio',
+                'Fotos da Oficina',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1622,6 +1690,69 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openGalleryScreen() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: isDarkMode ? const Color(0xFF0A0A0A) : const Color(0xFFF5F5F5),
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new, color: isDarkMode ? Colors.white : Colors.black87, size: 20),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              'Fotos da Oficina',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: isDarkMode ? Colors.white : Colors.black87),
+            ),
+          ),
+          body: GridView.builder(
+            padding: const EdgeInsets.all(12),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 1.0,
+            ),
+            itemCount: _galleryPhotos.length,
+            itemBuilder: (context, index) {
+              final photo = _galleryPhotos[index];
+              final imageUrl = photo['image_url']?.toString() ?? '';
+              final caption = photo['caption']?.toString() ?? '';
+              return GestureDetector(
+                onTap: () => _showPhotoViewer(index),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(
+                        imageUrl, fit: BoxFit.cover,
+                        loadingBuilder: (_, child, p) => p == null ? child : Container(
+                          color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[200],
+                          child: const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Color(0xFF00C977))))),
+                        ),
+                        errorBuilder: (_, __, ___) => Container(color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[200], child: const Icon(Icons.broken_image, color: Colors.grey)),
+                      ),
+                      if (caption.isNotEmpty)
+                        Positioned(
+                          left: 0, right: 0, bottom: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Colors.black.withOpacity(0.7), Colors.transparent])),
+                            child: Text(caption, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }

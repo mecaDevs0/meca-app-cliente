@@ -270,8 +270,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _isPaymentPendingStatus(String status) {
     final normalized = status.toLowerCase();
     return normalized == 'finalizado' ||
-        normalized == 'finalizado_cliente' ||
-        normalized == 'completed' ||
         normalized == 'finalizado_aguardando_pagamento' ||
         normalized == 'aguardando_pagamento' ||
         normalized == 'awaiting_payment';
@@ -551,8 +549,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final bookingId = widget.booking['id'];
     if (bookingId == null) return;
 
-    final id = bookingId is int ? bookingId : int.tryParse(bookingId.toString());
-    if (id == null) return;
+    final id = bookingId.toString();
+    if (id.isEmpty) return;
 
     setState(() => _timelineLoading = true);
 
@@ -560,8 +558,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       final result = await _apiService.getBookingTimeline(id);
       if (!mounted) return;
 
-      if (result is Map<String, dynamic>) {
-        final events = result['data'] ?? result['timeline'] ?? result['events'];
+      if (result is Map<String, dynamic> && result['success'] == true) {
+        final data = result['data'];
+        final events = (data is Map ? data['timeline'] : null)
+            ?? result['timeline']
+            ?? result['events']
+            ?? result['data'];
         if (events is List) {
           setState(() {
             _timelineEvents = events
@@ -580,7 +582,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildTimelineSection(bool isDarkMode) {
-    if (_timelineEvents.isEmpty && !_timelineLoading) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -637,15 +638,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ),
               ),
             ),
-            if (_timelineExpanded && _timelineEvents.isNotEmpty) ...[
+            if (_timelineExpanded) ...[
               Divider(
                 height: 1,
                 color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                child: BookingTimelineWidget(events: _timelineEvents),
-              ),
+              if (_timelineEvents.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  child: BookingTimelineWidget(events: _timelineEvents),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Nenhuma atualização de status registrada.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
+                    ),
+                  ),
+                ),
             ],
           ],
         ),
@@ -2382,7 +2395,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 style: TextStyle(
                   color: hasLocation ? const Color(0xFF00C977) : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
                   fontSize: 15,
-                  decoration: hasLocation ? TextDecoration.underline : null,
                 ),
               ),
             ),
@@ -2413,59 +2425,51 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Abrir Localização',
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(
-          'Escolha como deseja abrir a localização da oficina:',
-          style: TextStyle(color: isDarkMode ? Colors.grey[300] : Colors.grey[700]),
-        ),
-        actions: [
-          TextButton.icon(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _openInWaze(lat, lng);
-            },
-            icon: const Icon(Icons.navigation, color: Color(0xFF00C977)),
-            label: const Text(
-              'Waze',
-              style: TextStyle(color: Color(0xFF00C977), fontWeight: FontWeight.bold),
-            ),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: const BorderSide(color: Color(0xFF00C977), width: 1.5),
-              ),
-            ),
-          ),
-          ElevatedButton.icon(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _openInGoogleMaps(lat, lng);
-            },
-            icon: const Icon(Icons.map, color: Colors.white),
-            label: const Text(
-              'Google Maps',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C977),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-        ],
+      backgroundColor: isDarkMode ? const Color(0xFF101010) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 60,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.map, color: Color(0xFF00C977)),
+                  title: const Text('Abrir no Google Maps'),
+                  subtitle: const Text('Rota completa pelo Google Maps'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _openInGoogleMaps(lat, lng);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.directions_car, color: Color(0xFF00C977)),
+                  title: const Text('Abrir no Waze'),
+                  subtitle: const Text('Rota em tempo real pelo Waze'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _openInWaze(lat, lng);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
