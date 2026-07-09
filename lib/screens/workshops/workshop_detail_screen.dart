@@ -815,38 +815,66 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                       ),
                       if (hasCoords && latitude != null && longitude != null)
                         Positioned(
-                          top: 16,
-                          right: 16,
-                          child: GestureDetector(
-                            onTap: () => _showMapOptions(latitude, longitude),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF00C977),
-                                borderRadius: BorderRadius.circular(999),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.25),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  ),
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            padding: const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [
+                                  Colors.black.withOpacity(0.85),
+                                  Colors.black.withOpacity(0.0),
                                 ],
                               ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.open_in_new, size: 14, color: Colors.white),
-                                  SizedBox(width: 4),
-                                  Text(
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
+                                        'Localização da Oficina',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Toque para abrir no Waze ou Google Maps',
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.85),
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                ElevatedButton.icon(
+                                  onPressed: () => _showMapOptions(latitude, longitude),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF00C977),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    elevation: 2,
+                                  ),
+                                  icon: const Icon(Icons.directions, size: 16),
+                                  label: const Text(
                                     'Abrir',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                    ),
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -855,21 +883,6 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 ),
               ),
             ),
-            if (hasCoords && latitude != null && longitude != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.touch_app, size: 14, color: isDarkMode ? Colors.grey[500] : Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Toque no mapa para abrir rotas',
-                      style: TextStyle(fontSize: 12, color: isDarkMode ? Colors.grey[500] : Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ),
           ],
         ),
       ),
