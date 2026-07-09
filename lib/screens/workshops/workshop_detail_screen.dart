@@ -173,7 +173,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     final shareUrl = 'https://api.mecabr.com/share/workshop/${widget.workshopId}';
     final text = 'Achei essa oficina no MECA e recomendo!\n\n🔧 $name$locationLine${stars.isNotEmpty ? '\n$stars' : ''}\n\n$shareUrl';
     try {
-      await SharePlus.instance.share(ShareParams(text: text));
+      await Share.share(text);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
