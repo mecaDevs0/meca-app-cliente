@@ -38,6 +38,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   bool _showAllServices = false;
   bool _hoursExpanded = false;
   bool _isFavorite = false;
+  final GlobalKey _shareButtonKey = GlobalKey();
 
   /// URL do logo sempre via proxy da API (evita 403 do S3). Nunca retorna URL S3 direta.
   String? get _safeWorkshopLogoUrl {
@@ -167,17 +168,43 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     final city = (_workshop!['city'] ?? '').toString();
     final neighborhood = (_workshop!['neighborhood'] ?? '').toString();
     final ratingVal = _getWorkshopRating();
-    final stars = ratingVal != null ? '${'⭐' * ratingVal.round()} ${ratingVal.toStringAsFixed(1)}' : '';
     final location = [neighborhood, city].where((s) => s.isNotEmpty).join(', ');
-    final locationLine = location.isNotEmpty ? '\n📍 $location' : '';
     final shareUrl = 'https://api.mecabr.com/share/workshop/${widget.workshopId}';
-    final text = 'Achei essa oficina no MECA e recomendo!\n\n🔧 $name$locationLine${stars.isNotEmpty ? '\n$stars' : ''}\n\n$shareUrl';
+
+    final lines = <String>['Achei essa oficina no MECA e recomendo!', '', name];
+    if (location.isNotEmpty) lines.add(location);
+    if (ratingVal != null && ratingVal > 0) {
+      lines.add('${'⭐' * ratingVal.round()} ${ratingVal.toStringAsFixed(1)}');
+    }
+
+    final serviceNames = _services
+        .take(3)
+        .map((s) => (s['name'] ?? '').toString())
+        .where((n) => n.isNotEmpty)
+        .toList();
+    if (serviceNames.isNotEmpty) {
+      lines.add('Servicos: ${serviceNames.join(', ')}');
+    }
+
+    lines.addAll(['', shareUrl]);
+
     try {
-      await Share.share(text);
+      Rect? shareOrigin;
+      final renderObj = _shareButtonKey.currentContext?.findRenderObject();
+      if (renderObj is RenderBox && renderObj.hasSize) {
+        final pos = renderObj.localToGlobal(Offset.zero);
+        shareOrigin = pos & renderObj.size;
+      }
+
+      await Share.share(
+        lines.join('\n'),
+        sharePositionOrigin: shareOrigin,
+      );
     } catch (e) {
+      debugPrint('[MECA] Share error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível compartilhar. Tente novamente.')),
+          const SnackBar(content: Text('Nao foi possivel compartilhar. Tente novamente.')),
         );
       }
     }
@@ -492,6 +519,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               tooltip: _isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos',
             ),
             IconButton(
+              key: _shareButtonKey,
               icon: const Icon(Icons.share, color: Colors.white),
               onPressed: _shareWorkshop,
               tooltip: 'Compartilhar oficina',
