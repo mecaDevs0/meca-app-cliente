@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:app_links/app_links.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/auth/login_screen.dart';
 import 'screens/core/core_screen.dart';
@@ -10,6 +13,7 @@ import 'screens/orders/order_detail_screen.dart';
 import 'screens/profile/edit_profile_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/services/services_screen.dart';
+import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/vehicles/add_vehicle_screen.dart';
 import 'screens/vehicles/edit_vehicle_screen.dart';
@@ -95,13 +99,21 @@ void main() async {
             navigatorKey.currentState?.pushNamed('/orders');
             break;
           case 'maintenance_reminder':
-            // Navigate to booking flow or services screen
             final serviceId = data['service_id']?.toString();
             if (serviceId != null && serviceId.isNotEmpty) {
               navigatorKey.currentState?.pushNamed('/services');
             } else {
               navigatorKey.currentState?.pushNamed('/home');
             }
+            break;
+          case 'review_incentive':
+            final reviewBookingId = data['booking_id']?.toString();
+            if (reviewBookingId != null && reviewBookingId.isNotEmpty) {
+              navigatorKey.currentState?.pushNamed('/order-detail', arguments: {'id': reviewBookingId});
+            }
+            break;
+          case 'referral_reward':
+            navigatorKey.currentState?.pushNamed('/home');
             break;
           default:
             break;
@@ -144,44 +156,39 @@ void main() async {
         }
       };
       
-      // Aguardar um pouco para garantir que o token está disponível
-      // Tentar salvar o token periodicamente até conseguir
-      Future.delayed(const Duration(seconds: 2), () async {
-        for (int attempt = 0; attempt < 5; attempt++) {
-          try {
-            final playerId = OneSignalService.getSubscriptionId();
-            if (playerId != null && playerId.isNotEmpty) {
-              // Salvar token no backend se usuário estiver logado
-              final apiService = ApiService();
-              final prefs = await apiService.getStorage();
-              final token = prefs.getString('token');
-              if (token != null) {
-                // Associar external user ID ao OneSignal
-                try {
-                  final userId = prefs.getString('user_id');
-                  if (userId != null) {
-                    await OneSignalService.setExternalUserId(userId);
-                  }
-                } catch (e) {
-                  // Silenciar erro
-                }
-                
-                final result = await apiService.saveDeviceToken(playerId);
-                if (result['success'] == true) {
-                  break; // Sucesso, parar tentativas
-                }
-              } else {
-                break; // Usuário não logado, não precisa continuar
-              }
+      // Identificar usuário no OneSignal e salvar device token
+      Future.delayed(const Duration(seconds: 1), () async {
+        try {
+          final apiService = ApiService();
+          final prefs = await apiService.getStorage();
+          final token = prefs.getString('token');
+          if (token == null) return;
+
+          // Identificar o usuário IMEDIATAMENTE (não depende de subscription)
+          final userId = prefs.getString('user_id');
+          if (userId != null) {
+            try {
+              await OneSignalService.setExternalUserId(userId);
+            } catch (e) {
+              // Silenciar erro
             }
-          } catch (e) {
-            // Silenciar erro
           }
-          
-          // Aguardar antes da próxima tentativa
-          if (attempt < 4) {
-            await Future.delayed(const Duration(seconds: 1));
+
+          // Aguardar subscription com retry
+          for (int attempt = 0; attempt < 6; attempt++) {
+            try {
+              final playerId = OneSignalService.getSubscriptionId();
+              if (playerId != null && playerId.isNotEmpty) {
+                final result = await apiService.saveDeviceToken(playerId);
+                if (result['success'] == true) break;
+              }
+            } catch (e) {
+              // Silenciar erro
+            }
+            await Future.delayed(const Duration(seconds: 2));
           }
+        } catch (e) {
+          // Silenciar erro
         }
       });
   } catch (e) {
@@ -205,8 +212,67 @@ void main() async {
   }
 }
 
-class MecaClienteApp extends StatelessWidget {
+class MecaClienteApp extends StatefulWidget {
   const MecaClienteApp({Key? key}) : super(key: key);
+
+  @override
+  State<MecaClienteApp> createState() => _MecaClienteAppState();
+}
+
+class _MecaClienteAppState extends State<MecaClienteApp> {
+  late final AppLinks _appLinks;
+
+  @override
+  void initState() {
+    super.initState();
+    _appLinks = AppLinks();
+    _initDeepLinks();
+  }
+
+  void _initDeepLinks() {
+    _appLinks.uriLinkStream.listen((Uri uri) {
+      _handleDeepLink(uri);
+    });
+    _appLinks.getInitialLink().then((uri) {
+      if (uri != null) {
+        Future.delayed(const Duration(seconds: 1), () => _handleDeepLink(uri));
+      }
+    });
+  }
+
+  void _handleDeepLink(Uri uri) async {
+    final pathSegments = uri.pathSegments;
+    String? workshopId;
+
+    // meca://workshop/{id}
+    if (pathSegments.length >= 2 && pathSegments[0] == 'workshop') {
+      workshopId = pathSegments[1];
+    }
+    // https://api.mecabr.com/share/workshop/{id}
+    if (pathSegments.length >= 3 && pathSegments[0] == 'share' && pathSegments[1] == 'workshop') {
+      workshopId = pathSegments[2];
+    }
+    // https://www.mecabr.com/oficina/{id}
+    if (pathSegments.length >= 2 && pathSegments[0] == 'oficina') {
+      workshopId = pathSegments[1];
+    }
+
+    // Save referral code from ?ref=CODE
+    final refCode = uri.queryParameters['ref'];
+    if (refCode != null && refCode.isNotEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('pending_referral_code', refCode);
+      } catch (_) {}
+    }
+
+    if (workshopId != null && workshopId.isNotEmpty) {
+      navigatorKey.currentState?.pushNamed(
+        '/workshop-detail',
+        arguments: {'id': workshopId},
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -224,11 +290,22 @@ class MecaClienteApp extends StatelessWidget {
             theme: ThemeService.lightTheme,
             darkTheme: ThemeService.darkTheme,
             themeMode: themeService.themeMode,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [
+              Locale('pt', 'BR'),
+              Locale('en', 'US'),
+            ],
             initialRoute: '/',
             onGenerateRoute: (settings) {
               switch (settings.name) {
                 case '/':
                   return MaterialPageRoute(builder: (_) => const SplashScreen());
+                case '/onboarding':
+                  return MaterialPageRoute(builder: (_) => const OnboardingScreen());
                 case '/login':
                   return MaterialPageRoute(builder: (_) => const LoginScreen());
                 case '/home':

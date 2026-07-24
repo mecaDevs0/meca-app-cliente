@@ -4,6 +4,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../services/api_service.dart';
 import '../services/onesignal_service.dart';
 
@@ -61,12 +63,26 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         Navigator.pushReplacementNamed(context, '/home');
         _saveDeviceTokenInBackground();
       } else {
-        Navigator.pushReplacementNamed(context, '/login');
+        // Check if onboarding was completed
+        final prefs = await SharedPreferences.getInstance();
+        final onboardingDone = prefs.getBool('onboarding_completed') ?? false;
+        if (!mounted) return;
+        if (onboardingDone) {
+          Navigator.pushReplacementNamed(context, '/login');
+        } else {
+          Navigator.pushReplacementNamed(context, '/onboarding');
+        }
       }
     } catch (e) {
       if (mounted) {
-        // Em caso de erro, ir para login
-        Navigator.pushReplacementNamed(context, '/login');
+        final prefs = await SharedPreferences.getInstance();
+        final onboardingDone = prefs.getBool('onboarding_completed') ?? false;
+        if (!mounted) return;
+        if (onboardingDone) {
+          Navigator.pushReplacementNamed(context, '/login');
+        } else {
+          Navigator.pushReplacementNamed(context, '/onboarding');
+        }
       }
     }
   }

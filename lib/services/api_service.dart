@@ -245,18 +245,35 @@ class ApiService {
   }
 
   // Registro
-  Future<Map<String, dynamic>> register(String firstName, String email, String password, String phone, String cpf) async {
+  Future<Map<String, dynamic>> register(String firstName, String email, String password, String phone, String cpf, {String? referralCode}) async {
     try {
       final normalizedEmail = email.trim().toLowerCase();
       final normalizedPassword = password.trim();
 
-      final response = await _dio.post('/auth/register', data: {
+      // Check for pending referral code from deep link
+      String? refCode = referralCode;
+      if (refCode == null || refCode.isEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          refCode = prefs.getString('pending_referral_code');
+          if (refCode != null) {
+            await prefs.remove('pending_referral_code');
+          }
+        } catch (_) {}
+      }
+
+      final data = {
         'firstName': firstName,
         'email': normalizedEmail,
         'password': normalizedPassword,
         'phone': phone,
         'cpf': cpf,
-      });
+      };
+      if (refCode != null && refCode.isNotEmpty) {
+        data['referralCode'] = refCode;
+      }
+
+      final response = await _dio.post('/auth/register', data: data);
 
       return await _handleAuthResponse(response, fallbackError: 'Erro no registro');
     } catch (e) {
