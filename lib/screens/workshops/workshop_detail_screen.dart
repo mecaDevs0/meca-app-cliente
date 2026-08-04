@@ -1211,14 +1211,6 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     );
   }
 
-  String _buildFullAddress() {
-    final address = (_workshop?['address_text'] ?? _workshop?['address'] ?? '').toString().trim();
-    final city = (_workshop?['city'] ?? '').toString().trim();
-    final state = (_workshop?['state'] ?? '').toString().trim();
-    final parts = [address, city, state].where((s) => s.isNotEmpty).toList();
-    return parts.join(', ');
-  }
-
   Future<void> _launchGoogleMaps(double lat, double lng) async {
     final googleUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
     await _launchExternalUrl(googleUrl);
