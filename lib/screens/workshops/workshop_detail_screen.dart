@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../widgets/meca_toast.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -329,9 +330,10 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       );
     } catch (e, stack) {
       debugPrint('[MECA] Share error: $e\n$stack');
-      if (mounted) {
-        MecaToast.show(context, 'Não foi possível compartilhar. Tente novamente.');
-      }
+      if (!mounted) return;
+      await Clipboard.setData(ClipboardData(text: text));
+      if (!mounted) return;
+      MecaToast.showSuccess(context, 'Texto copiado! Cole e envie para seus amigos.');
     }
   }
 

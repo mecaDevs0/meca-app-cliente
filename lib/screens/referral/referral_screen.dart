@@ -67,6 +67,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
   Future<void> _shareCode() async {
     final code = _data?['referral_code'] ?? '';
     if (code.isEmpty) return;
+    final shareText = 'Agende serviços automotivos pelo MECA! Use meu código $code no cadastro. Baixe: https://www.mecabr.com/app/?ref=$code';
     try {
       Rect? shareOrigin;
       final renderObj = _shareButtonKey.currentContext?.findRenderObject();
@@ -75,17 +76,20 @@ class _ReferralScreenState extends State<ReferralScreen> {
         shareOrigin = pos & renderObj.size;
       }
       await Share.share(
-        'Agende serviços automotivos pelo MECA! Use meu código $code no cadastro. Baixe: https://www.mecabr.com/app/?ref=$code',
+        shareText,
         subject: 'Código de indicação MECA',
         sharePositionOrigin: shareOrigin,
       );
     } catch (e) {
       debugPrint('[MECA] Share error: $e');
       if (!mounted) return;
+      await Clipboard.setData(ClipboardData(text: shareText));
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Erro ao compartilhar. Tente novamente.'),
-          backgroundColor: Color(0xFFEF4444),
+          content: Text('Texto copiado! Cole e envie para seus amigos.'),
+          backgroundColor: Color(0xFF00C977),
+          duration: Duration(seconds: 3),
         ),
       );
     }
