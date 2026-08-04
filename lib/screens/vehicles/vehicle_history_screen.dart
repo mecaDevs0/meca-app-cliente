@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../utils/price_utils.dart';
 import '../../widgets/app_alerts.dart';

@@ -27,7 +27,7 @@ class BookingTimelineWidget extends StatelessWidget {
         String? formattedTime;
         if (timestampRaw != null) {
           try {
-            final dt = DateTime.parse(timestampRaw.toString());
+            final dt = DateTime.parse(timestampRaw.toString()).toLocal();
             formattedTime = DateFormat('dd/MM/yyyy HH:mm').format(dt);
           } catch (_) {
             formattedTime = timestampRaw.toString();
@@ -175,7 +175,7 @@ class BookingTimelineWidget extends StatelessWidget {
     final s = status.toLowerCase();
     if (s.contains('pendente') || s.contains('pending')) return Icons.schedule;
     if (s.contains('confirmado') || s.contains('confirmed') || s.contains('aceito') || s.contains('accepted')) return Icons.check_circle_outline;
-    if (s.contains('checkin') || s.contains('check_in')) return Icons.login;
+    if (s.contains('veiculo') || s.contains('checkin') || s.contains('check_in')) return Icons.directions_car;
     if (s.contains('andamento') || s.contains('progress') || s.contains('iniciado') || s.contains('started')) return Icons.build;
     if (s.contains('orcamento') || s.contains('quote')) return Icons.receipt_long;
     if (s.contains('finalizado') || s.contains('completed') || s.contains('concluido')) return Icons.done_all;

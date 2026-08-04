@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' show Position, Geolocator;
 
-import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../services/location_service.dart';
 import '../../utils/price_utils.dart';

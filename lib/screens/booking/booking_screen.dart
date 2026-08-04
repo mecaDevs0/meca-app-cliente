@@ -171,13 +171,43 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _selectDate() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: DateTime.now().add(const Duration(days: 1)),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 30)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: Color(0xFF00C977),
+                    onPrimary: Colors.white,
+                    surface: Color(0xFF1A1A1A),
+                    onSurface: Colors.white,
+                  )
+                : const ColorScheme.light(
+                    primary: Color(0xFF00C977),
+                    onPrimary: Colors.white,
+                    surface: Colors.white,
+                    onSurface: Colors.black87,
+                  ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF00C977),
+                textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                minimumSize: const Size(80, 48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
-    
+
     if (picked != null) {
       setState(() => _selectedDate = picked);
     }
@@ -219,26 +249,53 @@ class _BookingScreenState extends State<BookingScreen> {
       }
     }
 
+    // Filtrar horários passados se a data for hoje
+    final now = DateTime.now();
+    final bool isToday = _selectedDate!.year == now.year && _selectedDate!.month == now.month && _selectedDate!.day == now.day;
+    if (isToday) {
+      final int currentMinutes = now.hour * 60 + now.minute;
+      availableTimes = availableTimes.where((time) {
+        final parts = time.split(':');
+        if (parts.length != 2) return true;
+        final slotMinutes = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+        return slotMinutes > currentMinutes;
+      }).toList();
+    }
+
+    if (availableTimes.isEmpty) {
+      if (!mounted) return;
+      AppAlerts.showWarning(
+        context,
+        message: isToday
+            ? 'Nenhum horário disponível para hoje. Selecione outra data.'
+            : 'Nenhum horário disponível. Selecione outra data.',
+        title: 'Sem horários',
+      );
+      return;
+    }
+
     // Mostrar diálogo de seleção de horário
     final selectedTimeStr = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Selecione um horário'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: availableTimes.length,
-            itemBuilder: (context, index) {
-              final timeStr = availableTimes[index];
-              return ListTile(
-                title: Text(timeStr),
-                onTap: () => Navigator.pop(context, timeStr),
-              );
-            },
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Selecione um horário'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: availableTimes.length,
+              itemBuilder: (context, index) {
+                final timeStr = availableTimes[index];
+                return ListTile(
+                  title: Text(timeStr),
+                  onTap: () => Navigator.pop(context, timeStr),
+                );
+              },
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
 
     if (selectedTimeStr != null) {
@@ -1578,12 +1635,13 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  Future<TimeOfDay?> _showWheelTimePicker({TimeOfDay? initialTime}) async {
+  Future<TimeOfDay?> _showWheelTimePicker({TimeOfDay? initialTime, TimeOfDay? minimumTime}) async {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final initial = initialTime ?? TimeOfDay.now();
     int selectedHour = initial.hour;
     int selectedMinute = (initial.minute / 5).round() * 5;
     if (selectedMinute >= 60) selectedMinute = 55;
+    final int minMinutes = minimumTime != null ? minimumTime.hour * 60 + minimumTime.minute : -1;
 
     final result = await showModalBottomSheet<TimeOfDay>(
       context: context,
@@ -1594,6 +1652,9 @@ class _BookingScreenState extends State<BookingScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final int currentMinutes = selectedHour * 60 + selectedMinute;
+            final bool isPast = minMinutes >= 0 && currentMinutes <= minMinutes;
+
             return SafeArea(
               child: SizedBox(
                 height: 320,
@@ -1638,16 +1699,21 @@ class _BookingScreenState extends State<BookingScreen> {
                                     onSelectedItemChanged: (index) {
                                       setSheetState(() => selectedHour = index);
                                     },
-                                    children: List.generate(24, (i) => Center(
-                                      child: Text(
-                                        i.toString().padLeft(2, '0'),
-                                        style: TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w600,
-                                          color: isDarkMode ? Colors.white : Colors.black87,
+                                    children: List.generate(24, (i) {
+                                      final bool hourDisabled = minMinutes >= 0 && (i + 1) * 60 <= minMinutes;
+                                      return Center(
+                                        child: Text(
+                                          i.toString().padLeft(2, '0'),
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w600,
+                                            color: hourDisabled
+                                                ? (isDarkMode ? Colors.grey[700] : Colors.grey[400])
+                                                : (isDarkMode ? Colors.white : Colors.black87),
+                                          ),
                                         ),
-                                      ),
-                                    )),
+                                      );
+                                    }),
                                   ),
                                 ),
                               ],
@@ -1669,16 +1735,22 @@ class _BookingScreenState extends State<BookingScreen> {
                                     onSelectedItemChanged: (index) {
                                       setSheetState(() => selectedMinute = index * 5);
                                     },
-                                    children: List.generate(12, (i) => Center(
-                                      child: Text(
-                                        (i * 5).toString().padLeft(2, '0'),
-                                        style: TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w600,
-                                          color: isDarkMode ? Colors.white : Colors.black87,
+                                    children: List.generate(12, (i) {
+                                      final int minuteVal = i * 5;
+                                      final bool minuteDisabled = minMinutes >= 0 && (selectedHour * 60 + minuteVal) <= minMinutes;
+                                      return Center(
+                                        child: Text(
+                                          minuteVal.toString().padLeft(2, '0'),
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w600,
+                                            color: minuteDisabled
+                                                ? (isDarkMode ? Colors.grey[700] : Colors.grey[400])
+                                                : (isDarkMode ? Colors.white : Colors.black87),
+                                          ),
                                         ),
-                                      ),
-                                    )),
+                                      );
+                                    }),
                                   ),
                                 ),
                               ],
@@ -1688,15 +1760,24 @@ class _BookingScreenState extends State<BookingScreen> {
                         ],
                       ),
                     ),
+                    if (isPast)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          'Horário já passou',
+                          style: TextStyle(fontSize: 13, color: Colors.red[400], fontWeight: FontWeight.w500),
+                        ),
+                      ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                       child: SizedBox(
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed: () => Navigator.pop(ctx, TimeOfDay(hour: selectedHour, minute: selectedMinute)),
+                          onPressed: isPast ? null : () => Navigator.pop(ctx, TimeOfDay(hour: selectedHour, minute: selectedMinute)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00C977),
+                            disabledBackgroundColor: isDarkMode ? Colors.grey[800] : Colors.grey[300],
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             elevation: 0,
                           ),
@@ -1716,9 +1797,19 @@ class _BookingScreenState extends State<BookingScreen> {
     return result;
   }
 
+  TimeOfDay? _todayMinimumTime() {
+    if (_selectedDate == null) return null;
+    final now = DateTime.now();
+    if (_selectedDate!.year == now.year && _selectedDate!.month == now.month && _selectedDate!.day == now.day) {
+      return TimeOfDay(hour: now.hour, minute: now.minute);
+    }
+    return null;
+  }
+
   Future<void> _selectTimeWindowStart() async {
     final selectedTime = await _showWheelTimePicker(
       initialTime: _selectedTime ?? const TimeOfDay(hour: 14, minute: 0),
+      minimumTime: _todayMinimumTime(),
     );
 
     if (selectedTime != null) {
@@ -1742,7 +1833,10 @@ class _BookingScreenState extends State<BookingScreen> {
                              )
                            : const TimeOfDay(hour: 18, minute: 0));
 
-    final selectedTime = await _showWheelTimePicker(initialTime: initialTime);
+    final selectedTime = await _showWheelTimePicker(
+      initialTime: initialTime,
+      minimumTime: _todayMinimumTime(),
+    );
 
     if (selectedTime != null) {
       if (_selectedTime != null) {

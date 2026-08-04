@@ -61,6 +61,7 @@ class MiaChatBubble extends StatelessWidget {
   final bool isBot;
   final int index;
   final bool showAvatar;
+  final bool isDark;
   /// Delay em ms antes da animação de entrada (200-400ms para efeito conversacional)
   final int animationDelayMs;
 
@@ -70,6 +71,7 @@ class MiaChatBubble extends StatelessWidget {
     required this.isBot,
     this.index = 0,
     this.showAvatar = true,
+    this.isDark = true,
     this.animationDelayMs = 0,
   });
 
@@ -112,7 +114,9 @@ class MiaChatBubble extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isBot ? const Color(0xFF1A1F1C) : const Color(0xFF1B4D30),
+                  color: isBot
+                      ? (isDark ? const Color(0xFF1A1F1C) : const Color(0xFFF0F4F2))
+                      : (isDark ? const Color(0xFF1B4D30) : const Color(0xFFD6F5E5)),
                   borderRadius: BorderRadius.only(
                     topLeft: const Radius.circular(20),
                     topRight: const Radius.circular(20),
@@ -122,20 +126,24 @@ class MiaChatBubble extends StatelessWidget {
                   boxShadow: isBot
                       ? [
                           BoxShadow(
-                            color: const Color(0xFF00C977).withOpacity(0.06),
+                            color: const Color(0xFF00C977).withOpacity(isDark ? 0.06 : 0.08),
                             blurRadius: 16,
                             spreadRadius: 0,
                           ),
                         ]
                       : null,
-                  border: isBot ? null : Border.all(color: Colors.greenAccent.withOpacity(0.3), width: 1),
+                  border: isBot
+                      ? (isDark ? null : Border.all(color: const Color(0xFF00C977).withOpacity(0.12), width: 0.5))
+                      : Border.all(color: isDark ? Colors.greenAccent.withOpacity(0.3) : const Color(0xFF00C977).withOpacity(0.25), width: 1),
                 ),
                 child: Text(
                   text,
                   style: TextStyle(
                     fontSize: 16,
                     height: 1.4,
-                    color: isBot ? Colors.white.withOpacity(0.9) : Colors.white,
+                    color: isBot
+                        ? (isDark ? Colors.white.withOpacity(0.9) : const Color(0xFF1A1A1A))
+                        : (isDark ? Colors.white : const Color(0xFF1A3D2A)),
                   ),
                 ),
               ),
@@ -267,6 +275,7 @@ class VehicleSelectorCard extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
   final int animationIndex;
+  final bool isDark;
 
   const VehicleSelectorCard({
     super.key,
@@ -274,6 +283,7 @@ class VehicleSelectorCard extends StatelessWidget {
     required this.isSelected,
     required this.onTap,
     this.animationIndex = 0,
+    this.isDark = true,
   });
 
   @override
@@ -310,36 +320,42 @@ class VehicleSelectorCard extends StatelessWidget {
               width: 180,
               height: 120,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
+                color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: isSelected
-                      ? Colors.greenAccent.withOpacity(0.5)
-                      : Colors.greenAccent.withOpacity(0.2),
+                      ? const Color(0xFF00C977).withOpacity(isDark ? 0.5 : 0.7)
+                      : (isDark ? Colors.greenAccent.withOpacity(0.2) : const Color(0xFFE0E0E0)),
                   width: 1,
                 ),
                 boxShadow: isSelected
                     ? [
                         BoxShadow(
-                          color: const Color(0xFF00C977).withOpacity(0.15),
+                          color: const Color(0xFF00C977).withOpacity(isDark ? 0.15 : 0.2),
                           blurRadius: 12,
                           spreadRadius: 0,
                         ),
                       ]
-                    : null,
+                    : (isDark ? null : [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 8,
+                          spreadRadius: 0,
+                        ),
+                      ]),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.directions_car_rounded, color: Colors.greenAccent.withOpacity(0.9), size: 20),
+                  Icon(Icons.directions_car_rounded, color: const Color(0xFF00C977), size: 20),
                   const SizedBox(height: 12),
                   Text(
                     model,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
-                      color: Colors.white,
+                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -347,7 +363,7 @@ class VehicleSelectorCard extends StatelessWidget {
                   if (year.isNotEmpty || km.isNotEmpty)
                     Text(
                       [if (year.isNotEmpty) year, if (km.isNotEmpty) '$km km'].join(' • '),
-                      style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6)),
+                      style: TextStyle(fontSize: 12, color: isDark ? Colors.white.withOpacity(0.6) : const Color(0xFF777777)),
                     ),
                 ],
               ),
@@ -363,7 +379,8 @@ class VehicleSelectorCard extends StatelessWidget {
 const double _kMiaHeaderHeight = 56;
 
 class _MiaPremiumHeader extends StatelessWidget {
-  const _MiaPremiumHeader();
+  final bool isDark;
+  const _MiaPremiumHeader({this.isDark = true});
 
   @override
   Widget build(BuildContext context) {
@@ -372,10 +389,12 @@ class _MiaPremiumHeader extends StatelessWidget {
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF0D0F0E).withOpacity(0.6),
+            color: isDark
+                ? const Color(0xFF0D0F0E).withOpacity(0.6)
+                : Colors.white.withOpacity(0.85),
             border: Border(
               bottom: BorderSide(
-                color: Colors.white.withOpacity(0.1),
+                color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.06),
                 width: 0.5,
               ),
             ),
@@ -387,7 +406,7 @@ class _MiaPremiumHeader extends StatelessWidget {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                    icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : const Color(0xFF1A1A1A), size: 20),
                     onPressed: () => Navigator.maybePop(context),
                     style: IconButton.styleFrom(
                       minimumSize: const Size(44, 44),
@@ -471,7 +490,7 @@ class _MiaPremiumHeader extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.greenAccent,
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF0D0F0E), width: 1.5),
+              border: Border.all(color: isDark ? const Color(0xFF0D0F0E) : Colors.white, width: 1.5),
             ),
           ),
         ),
@@ -516,8 +535,6 @@ class _MiaChatScreenState extends State<MiaChatScreen>
   Map<String, dynamic>? _selectedVehicle;
   String _flowState = 'vehicle_selection';
   bool _isTypingIndicator = false;
-  String? _suggestedServiceId;
-  String? _suggestedServiceName;
   bool _vehiclesLoading = true;
 
   @override
@@ -653,8 +670,6 @@ class _MiaChatScreenState extends State<MiaChatScreen>
       final serviceId = data['suggestedServiceId']?.toString();
       final serviceName = data['suggestedCategory']?.toString() ?? data['suggestedServiceName']?.toString() ?? 'Manutenção';
       setState(() {
-        _suggestedServiceId = serviceId;
-        _suggestedServiceName = serviceName;
         _flowState = 'done';
       });
       _addBotMessage(
@@ -670,10 +685,6 @@ class _MiaChatScreenState extends State<MiaChatScreen>
         onComplete: () => _scrollToBottom(),
       );
     }
-  }
-
-  void _goToWorkshops() {
-    _goToWorkshopsWithParams(_suggestedServiceId, _suggestedServiceName ?? 'Manutenção');
   }
 
   void _goToWorkshopsWithParams(String? serviceId, String categoryName) {
@@ -701,7 +712,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
       builder: (context, themeService, child) {
         final isDark = themeService.isDarkMode;
         return Scaffold(
-          backgroundColor: const Color(0xFF0D0F0E),
+          backgroundColor: isDark ? const Color(0xFF0D0F0E) : const Color(0xFFF7F8FA),
           body: Column(
             children: [
               Expanded(
@@ -709,7 +720,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
                   children: [
                     Positioned.fill(
                       child: _vehiclesLoading && _flowState == 'vehicle_selection'
-                              ? _buildLoadingState(context)
+                              ? _buildLoadingState(context, isDark)
                               : (_flowState == 'vehicle_selection' || _flowState == 'vehicle_selected')
                                   ? _buildVehicleSelection(context, isDark)
                                   : _buildChatArea(context, isDark),
@@ -718,7 +729,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
                       top: 0,
                       left: 0,
                       right: 0,
-                      child: const _MiaPremiumHeader(),
+                      child: _MiaPremiumHeader(isDark: isDark),
                     ),
                   ],
                 ),
@@ -735,7 +746,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
   double get _contentTopPadding =>
       _kMiaHeaderHeight + MediaQuery.of(context).padding.top;
 
-  Widget _buildLoadingState(BuildContext context) {
+  Widget _buildLoadingState(BuildContext context, bool isDark) {
     return Padding(
       padding: EdgeInsets.only(top: _contentTopPadding),
       child: Center(
@@ -750,9 +761,12 @@ class _MiaChatScreenState extends State<MiaChatScreen>
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
+              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.greenAccent.withOpacity(0.2)),
+              border: Border.all(color: isDark ? Colors.greenAccent.withOpacity(0.2) : const Color(0xFFE0E0E0)),
+              boxShadow: isDark ? null : [
+                BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, spreadRadius: 0),
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -763,7 +777,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
                   'Carregando seus veículos...',
                   style: TextStyle(
                     fontSize: 15,
-                    color: Colors.white.withOpacity(0.8),
+                    color: isDark ? Colors.white.withOpacity(0.8) : const Color(0xFF555555),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -790,6 +804,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
             text: 'Olá! Sou a MIA, sua assistente automotiva. Para começar o diagnóstico, selecione o veículo que vamos analisar.',
             isBot: true,
             index: 0,
+            isDark: isDark,
             animationDelayMs: 280,
           ),
           const SizedBox(height: 24),
@@ -833,6 +848,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
                           isSelected: _selectedVehicle == v,
                           onTap: () => _selectVehicle(v),
                           animationIndex: i,
+                          isDark: isDark,
                         );
                       },
                     ),
@@ -863,15 +879,15 @@ class _MiaChatScreenState extends State<MiaChatScreen>
           child: Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
+              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: Colors.greenAccent.withOpacity(0.25),
+                color: isDark ? Colors.greenAccent.withOpacity(0.25) : const Color(0xFFE0E0E0),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF00C977).withOpacity(0.04),
+                  color: isDark ? const Color(0xFF00C977).withOpacity(0.04) : Colors.black.withOpacity(0.04),
                   blurRadius: 16,
                   spreadRadius: 0,
                 ),
@@ -883,13 +899,13 @@ class _MiaChatScreenState extends State<MiaChatScreen>
                 Icon(
                   Icons.directions_car,
                   size: 64,
-                  color: Colors.white.withOpacity(0.35),
+                  color: isDark ? Colors.white.withOpacity(0.35) : const Color(0xFFCCCCCC),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Nenhum veículo encontrado',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                     fontWeight: FontWeight.w600,
                     fontSize: 17,
                   ),
@@ -900,7 +916,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.white.withOpacity(0.65),
+                    color: isDark ? Colors.white.withOpacity(0.65) : const Color(0xFF777777),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -971,12 +987,13 @@ class _MiaChatScreenState extends State<MiaChatScreen>
           text: msg.text,
           isBot: msg.isBot,
           index: index,
+          isDark: isDark,
           animationDelayMs: (index == 0 && _messages.length == 1) ? 150 : 0,
         ),
         if (showActionButton) ...[
           const SizedBox(height: 12),
           _MiaActionButton(
-            category: category!,
+            category: category,
             serviceId: serviceId,
             onPressed: () => _goToWorkshopsWithParams(serviceId, category),
           ),
@@ -1010,7 +1027,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1F1C),
+                color: isDark ? const Color(0xFF1A1F1C) : const Color(0xFFF0F4F2),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(20),
                   topRight: Radius.circular(20),
@@ -1019,7 +1036,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF00C977).withOpacity(0.06),
+                    color: const Color(0xFF00C977).withOpacity(isDark ? 0.06 : 0.08),
                     blurRadius: 16,
                     spreadRadius: 0,
                   ),
@@ -1048,7 +1065,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
             ),
             decoration: BoxDecoration(
               color: (isDark ? const Color(0xFF0D0D0D) : Colors.white).withOpacity(0.85),
-              border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+              border: Border(top: BorderSide(color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06))),
             ),
             child: SafeArea(
               top: false,
@@ -1099,7 +1116,7 @@ class _MiaChatScreenState extends State<MiaChatScreen>
           ),
           decoration: BoxDecoration(
             color: (isDark ? const Color(0xFF0D0D0D) : Colors.white).withOpacity(0.88),
-            border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+            border: Border(top: BorderSide(color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06))),
           ),
           child: SafeArea(
         top: false,
@@ -1119,10 +1136,10 @@ class _MiaChatScreenState extends State<MiaChatScreen>
                     _scrollToBottom();
                   });
                 },
-                icon: const Icon(Icons.refresh, size: 18),
+                icon: Icon(Icons.refresh, size: 18, color: isDark ? Colors.greenAccent : const Color(0xFF00C977)),
                 label: Text(
                   'Fazer outro diagnóstico',
-                  style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: isDark ? Colors.greenAccent : const Color(0xFF00C977), fontWeight: FontWeight.w600),
                 ),
               ),
               const SizedBox(height: 12),
@@ -1134,10 +1151,12 @@ class _MiaChatScreenState extends State<MiaChatScreen>
                     controller: _inputController,
                     focusNode: _inputFocusNode,
                     enabled: _flowState == 'await_problem' && !_isTypingIndicator,
+                    style: TextStyle(color: isDark ? Colors.white : const Color(0xFF1A1A1A)),
                     decoration: InputDecoration(
                       hintText: 'Descreva o problema...',
+                      hintStyle: TextStyle(color: isDark ? Colors.white38 : const Color(0xFF999999)),
                       filled: true,
-                      fillColor: Colors.white.withOpacity(0.04),
+                      fillColor: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF2F3F5),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,

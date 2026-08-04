@@ -6,7 +6,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../utils/formatters.dart';
 import '../booking/booking_screen.dart';
@@ -42,7 +41,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
 
   /// URL do logo sempre via proxy da API (evita 403 do S3). Nunca retorna URL S3 direta.
   String? get _safeWorkshopLogoUrl {
-    final raw = _workshop?['logo_url']?.toString()?.trim();
+    final raw = _workshop?['logo_url']?.toString().trim();
     if (raw != null && raw.isNotEmpty && raw.startsWith('http')) return raw;
     return null;
   }
@@ -68,69 +67,89 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange[700], size: 28),
-            const SizedBox(width: 10),
-            const Expanded(child: Text('Oficina Distante', style: TextStyle(fontWeight: FontWeight.bold))),
-          ],
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+        title: null,
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.warning_amber_rounded, color: Colors.orange[700], size: 28),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Oficina Distante',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
             Text(
               'Esta oficina está a aproximadamente ${widget.distanceKm!.toStringAsFixed(0)} km de você.',
-              style: const TextStyle(fontSize: 16),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600], height: 1.4),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.orange[100],
+                color: Colors.orange[50],
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange[300]!),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.orange[800], size: 20),
+                  Icon(Icons.route_rounded, color: Colors.orange[600], size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Isso pode impactar em custos de deslocamento e tempo de atendimento.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.orange[900],
-                        fontWeight: FontWeight.w500,
-                      ),
+                      'Pode haver custos extras de deslocamento',
+                      style: TextStyle(fontSize: 12, color: Colors.orange[700], fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Tem certeza que deseja continuar?',
-              style: TextStyle(fontWeight: FontWeight.w500),
+            const SizedBox(height: 14),
+            Text(
+              'Deseja continuar mesmo assim?',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[800]),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop(false);
-            },
-            child: const Text('Voltar', style: TextStyle(color: Colors.grey)),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF00C977),
-            ),
-            onPressed: () {
-              Navigator.of(dialogContext).pop(true);
-            },
-            child: const Text('Sim, continuar'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    side: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text('Voltar', style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C977),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Sim, continuar', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -162,8 +181,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     }
   }
 
-  void _shareWorkshop() async {
-    if (_workshop == null) return;
+  String _buildShareText() {
     final name = (_workshop!['name'] ?? 'Oficina').toString();
     final city = (_workshop!['city'] ?? '').toString();
     final neighborhood = (_workshop!['neighborhood'] ?? '').toString();
@@ -187,7 +205,115 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     }
 
     lines.addAll(['', shareUrl]);
+    return lines.join('\n');
+  }
 
+  void _shareWorkshop() {
+    if (_workshop == null) return;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[700] : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Compartilhar oficina',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildShareOption(
+                      icon: Icons.share,
+                      label: 'Compartilhar',
+                      color: const Color(0xFF00C977),
+                      isDark: isDark,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _doNativeShare();
+                      },
+                    ),
+                    _buildShareOption(
+                      icon: Icons.chat,
+                      label: 'WhatsApp',
+                      color: const Color(0xFF25D366),
+                      isDark: isDark,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _doWhatsAppShare();
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildShareOption({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.grey[300] : Colors.grey[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _doNativeShare() async {
+    final text = _buildShareText();
     try {
       Rect? shareOrigin;
       final renderObj = _shareButtonKey.currentContext?.findRenderObject();
@@ -197,15 +323,34 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       }
 
       await Share.share(
-        lines.join('\n'),
+        text,
+        subject: 'Oficina no MECA',
         sharePositionOrigin: shareOrigin,
       );
-    } catch (e) {
-      debugPrint('[MECA] Share error: $e');
+    } catch (e, stack) {
+      debugPrint('[MECA] Share error: $e\n$stack');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Nao foi possivel compartilhar. Tente novamente.')),
-        );
+        MecaToast.show(context, 'Não foi possível compartilhar. Tente novamente.');
+      }
+    }
+  }
+
+  Future<void> _doWhatsAppShare() async {
+    final text = _buildShareText();
+    final encoded = Uri.encodeComponent(text);
+    final uri = Uri.parse('https://wa.me/?text=$encoded');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          MecaToast.show(context, 'WhatsApp não encontrado');
+        }
+      }
+    } catch (e) {
+      debugPrint('[MECA] WhatsApp share error: $e');
+      if (mounted) {
+        MecaToast.show(context, 'Erro ao abrir WhatsApp');
       }
     }
   }
@@ -222,8 +367,8 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
       final results = await Future.wait([futureDetails, futureServices]);
 
       if (!mounted) return;
-      final result = results[0] as Map<String, dynamic>;
-      final servicesResult = results[1] as Map<String, dynamic>;
+      final result = results[0];
+      final servicesResult = results[1];
 
       if (result['success']) {
         final rawWorkshop = Map<String, dynamic>.from(result['data'] ?? {});
@@ -273,34 +418,6 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         _loading = false;
       });
     }
-  }
-
-  Future<List<Map<String, dynamic>>> _loadWorkshopServices() async {
-    try {
-      final servicesResult = await _apiService.getWorkshopServices(widget.workshopId);
-      if (servicesResult['success']) {
-        final rawData = servicesResult['data'];
-        List<Map<String, dynamic>> servicesList = [];
-        if (rawData is List) {
-          servicesList = rawData
-              .whereType<Map>()
-              .map((service) => _normalizeService(Map<String, dynamic>.from(service)))
-              .toList();
-        } else if (rawData is Map) {
-          final nested = rawData['services'] ?? rawData['data'];
-          if (nested is List) {
-            servicesList = nested
-                .whereType<Map>()
-                .map((service) => _normalizeService(Map<String, dynamic>.from(service)))
-                .toList();
-          }
-        }
-        return servicesList;
-      }
-    } catch (e) {
-      print('Erro ao carregar serviços da oficina: $e');
-    }
-    return [];
   }
 
   @override
@@ -499,16 +616,28 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     final String workshopName = (_workshop!['name'] ?? 'Oficina').toString();
     final double? rating = _getWorkshopRating();
     
-    final raw = _workshop!['logo_url']?.toString()?.trim();
+    final raw = _workshop!['logo_url']?.toString().trim();
     final String? logoUrl = (raw != null && raw.isNotEmpty && raw.startsWith('http')) ? raw : null;
 
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return CustomScrollView(
       slivers: [
         // Header Minimalista com Gradiente Vertical
         SliverAppBar(
           expandedHeight: 280,
           pinned: true,
-          backgroundColor: const Color(0xFF121E29), // Mesma cor do gradiente final
+          backgroundColor: const Color(0xFF121E29),
+          leading: Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isDarkMode ? Colors.black.withOpacity(0.7) : Colors.white.withOpacity(0.8),
+            ),
+            child: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new, size: 18, color: isDarkMode ? Colors.white : Colors.black87),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
           actions: [
             IconButton(
               icon: Icon(
@@ -1091,24 +1220,12 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   }
 
   Future<void> _launchGoogleMaps(double lat, double lng) async {
-    final fullAddress = _buildFullAddress();
-    final Uri googleUrl;
-    if (fullAddress.isNotEmpty) {
-      googleUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(fullAddress)}&travelmode=driving');
-    } else {
-      googleUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
-    }
+    final googleUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
     await _launchExternalUrl(googleUrl);
   }
 
   Future<void> _launchWaze(double lat, double lng) async {
-    final fullAddress = _buildFullAddress();
-    final Uri wazeUrl;
-    if (fullAddress.isNotEmpty) {
-      wazeUrl = Uri.parse('https://waze.com/ul?q=${Uri.encodeComponent(fullAddress)}&navigate=yes');
-    } else {
-      wazeUrl = Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes');
-    }
+    final wazeUrl = Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes');
     await _launchExternalUrl(wazeUrl);
   }
 
@@ -1294,7 +1411,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                       ],
                     ),
                     Text(
-                      isOpen ? '${dayHours!['start']} - ${dayHours['end']}' : closedLabel,
+                      isOpen ? '${dayHours['start']} - ${dayHours['end']}' : closedLabel,
                       style: TextStyle(
                         color: isOpen ? const Color(0xFF00C977) : (noSchedule ? Colors.grey : Colors.red),
                         fontWeight: FontWeight.w500,
@@ -1591,150 +1708,6 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               );
   }
   
-  
-  Widget _buildPortfolioSection() {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00C977).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.photo_library, color: Color(0xFF00C977), size: 20),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Fotos da Oficina',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${_galleryPhotos.length} foto${_galleryPhotos.length != 1 ? 's' : ''}',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDarkMode ? Colors.white54 : Colors.black45,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 180,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _galleryPhotos.length,
-              itemBuilder: (context, index) {
-                final photo = _galleryPhotos[index];
-                final imageUrl = photo['image_url']?.toString() ?? '';
-                final caption = photo['caption']?.toString();
-                return GestureDetector(
-                  onTap: () => _showPhotoViewer(index),
-                  child: Container(
-                    width: 160,
-                    margin: EdgeInsets.only(right: index < _galleryPhotos.length - 1 ? 12 : 0),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (ctx, child, progress) {
-                              if (progress == null) return child;
-                              return Container(
-                                color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[200],
-                                child: const Center(
-                                  child: SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation(Color(0xFF00C977)),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                            errorBuilder: (ctx, err, stack) => Container(
-                              color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[200],
-                              child: Icon(Icons.broken_image, color: Colors.grey[400], size: 32),
-                            ),
-                          ),
-                          if (caption != null && caption.isNotEmpty)
-                            Positioned(
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.bottomCenter,
-                                    end: Alignment.topCenter,
-                                    colors: [
-                                      Colors.black.withOpacity(0.7),
-                                      Colors.transparent,
-                                    ],
-                                  ),
-                                ),
-                                child: Text(
-                                  caption,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _openGalleryScreen() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     Navigator.of(context).push(
@@ -1782,9 +1755,9 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                         Positioned(
                           left: 0, right: 0, bottom: 0,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                            decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Colors.black.withOpacity(0.7), Colors.transparent])),
-                            child: Text(caption, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Colors.black.withOpacity(0.8), Colors.transparent])),
+                            child: Text(caption, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
                           ),
                         ),
                     ],
@@ -1853,7 +1826,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                       child: Text(
                         caption,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
                       ),
                     ),
                   Positioned(

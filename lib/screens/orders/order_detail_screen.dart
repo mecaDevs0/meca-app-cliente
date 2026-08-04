@@ -7,7 +7,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/booking_timeline_widget.dart';
@@ -16,7 +15,6 @@ import '../../utils/price_utils.dart';
 import '../../widgets/app_alerts.dart';
 import '../payment/payment_screen.dart';
 import '../review/review_screen.dart';
-import 'booking_evidence_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Map<String, dynamic> booking;
@@ -558,7 +556,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       final result = await _apiService.getBookingTimeline(id);
       if (!mounted) return;
 
-      if (result is Map<String, dynamic> && result['success'] == true) {
+      if (result['success'] == true) {
         final data = result['data'];
         final events = (data is Map ? data['timeline'] : null)
             ?? result['timeline']
@@ -1263,7 +1261,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
                                           ),
                                           child: Text(
-                                            comment!,
+                                            comment,
                                             style: TextStyle(
                                               fontSize: 14,
                                               color: isDarkMode ? Colors.grey[200] : Colors.grey[800],
@@ -1635,7 +1633,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     // ── INTERACTIVE QUOTE VIEW (when pending + has detailed items) ──
     if (isQuotePending && hasDetailedQuote) {
-      _initQuoteSelection(quoteItems!);
+      _initQuoteSelection(quoteItems);
       final selectedTotal = _calculateQuoteSelectedTotal(quoteItems, diagnosticValue);
 
       return Column(
@@ -2003,7 +2001,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ...List<Widget>.from(quoteItems!.asMap().entries.map<Widget>((entry) {
+                  ...List<Widget>.from(quoteItems.asMap().entries.map<Widget>((entry) {
                     final index = entry.key;
                     final item = entry.value;
                     final description = item['description'] ?? 'Item sem descrição';
@@ -2880,11 +2878,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _buildActionButtons(String status) {
     final merged = _mergeBookingData();
-    // IMPORTANTE: Usar status do merged (que já foi corrigido se há sugestão pendente)
-    final finalStatus = merged['status'] ?? status;
-    final normalizedStatus = _normalizeStatusKey(finalStatus);
-    final rawStatus = finalStatus.toLowerCase();
-    
+
     // Verificar sugestão de horário com múltiplas variações de campos
     final suggestedBy = merged['suggested_by'] ?? 
                        merged['sugerido_por'] ?? 
@@ -4112,7 +4106,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final merged = _mergeBookingData();
     final quoteStatus = merged['quote_status'] ?? widget.booking['quote_status'];
     final isFinalQuote = quoteStatus == 'final';
-    final hasCompletedAt = merged['completed_at'] != null || widget.booking['completed_at'] != null;
     final diagnosticValueRaw = merged['diagnostic_value'] ?? widget.booking['diagnostic_value'];
     final diagnosticValue = _parseDiagnosticValue(diagnosticValueRaw);
     final hasDiagnostic = diagnosticValue != null && diagnosticValue > 0;
@@ -4181,7 +4174,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         _buildRejectInfoRow(
                           Icons.restore,
                           'Valor original',
-                          PriceUtils.formatCurrency(previousQuote!['final_price']) ?? 'R\$ 0,00',
+                          PriceUtils.formatCurrency(previousQuote['final_price']) ?? 'R\$ 0,00',
                           isDark ? Colors.blue.shade300 : Colors.blue.shade700,
                           isDark,
                         ),
@@ -4462,18 +4455,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     });
   }
 
-  Future<void> _viewEvidence() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BookingEvidenceScreen(
-          bookingId: widget.booking['id'],
-          booking: widget.booking,
-        ),
-      ),
-    );
-  }
-
   bool _shouldShowPrice() {
     final merged = _mergeBookingData();
     final serviceStartPending = merged['service_start_pending'] == true || merged['service_start_pending'] == 'true';
@@ -4603,7 +4584,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (_quoteSelectionInitialized) return;
     _quoteSelectionInitialized = true;
     for (var i = 0; i < quoteItems.length; i++) {
-      final priority = _parsePriority(quoteItems[i]['priority']);
       _quoteSelectedItems[i] = true;
       final options = quoteItems[i]['options'] as List?;
       if (options != null && options.isNotEmpty) {
@@ -5072,7 +5052,6 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
     super.initState();
     for (var i = 0; i < widget.quoteItems.length; i++) {
       final item = widget.quoteItems[i];
-      final priority = _parsePriority(item['priority']);
       _selectedItems[i] = true;
       final options = item['options'] as List?;
       if (options != null && options.isNotEmpty) {

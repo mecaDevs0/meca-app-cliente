@@ -5,8 +5,8 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
-import '../../config/app_config.dart';
 import '../../services/api_service.dart';
+import '../../widgets/meca_toast.dart';
 import '../../services/location_service.dart';
 import '../../utils/cep_formatter.dart';
 import '../../widgets/meca_loading_widget.dart';
@@ -47,13 +47,16 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   String _selectedRating = 'Todos';
   String _selectedInstallment = 'Todos';
   String _sortBy = 'distancia';
+  bool _showOnlyFavorites = false;
+  final Map<String, int> _heartBounceCounters = {};
 
   bool get _hasActiveFilters =>
       _selectedService != 'Todos' ||
       _selectedDistance != 'Todas' ||
       _selectedRating != 'Todos' ||
       _selectedInstallment != 'Todos' ||
-      _sortBy != 'distancia';
+      _sortBy != 'distancia' ||
+      _showOnlyFavorites;
 
   @override
   void initState() {
@@ -568,7 +571,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) => _buildWorkshopCard(_filteredWorkshops[index]),
@@ -582,38 +585,60 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   }
 
   Widget _buildErrorView() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 80,
-              color: Colors.red,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Erro ao carregar oficinas',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.wifi_off_rounded,
+                size: 48,
+                color: Colors.red,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 24),
+            Text(
+              'Erro ao carregar oficinas',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+              ),
+            ),
+            const SizedBox(height: 8),
             Text(
               _error,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _loadNearbyWorkshops,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00C977),
+              style: TextStyle(
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                fontSize: 14,
+                height: 1.4,
               ),
-              child: const Text('Tentar Novamente'),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _loadNearbyWorkshops,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Tentar Novamente'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00C977),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -622,28 +647,32 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   }
 
   Widget _buildEmptyState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.build_circle_outlined,
-              size: 100,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey.shade600
-                  : Colors.grey.shade400,
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00C977).withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.build_circle_outlined,
+                size: 48,
+                color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
+              ),
             ),
             const SizedBox(height: 24),
             Text(
               'Nenhuma oficina encontrada',
               style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : Colors.grey.shade900,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : Colors.grey.shade900,
               ),
               textAlign: TextAlign.center,
             ),
@@ -681,75 +710,75 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   Widget _buildWarningBanner(String message) {
     final theme = Theme.of(context);
     return Card(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       color: theme.colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      elevation: 2,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: const BoxDecoration(
               color: Color(0xFFFFF4E5),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
             ),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const CircleAvatar(
-                  radius: 18,
+                  radius: 14,
                   backgroundColor: Color(0xFFFFB74D),
-                  child: Icon(Icons.gps_off, color: Colors.white),
+                  child: Icon(Icons.gps_off, color: Colors.white, size: 16),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Não conseguimos sua localização',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF8B5E00),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        message,
-                        style: const TextStyle(
-                          color: Color(0xFF8B5E00),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    'Localização indisponível. Distâncias não serão exibidas.',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF8B5E00),
+                      height: 1.3,
+                    ),
                   ),
                 ),
-                TextButton.icon(
+                const SizedBox(width: 4),
+                TextButton(
                   onPressed: _loadNearbyWorkshops,
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Tentar GPS'),
-                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF8B5E00)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF8B5E00),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.refresh, size: 14),
+                      SizedBox(width: 4),
+                      Text('GPS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
 
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Informe o CEP onde você está',
+                  'Ou informe seu CEP',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
+                    fontSize: 13,
                     color: theme.colorScheme.onSurface,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Container(
                   decoration: BoxDecoration(
                     color: theme.brightness == Brightness.dark ? const Color(0xFF1F1F1F) : const Color(0xFFF8F9FB),
@@ -764,9 +793,10 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                   ),
                   child: Row(
                     children: [
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Icon(
                         Icons.location_searching,
+                        size: 20,
                         color: _manualCepError != null
                             ? Colors.red
                             : _manualCepSuccess
@@ -796,13 +826,14 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                       ),
                       const SizedBox(width: 8),
                       Padding(
-                        padding: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.only(right: 6),
                         child: ElevatedButton(
                           onPressed: _isManualCepLoading ? null : _handleCepSearch,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00C977),
                             foregroundColor: Colors.white,
-                            minimumSize: const Size(70, 40),
+                            minimumSize: const Size(60, 36),
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
                           child: _isManualCepLoading
@@ -837,29 +868,35 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   }
 
   Future<void> _toggleWorkshopFavorite(Map<String, dynamic> workshop) async {
-    final workshopId = workshop['id'];
-    final id = workshopId is int ? workshopId : int.tryParse(workshopId?.toString() ?? '');
-    if (id == null) return;
+    final workshopId = workshop['id']?.toString();
+    if (workshopId == null || workshopId.isEmpty) return;
 
-    // Optimistic update
+    final nowFavorite = !(workshop['is_favorite'] == true);
     setState(() {
-      workshop['is_favorite'] = !(workshop['is_favorite'] == true);
+      workshop['is_favorite'] = nowFavorite;
+      _heartBounceCounters[workshopId] = (_heartBounceCounters[workshopId] ?? 0) + 1;
     });
 
     try {
-      await _apiService.toggleWorkshopFavorite(id);
+      await _apiService.toggleWorkshopFavorite(workshopId);
+      if (mounted) {
+        MecaToast.showSuccess(context, nowFavorite ? 'Adicionada aos favoritos' : 'Removida dos favoritos');
+      }
     } catch (e) {
-      // Revert on error
       if (mounted) {
         setState(() {
-          workshop['is_favorite'] = !(workshop['is_favorite'] == true);
+          workshop['is_favorite'] = !nowFavorite;
         });
+        MecaToast.show(context, 'Erro ao atualizar favorito');
       }
     }
   }
 
   Widget _buildWorkshopCard(Map<String, dynamic> workshop) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardPadding = screenWidth >= 430 ? 20.0 : 16.0;
+    final logoSize = screenWidth >= 430 ? 72.0 : 64.0;
     // Usar distância real calculada (pode ser null se oficina não tem coordenadas)
     final distanceRaw = workshop['distance'];
     final double? distance = distanceRaw != null
@@ -873,7 +910,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         _parseDouble(workshop['rating']) ?? _parseDouble(workshop['average_rating']);
     
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFF00C977).withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
@@ -903,26 +940,25 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
               ),
             );
           },
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(cardPadding),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    // Logo: SEMPRE via proxy da API (evita 403 do S3). Tentar carregar sempre que tiver id (404 = placeholder).
                     Builder(
                       builder: (context) {
                         final rawLogo = workshop['logo_url']?.toString() ?? '';
                         final logoUrl = rawLogo.isNotEmpty && rawLogo.startsWith('http') ? rawLogo : null;
                         if (logoUrl == null || logoUrl.isEmpty) {
                           return Container(
-                            width: 70,
-                            height: 70,
+                            width: logoSize,
+                            height: logoSize,
                             decoration: BoxDecoration(
                               color: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[100],
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
                                 width: 1,
@@ -931,13 +967,13 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                             child: Icon(
                               Icons.store_outlined,
                               color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
-                              size: 28,
+                              size: logoSize * 0.4,
                             ),
                           );
                         }
                         return Container(
-                          width: 70,
-                          height: 70,
+                          width: logoSize,
+                          height: logoSize,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
@@ -953,18 +989,18 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                             child: Image.network(
                               logoUrl,
                               fit: BoxFit.cover,
-                              width: 70,
-                              height: 70,
+                              width: logoSize,
+                              height: logoSize,
                               errorBuilder: (context, error, stackTrace) {
                                 return Container(
                                   decoration: BoxDecoration(
                                     color: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey[200],
-                                    borderRadius: BorderRadius.circular(20),
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Icon(
                                     Icons.store_outlined,
                                     color: isDarkMode ? Colors.grey[500] : Colors.grey[400],
-                                    size: 28,
+                                    size: logoSize * 0.4,
                                   ),
                                 );
                               },
@@ -973,20 +1009,22 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                         );
                       },
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             workshop['name'] ?? 'Oficina',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 20,
+                              fontSize: 17,
                               fontWeight: FontWeight.bold,
                               color: isDarkMode ? const Color(0xFF00C977) : const Color(0xFF1A1A1A),
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           Row(
                             children: [
                               const Icon(
@@ -1000,7 +1038,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                   _formatAddress(workshop['address'] ?? workshop['address_details']),
                                   style: const TextStyle(
                                     color: Colors.grey,
-                                    fontSize: 14,
+                                    fontSize: 13,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -1008,10 +1046,8 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 8,
+                          const SizedBox(height: 6),
+                          Row(
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1025,57 +1061,61 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                                     const Icon(
                                       Icons.star,
                                       color: Colors.amber,
-                                      size: 16,
+                                      size: 14,
                                     ),
-                                    const SizedBox(width: 4),
+                                    const SizedBox(width: 3),
                                     Text(
                                       (ratingValue != null && ratingValue > 0 && ratingValue <= 5)
                                           ? ratingValue.toStringAsFixed(1)
                                           : '-',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 14,
+                                        fontSize: 12,
                                         color: isDarkMode ? Colors.white : const Color(0xFF1A1A1A),
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  // Se distância > 200km, usar vermelho; senão, verde
-                                  color: distance != null && distance > 200.0 
-                                      ? Colors.red.withOpacity(0.1)
-                                      : const Color(0xFF00C977).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.navigation,
-                                      // Se distância > 200km, usar vermelho; senão, verde
-                                      color: distance != null && distance > 200.0 
-                                          ? Colors.red
-                                          : const Color(0xFF00C977),
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      distance != null && distance > 0
-                                          ? _formatDistance(distance)
-                                          : 'Distância Indisponível',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                        // Se distância > 200km, usar vermelho; senão, verde
-                                        color: distance != null && distance > 200.0 
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: distance != null && distance > 200.0
+                                        ? Colors.red.withOpacity(0.1)
+                                        : const Color(0xFF00C977).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.navigation,
+                                        color: distance != null && distance > 200.0
                                             ? Colors.red
-                                            : (isDarkMode ? const Color(0xFF00C977) : const Color(0xFF00C977)),
+                                            : const Color(0xFF00C977),
+                                        size: 14,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 3),
+                                      Flexible(
+                                        child: Text(
+                                          distance != null && distance > 0
+                                              ? _formatDistance(distance)
+                                              : 'Sem distância',
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                            color: distance != null && distance > 200.0
+                                                ? Colors.red
+                                                : const Color(0xFF00C977),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -1083,26 +1123,48 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    // Favorite heart icon
                     GestureDetector(
                       onTap: () => _toggleWorkshopFavorite(workshop),
-                      child: Icon(
-                        workshop['is_favorite'] == true ? Icons.favorite : Icons.favorite_border,
-                        color: workshop['is_favorite'] == true
-                            ? const Color(0xFF00C977)
-                            : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
-                        size: 22,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: TweenAnimationBuilder<double>(
+                          key: ValueKey('heart_${workshop['id']}_${_heartBounceCounters[workshop['id']?.toString()] ?? 0}'),
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: const Duration(milliseconds: 350),
+                          curve: Curves.elasticOut,
+                          builder: (context, value, child) {
+                            final scale = 0.5 + (value * 0.5);
+                            return Transform.scale(
+                              scale: scale,
+                              child: child,
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: workshop['is_favorite'] != true ? BoxDecoration(
+                              color: isDarkMode ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.04),
+                              borderRadius: BorderRadius.circular(16),
+                            ) : null,
+                            child: Icon(
+                              workshop['is_favorite'] == true ? Icons.favorite : Icons.favorite_border,
+                              color: workshop['is_favorite'] == true
+                                  ? const Color(0xFFFF4B6E)
+                                  : (isDarkMode ? Colors.white.withOpacity(0.5) : Colors.grey[600]),
+                              size: 26,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
                 // Services
                 if (workshop['services'] != null)
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 6,
+                    runSpacing: 6,
                     children: (workshop['services'] as List).take(3).map((service) {
                       // Capitalizar primeira letra de cada palavra
                       final serviceName = service.toString();
@@ -1112,12 +1174,12 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                       }).join(' ');
                       
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isDarkMode 
+                          color: isDarkMode
                               ? const Color(0xFF00C977).withOpacity(0.15)
                               : const Color(0xFF00C977).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: const Color(0xFF00C977).withOpacity(0.2),
                           ),
@@ -1126,23 +1188,23 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                           capitalizedService,
                           style: TextStyle(
                             color: const Color(0xFF00C977),
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                       );
                     }).toList(),
                   ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 // Action button
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF00C977), Color(0xFF00B369)],
                     ),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Text(
                     'Ver Detalhes',
@@ -1150,7 +1212,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 14,
                     ),
                   ),
                 ),
@@ -1165,6 +1227,11 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
   void _applyFilters() {
     setState(() {
       _filteredWorkshops = _workshops.where((workshop) {
+        // Filtro de favoritas
+        if (_showOnlyFavorites && workshop['is_favorite'] != true) {
+          return false;
+        }
+
         // Filtro por nome/bairro/endereço
         if (_searchController.text.isNotEmpty) {
           final searchText = _searchController.text.toLowerCase();
@@ -1322,6 +1389,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                             _selectedRating = 'Todos';
                             _selectedInstallment = 'Todos';
                             _sortBy = 'distancia';
+                            _showOnlyFavorites = false;
                           });
                           setState(() {
                             _selectedService = 'Todos';
@@ -1329,6 +1397,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                             _selectedRating = 'Todos';
                             _selectedInstallment = 'Todos';
                             _sortBy = 'distancia';
+                            _showOnlyFavorites = false;
                           });
                           _applyFilters();
                           Navigator.pop(context);
@@ -1348,6 +1417,60 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Filtro de favoritas
+                        GestureDetector(
+                          onTap: () {
+                            setModalState(() => _showOnlyFavorites = !_showOnlyFavorites);
+                            setState(() {});
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            margin: const EdgeInsets.only(bottom: 20),
+                            decoration: BoxDecoration(
+                              color: _showOnlyFavorites
+                                  ? const Color(0xFFFF4B6E).withOpacity(0.1)
+                                  : (isDarkMode ? const Color(0xFF252525) : Colors.grey[100]),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: _showOnlyFavorites
+                                    ? const Color(0xFFFF4B6E).withOpacity(0.4)
+                                    : Colors.transparent,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _showOnlyFavorites ? Icons.favorite : Icons.favorite_border,
+                                  color: _showOnlyFavorites
+                                      ? const Color(0xFFFF4B6E)
+                                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Apenas oficinas favoritas',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: _showOnlyFavorites ? FontWeight.w600 : FontWeight.w400,
+                                      color: _showOnlyFavorites
+                                          ? const Color(0xFFFF4B6E)
+                                          : (isDarkMode ? Colors.white70 : Colors.black87),
+                                    ),
+                                  ),
+                                ),
+                                Icon(
+                                  _showOnlyFavorites ? Icons.check_circle : Icons.circle_outlined,
+                                  color: _showOnlyFavorites
+                                      ? const Color(0xFFFF4B6E)
+                                      : (isDarkMode ? Colors.grey[600] : Colors.grey[400]),
+                                  size: 22,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
                         // Seção de Ordenação
                         Container(
                           padding: const EdgeInsets.all(16),
@@ -1508,8 +1631,11 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                         child: OutlinedButton(
                           onPressed: () => Navigator.pop(context),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFF00C977)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            foregroundColor: const Color(0xFF00C977),
+                            side: const BorderSide(color: Color(0xFF00C977), width: 1.5),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                           ),
                           child: const Text('Cancelar'),
                         ),
@@ -1519,21 +1645,20 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
                         child: ElevatedButton(
                           onPressed: () {
                             setState(() {
-                              // Aplicar filtros e atualizar estado
                               _applyFilters();
                             });
                             Navigator.pop(context);
-                            // Recarregar lista após aplicar filtros
                             setState(() {});
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00C977),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                            elevation: 0,
                           ),
-                          child: const Text(
-                            'Aplicar',
-                            style: TextStyle(color: Colors.white),
-                          ),
+                          child: const Text('Aplicar'),
                         ),
                       ),
                     ],
@@ -1556,30 +1681,23 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
-          color: isSelected 
-              ? const Color(0xFF00C977).withOpacity(0.15) 
+          color: isSelected
+              ? const Color(0xFF00C977)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected 
-                ? const Color(0xFF00C977) 
+            color: isSelected
+                ? const Color(0xFF00C977)
                 : (isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
             width: isSelected ? 2 : 1,
           ),
-          boxShadow: isSelected ? [
-            BoxShadow(
-              color: const Color(0xFF00C977).withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ] : null,
         ),
         child: Row(
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-              color: isSelected 
-                  ? const Color(0xFF00C977) 
+              color: isSelected
+                  ? Colors.white
                   : (isDarkMode ? Colors.grey[400] : Colors.grey[400]!),
               size: 20,
             ),
@@ -1587,8 +1705,8 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
             Text(
               title,
               style: TextStyle(
-                color: isSelected 
-                    ? const Color(0xFF00C977) 
+                color: isSelected
+                    ? Colors.white
                     : (isDarkMode ? Colors.white70 : Colors.grey[600]!),
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                 fontSize: 15,

@@ -23,6 +23,8 @@ import 'screens/workshops/favorite_workshops_screen.dart';
 import 'screens/mia/mia_chat_screen.dart';
 import 'screens/payment/payment_history_screen.dart';
 import 'screens/pre_compra/pre_compra_detail_screen.dart';
+import 'screens/loyalty/loyalty_screen.dart';
+import 'screens/referral/referral_screen.dart';
 import 'services/theme_service.dart';
 import 'services/notification_service.dart';
 import 'services/onesignal_service.dart';
@@ -134,16 +136,6 @@ void main() async {
         if (payload == null) return;
 
         try {
-          // Tentar parsear como JSON primeiro
-          Map<String, dynamic>? jsonData;
-          try {
-            jsonData = Map<String, dynamic>.from(
-              (payload.startsWith('{'))
-                  ? (Map<String, dynamic>.from({})) // placeholder
-                  : {},
-            );
-          } catch (_) {}
-
           // Fallback: formato legado type|id
           final parts = payload.split('|');
           if (parts.length >= 2) {
@@ -231,7 +223,7 @@ class _MecaClienteAppState extends State<MecaClienteApp> {
 
   void _initDeepLinks() {
     _appLinks.uriLinkStream.listen((Uri uri) {
-      _handleDeepLink(uri);
+      Future.delayed(const Duration(milliseconds: 300), () => _handleDeepLink(uri));
     });
     _appLinks.getInitialLink().then((uri) {
       if (uri != null) {
@@ -240,7 +232,7 @@ class _MecaClienteAppState extends State<MecaClienteApp> {
     });
   }
 
-  void _handleDeepLink(Uri uri) async {
+  Future<void> _handleDeepLink(Uri uri) async {
     final pathSegments = uri.pathSegments;
     String? workshopId;
 
@@ -267,10 +259,14 @@ class _MecaClienteAppState extends State<MecaClienteApp> {
     }
 
     if (workshopId != null && workshopId.isNotEmpty) {
-      navigatorKey.currentState?.pushNamed(
-        '/workshop-detail',
-        arguments: {'id': workshopId},
-      );
+      for (int i = 0; i < 5; i++) {
+        final nav = navigatorKey.currentState;
+        if (nav != null) {
+          nav.pushNamed('/workshop-detail', arguments: {'id': workshopId});
+          return;
+        }
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
     }
   }
 
@@ -372,6 +368,10 @@ class _MecaClienteAppState extends State<MecaClienteApp> {
                   return MaterialPageRoute(builder: (_) => const MiaChatScreen());
                 case '/favorite-workshops':
                   return MaterialPageRoute(builder: (_) => const FavoriteWorkshopsScreen());
+                case '/loyalty':
+                  return MaterialPageRoute(builder: (_) => const LoyaltyScreen());
+                case '/referral':
+                  return MaterialPageRoute(builder: (_) => const ReferralScreen());
                 default:
                   return MaterialPageRoute(builder: (_) => const SplashScreen());
               }

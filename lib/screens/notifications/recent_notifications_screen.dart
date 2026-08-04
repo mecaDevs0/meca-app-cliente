@@ -6,7 +6,6 @@ import '../../widgets/meca_toast.dart';
 import '../../providers/notification_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
-import '../../widgets/app_alerts.dart';
 
 class RecentNotificationsScreen extends StatefulWidget {
   const RecentNotificationsScreen({Key? key}) : super(key: key);
@@ -155,23 +154,33 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
                 const Spacer(),
                 GestureDetector(
                   onTap: _unreadCount > 0 ? _markAllAsRead : null,
-                  child: Opacity(
-                    opacity: _unreadCount > 0 ? 1.0 : 0.3,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _unreadCount > 0
+                          ? const Color(0xFF00C977).withOpacity(0.12)
+                          : Colors.grey.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.done_all_rounded,
-                          size: 15,
-                          color: (isDark ? Colors.white : const Color(0xFF252940)).withOpacity(0.45),
+                          size: 18,
+                          color: _unreadCount > 0
+                              ? const Color(0xFF00C977)
+                              : Colors.grey,
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 6),
                         Text(
                           'Ler todas',
                           style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: (isDark ? Colors.white : const Color(0xFF252940)).withOpacity(0.45),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: _unreadCount > 0
+                                ? const Color(0xFF00C977)
+                                : Colors.grey,
                           ),
                         ),
                       ],
@@ -241,7 +250,7 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
   }
 
   Widget _buildNotificationCard(Map<String, dynamic> notification, ThemeService themeService) {
-    final isRead = notification['read'] == true;
+    final isRead = notification['read'] == true || notification['is_read'] == true;
     final date = notification['created_at'] != null ? DateTime.tryParse(notification['created_at']) : null;
 
     return Container(

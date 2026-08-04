@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
@@ -11,7 +10,8 @@ import '../notifications/recent_notifications_screen.dart';
 import '../../providers/notification_provider.dart';
 import '../../utils/formatters.dart';
 import 'edit_password_screen.dart';
-import '../payment/payment_history_screen.dart';
+import '../loyalty/loyalty_screen.dart';
+import '../referral/referral_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -399,7 +399,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: const Color(0xFF00C977).withOpacity(isDark ? 0.25 : 0.35),
+          width: 0.8,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -479,8 +487,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         _buildSettingTile(
           icon: Icons.favorite,
-          title: 'Minhas Oficinas',
-          subtitle: 'Oficinas favoritadas',
+          title: 'Oficinas Favoritas',
+          subtitle: 'Oficinas que você salvou',
           onTap: () => Navigator.pushNamed(context, '/favorite-workshops'),
         ),
         _buildSettingTile(
@@ -488,6 +496,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           title: 'Meus Pagamentos',
           subtitle: 'Histórico de pagamentos realizados',
           onTap: () => Navigator.pushNamed(context, '/payment-history'),
+        ),
+        _buildSettingTile(
+          icon: Icons.star,
+          title: 'Meus Pontos',
+          subtitle: 'Programa de fidelidade MECA',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LoyaltyScreen()),
+            );
+          },
+        ),
+        _buildSettingTile(
+          icon: Icons.card_giftcard,
+          title: 'Indique e Ganhe',
+          subtitle: 'Convide amigos e ganhe R\$ 10',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ReferralScreen()),
+            );
+          },
         ),
         _buildSettingTile(
           icon: Icons.notifications,
@@ -698,132 +728,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Navigator.pushNamed(context, '/help');
   }
 
-  Widget _buildModernContactSection(
-    bool isDark,
-    IconData icon,
-    String label,
-    String value,
-    Color iconColor,
-    VoidCallback? onTap,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[50],
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                color: iconColor,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.grey[300] : Colors.grey[700],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? Colors.white : const Color(0xFF252940),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (onTap != null)
-              Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFAQItem(bool isDark, String question, String answer) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
-          width: 1,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            margin: const EdgeInsets.only(top: 6),
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: const Color(0xFF00C977),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  question,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: isDark ? Colors.white : const Color(0xFF252940),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  answer,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.white70 : Colors.black54,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _syncNotifications() async {
     try {
       final result = await _apiService.getNotifications(limit: 100);
@@ -881,36 +785,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         print('Erro ao sincronizar notificações: $e');
       }
     }
-  }
-
-  Widget _buildContactInfo(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: const Color(0xFF00C977)),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
   }
 
   void _logout() {

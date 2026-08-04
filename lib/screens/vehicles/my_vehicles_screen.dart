@@ -186,11 +186,22 @@ class _MyVehiclesScreenState extends State<MyVehiclesScreen> {
               ),
             ),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.add_circle, color: Color(0xFF00C977), size: 28),
-                onPressed: () {
-                  Navigator.pushNamed(context, '/add-vehicle').then((_) => _loadVehicles(forceRefresh: true));
-                },
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.pushNamed(context, '/add-vehicle').then((_) => _loadVehicles(forceRefresh: true));
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00C977).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF00C977).withOpacity(0.4)),
+                    ),
+                    child: const Icon(Icons.add_rounded, color: Color(0xFF00C977), size: 22),
+                  ),
+                ),
               ),
             ],
           ),

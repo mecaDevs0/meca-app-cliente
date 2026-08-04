@@ -229,17 +229,17 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
     final status = payment['status'] as String? ?? '';
     final installments = int.tryParse(payment['installments']?.toString() ?? '') ?? 1;
     final createdAtRaw = payment['created_at'] as String?;
-    final bookingId = payment['booking_id']?.toString() ?? '';
-    final paymentId = payment['id']?.toString() ?? '';
 
-    // Derive display name: prefer booking service name or a readable fallback
     final serviceName = payment['service_name'] as String?;
     final workshopName = payment['workshop_name'] as String?;
+    final vehicleDisplay = payment['vehicle_display'] as String? ?? payment['vehicle_model'] as String?;
     final displayTitle = serviceName?.isNotEmpty == true
         ? serviceName!
-        : bookingId.isNotEmpty
-            ? 'Agendamento #${bookingId.substring(0, bookingId.length.clamp(0, 8))}'
-            : 'Pagamento #${paymentId.substring(0, paymentId.length.clamp(0, 8))}';
+        : (workshopName?.isNotEmpty == true ? workshopName! : 'Pagamento');
+    final subtitleParts = <String>[];
+    if (vehicleDisplay?.isNotEmpty == true) subtitleParts.add(vehicleDisplay!);
+    if (serviceName?.isNotEmpty == true && workshopName?.isNotEmpty == true) subtitleParts.add(workshopName!);
+    final displaySubtitle = subtitleParts.isNotEmpty ? subtitleParts.join(' • ') : null;
 
     DateTime? parsedDate;
     if (createdAtRaw != null) {
@@ -299,7 +299,18 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (workshopName != null && workshopName.isNotEmpty) ...[
+                      if (displaySubtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          displaySubtitle,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ] else if (workshopName != null && workshopName.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
                           workshopName,

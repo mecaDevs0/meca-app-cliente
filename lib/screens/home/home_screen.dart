@@ -10,7 +10,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../config/app_config.dart';
 import '../../services/api_service.dart';
 import '../../services/location_service.dart';
 import '../../services/theme_service.dart';
@@ -118,14 +117,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
         final inProgress = bookings.where((b) {
           final status = (b['status'] ?? '').toString().toLowerCase();
-          return status == 'em_andamento' || status == 'in_progress';
+          return status == 'em_andamento' || status == 'in_progress' ||
+                 status == 'veiculo_na_oficina' || status == 'vehicle_at_workshop';
         }).toList();
 
         final now = DateTime.now();
         final upcoming = bookings.where((b) {
           final status = b['status'] ?? '';
           final statusLower = status.toString().toLowerCase();
-          if (statusLower == 'em_andamento' || statusLower == 'in_progress') return false;
+          if (statusLower == 'em_andamento' || statusLower == 'in_progress' ||
+              statusLower == 'veiculo_na_oficina' || statusLower == 'vehicle_at_workshop') return false;
           final isPendingOrConfirmed = status == 'pendente_oficina' || status == 'confirmed' || status == 'confirmado' ||
               status == 'pendente_cliente' || status == 'aguardando_autorizacao_inicio' ||
               statusLower == 'awaiting_service_start' || statusLower == 'pending_cliente' || statusLower == 'pending_customer';
@@ -335,23 +336,69 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             builder: (context) {
               final screenWidth = MediaQuery.of(context).size.width;
               final isSmall = screenWidth < 375;
-              final isLarge = screenWidth >= 414;
+              final isXLarge = screenWidth >= 430;
+              final isLarge = !isXLarge && screenWidth >= 414;
 
-              final miaWidthFactor = isSmall ? 0.30 : (isLarge ? 0.38 : 0.34);
-              final contentLeftFactor = isSmall ? 0.20 : (isLarge ? 0.26 : 0.23);
-              final miaOffsetFactor = isSmall ? -0.04 : (isLarge ? -0.08 : -0.06);
+              final double miaWidthFactor;
+              final double contentLeftFactor;
+              final double miaOffsetFactor;
+              final double titleFontSize;
+              final double titleLetterSpacing;
+              final double subtitleFontSize;
+              final double descFontSize;
+              final double arrowPadding;
+              final double arrowSize;
+              final double arrowGap;
+
+              if (isXLarge) {
+                miaWidthFactor = 0.42;
+                contentLeftFactor = 0.28;
+                miaOffsetFactor = -0.09;
+                titleFontSize = 24.0;
+                titleLetterSpacing = 1.8;
+                subtitleFontSize = 17.0;
+                descFontSize = 14.0;
+                arrowPadding = 12.0;
+                arrowSize = 18.0;
+                arrowGap = 10.0;
+              } else if (isLarge) {
+                miaWidthFactor = 0.38;
+                contentLeftFactor = 0.26;
+                miaOffsetFactor = -0.08;
+                titleFontSize = 22.0;
+                titleLetterSpacing = 1.5;
+                subtitleFontSize = 16.0;
+                descFontSize = 13.0;
+                arrowPadding = 10.0;
+                arrowSize = 16.0;
+                arrowGap = 8.0;
+              } else if (isSmall) {
+                miaWidthFactor = 0.30;
+                contentLeftFactor = 0.20;
+                miaOffsetFactor = -0.04;
+                titleFontSize = 16.0;
+                titleLetterSpacing = 0.5;
+                subtitleFontSize = 14.0;
+                descFontSize = 12.0;
+                arrowPadding = 8.0;
+                arrowSize = 14.0;
+                arrowGap = 4.0;
+              } else {
+                miaWidthFactor = 0.34;
+                contentLeftFactor = 0.23;
+                miaOffsetFactor = -0.06;
+                titleFontSize = 18.0;
+                titleLetterSpacing = 0.8;
+                subtitleFontSize = 16.0;
+                descFontSize = 13.0;
+                arrowPadding = 10.0;
+                arrowSize = 16.0;
+                arrowGap = 8.0;
+              }
 
               final miaWidth = screenWidth * miaWidthFactor;
               final miaHeight = miaWidth * 1.8;
               final contentLeft = screenWidth * contentLeftFactor;
-
-              final titleFontSize = isSmall ? 16.0 : (isLarge ? 22.0 : 18.0);
-              final titleLetterSpacing = isSmall ? 1.0 : (isLarge ? 2.0 : 1.5);
-              final subtitleFontSize = isSmall ? 14.0 : 16.0;
-              final descFontSize = isSmall ? 12.0 : 13.0;
-              final arrowPadding = isSmall ? 8.0 : 10.0;
-              final arrowSize = isSmall ? 14.0 : 16.0;
-              final arrowGap = isSmall ? 4.0 : 8.0;
 
               return Stack(
                 clipBehavior: Clip.none,
@@ -411,16 +458,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   ),
                                   const SizedBox(width: 8),
                                   Flexible(
-                                    child: Text(
-                                      'DIAGNÓSTICO',
-                                      style: TextStyle(
-                                        fontSize: titleFontSize,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: titleLetterSpacing,
-                                        color: const Color(0xFF00C977),
-                                        height: 1.1,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        'DIAGNÓSTICO',
+                                        style: TextStyle(
+                                          fontSize: titleFontSize,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: titleLetterSpacing,
+                                          color: const Color(0xFF00C977),
+                                          height: 1.1,
+                                        ),
                                       ),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
@@ -572,7 +622,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ? const Color(0xFF1E1E1E) // Carbono/Neutro (tema escuro)
                         : const Color(0xFFF5F5F5), // Cinza Claro (tema claro)
                     iconColor: const Color(0xFF00C977),
-                    onTap: () => Navigator.pushNamed(context, '/orders'),
+                    onTap: () => Navigator.pushNamed(context, '/orders', arguments: 2),
                   );
                 },
               ),
@@ -1441,7 +1491,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final double? ratingValue =
         _parseDouble(workshop['rating']) ?? _parseDouble(workshop['average_rating']);
     final rawLogo = workshop['logo_url']?.toString() ?? '';
-    final workshopId = workshop['id']?.toString();
     // Usa a presigned URL da API diretamente (S3 presigned ou URL válida)
     final String? logoUrl = rawLogo.isNotEmpty && rawLogo.startsWith('http') ? rawLogo : null;
     final hasLogo = logoUrl != null;
@@ -1517,7 +1566,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               clipBehavior: Clip.hardEdge,
                               children: [
                                 Image.network(
-                                  logoUrl!,
+                                  logoUrl,
                                   width: double.infinity,
                                   height: 120,
                                   fit: BoxFit.cover,
@@ -1905,6 +1954,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       'confirmado': Colors.blue,
       'confirmado_oficina': Colors.blue,
       'confirmed': Colors.blue,
+      'veiculo_na_oficina': Colors.cyan,
+      'vehicle_at_workshop': Colors.cyan,
       'em_andamento': Colors.purple,
       'in_progress': Colors.purple,
       'started': Colors.purple,
@@ -1935,6 +1986,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       'confirmado': 'Confirmado',
       'confirmado_oficina': 'Confirmado',
       'confirmed': 'Confirmado',
+      'veiculo_na_oficina': 'Na Oficina',
+      'vehicle_at_workshop': 'Na Oficina',
       'em_andamento': 'Em Andamento',
       'in_progress': 'Em Andamento',
       'started': 'Em Andamento',
@@ -2098,7 +2151,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final booking = _inProgressBookings.first; // Pegar o primeiro serviço em andamento
     final serviceName = booking['service_name'] ?? booking['service']?['name'] ?? 'Serviço';
     final workshopName = booking['workshop_name'] ?? booking['workshop']?['name'] ?? 'Oficina';
-    final workshopId = booking['workshop_id']?.toString() ?? booking['workshop']?['id']?.toString();
     final rawLogo = booking['workshop_logo_url'] ?? booking['workshop']?['logo_url']?.toString() ?? '';
     // Usa presigned URL da API diretamente
     final workshopLogoUrl = rawLogo.toString().trim().isNotEmpty && rawLogo.toString().startsWith('http')
@@ -2147,7 +2199,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: Image.network(
-                            workshopLogoUrl!,
+                            workshopLogoUrl,
                             width: 40,
                             height: 40,
                             fit: BoxFit.cover,

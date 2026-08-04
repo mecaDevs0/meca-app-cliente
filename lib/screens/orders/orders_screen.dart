@@ -16,7 +16,8 @@ import 'expired_bookings_screen.dart';
 import '../pre_compra/pre_compra_detail_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
-  const OrdersScreen({Key? key}) : super(key: key);
+  final int? initialTab;
+  const OrdersScreen({Key? key, this.initialTab}) : super(key: key);
 
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
@@ -35,12 +36,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    final initialIndex = (widget.initialTab ?? 0).clamp(0, 2);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: initialIndex);
+    final statuses = ['pendente_oficina', 'confirmado', 'finalizado_cliente'];
+    _currentStatus = statuses[initialIndex];
     _pendingSearchController.addListener(() {
       if (mounted) setState(() => _pendingSearchQuery = _pendingSearchController.text);
     });
     _tabController.addListener(() {
-      final statuses = ['pendente_oficina', 'confirmado', 'finalizado_cliente'];
       setState(() {
         final index = _tabController.index;
         if (index >= 0 && index < statuses.length) {
@@ -449,21 +452,6 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     final textPrimary = isDarkMode ? Colors.white : Colors.black87;
     final textSecondary = isDarkMode ? Colors.white70 : Colors.black54;
 
-    int awaitingWorkshop = 0;
-    int awaitingYou = 0;
-    int awaitingPayment = 0;
-    for (final b in pendingBookings) {
-      final normalized = _normalizeStatusKeyForList((b['status'] ?? '').toString());
-      if (normalized == 'pending') {
-        awaitingWorkshop += 1;
-      } else if (normalized == 'awaiting_payment') {
-        awaitingPayment += 1;
-        awaitingYou += 1; // pagamento é ação do cliente
-      } else {
-        awaitingYou += 1;
-      }
-    }
-
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       padding: const EdgeInsets.all(16),
@@ -522,90 +510,6 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildPendingPillCompact({
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color bg,
-    required Color fg,
-    bool isMuted = false,
-  }) {
-    final effectiveFg = isMuted ? fg.withOpacity(0.55) : fg;
-    final effectiveBg = isMuted ? bg.withOpacity(0.55) : bg;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: effectiveBg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: effectiveFg),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: effectiveFg,
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                value,
-                style: TextStyle(
-                  color: effectiveFg,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPendingPill({
-    required String label,
-    required IconData icon,
-    required Color bg,
-    required Color fg,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: fg),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: fg,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _normalizeStatusKeyForList(String rawStatus) {
     final normalized = rawStatus.toLowerCase().trim();
     switch (normalized) {
@@ -632,6 +536,9 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       case 'confirmed':
       case 'confirmado_oficina':
         return 'confirmed';
+      case 'veiculo_na_oficina':
+      case 'vehicle_at_workshop':
+        return 'in_progress';
       case 'em_andamento':
       case 'in_progress':
       case 'started':
@@ -1732,6 +1639,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       'confirmado': 'confirmed',
       'confirmado_oficina': 'confirmed',
       'confirmed': 'confirmed',
+      'veiculo_na_oficina': 'in_progress',
+      'vehicle_at_workshop': 'in_progress',
       'em_andamento': 'in_progress',
       'em andamento': 'in_progress',
       'in_progress': 'in_progress',

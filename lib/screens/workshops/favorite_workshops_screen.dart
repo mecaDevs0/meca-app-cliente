@@ -47,7 +47,7 @@ class _FavoriteWorkshopsScreenState extends State<FavoriteWorkshopsScreen> {
     }
   }
 
-  Future<void> _toggleFavorite(int workshopId, int index) async {
+  Future<void> _toggleFavorite(String workshopId, int index) async {
     try {
       await _apiService.toggleWorkshopFavorite(workshopId);
       if (!mounted) return;
@@ -73,7 +73,7 @@ class _FavoriteWorkshopsScreenState extends State<FavoriteWorkshopsScreen> {
             surfaceTintColor: Colors.transparent,
             backgroundColor: isDark ? const Color(0xFF111111) : Colors.white,
             title: Text(
-              'Minhas Oficinas',
+              'Oficinas Favoritas',
               style: TextStyle(
                 color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                 fontWeight: FontWeight.w700,
@@ -201,26 +201,19 @@ class _FavoriteWorkshopsScreenState extends State<FavoriteWorkshopsScreen> {
     if (ratingRaw is num) rating = ratingRaw.toDouble();
     if (ratingRaw is String) rating = double.tryParse(ratingRaw);
 
+    final address = (workshop['address'] ?? '').toString();
     final city = (workshop['city'] ?? '').toString();
-    final neighborhood = (workshop['neighborhood'] ?? '').toString();
-    final locationParts = [neighborhood, city].where((s) => s.isNotEmpty).toList();
-    final locationText = locationParts.isNotEmpty ? locationParts.join(', ') : 'Localização não informada';
+    final locationText = address.isNotEmpty ? address : (city.isNotEmpty ? city : 'Localização não informada');
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFF00C977).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDark ? const Color(0xFF333333) : Colors.grey[200]!,
+          color: isDark ? const Color(0xFF333333) : const Color(0xFF00C977).withOpacity(0.2),
+          width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -235,123 +228,173 @@ class _FavoriteWorkshopsScreenState extends State<FavoriteWorkshopsScreen> {
               if (mounted) _loadFavorites();
             });
           },
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(13),
-                    child: logoUrl != null
-                        ? Image.network(
-                            logoUrl,
-                            width: 56,
-                            height: 56,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Icon(
+                Row(
+                  children: [
+                    // Logo — mesmo estilo da tela principal
+                    Builder(
+                      builder: (context) {
+                        if (logoUrl == null) {
+                          return Container(
+                            width: 70,
+                            height: 70,
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                                width: 1,
+                              ),
+                            ),
+                            child: Icon(
                               Icons.store_outlined,
-                              color: isDark ? Colors.grey[500] : Colors.grey[400],
-                              size: 24,
+                              color: isDark ? Colors.grey[600] : Colors.grey[400],
+                              size: 28,
                             ),
-                          )
-                        : Icon(
-                            Icons.store_outlined,
-                            color: isDark ? Colors.grey[500] : Colors.grey[400],
-                            size: 24,
+                          );
+                        }
+                        return Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF00C977).withOpacity(0.3),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                // Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      if (rating != null && rating > 0 && rating <= 5)
-                        Row(
-                          children: [
-                            const Icon(Icons.star, color: Colors.amber, size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              rating.toStringAsFixed(1),
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.white70 : Colors.grey[700],
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Image.network(
+                              logoUrl,
+                              fit: BoxFit.cover,
+                              width: 70,
+                              height: 70,
+                              errorBuilder: (_, __, ___) => Container(
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Icon(
+                                  Icons.store_outlined,
+                                  color: isDark ? Colors.grey[500] : Colors.grey[400],
+                                  size: 28,
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      const SizedBox(height: 4),
-                      Row(
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.location_on,
-                            size: 14,
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          Text(
+                            name,
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? const Color(0xFF00C977) : const Color(0xFF1A1A1A),
+                            ),
                           ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              locationText,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.location_on,
+                                color: Color(0xFF00C977),
+                                size: 16,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  locationText,
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 14,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.star, color: Colors.amber, size: 16),
+                                const SizedBox(width: 4),
+                                Text(
+                                  (rating != null && rating > 0 && rating <= 5)
+                                      ? rating.toStringAsFixed(1)
+                                      : '-',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                // Heart + Arrow
-                Column(
-                  children: [
+                    ),
                     GestureDetector(
                       onTap: () {
                         final id = workshop['id'];
                         if (id != null) {
-                          _toggleFavorite(id is int ? id : int.tryParse(id.toString()) ?? 0, index);
+                          _toggleFavorite(id.toString(), index);
                         }
                       },
-                      child: const Icon(
-                        Icons.favorite,
-                        color: Color(0xFF00C977),
-                        size: 22,
+                      behavior: HitTestBehavior.opaque,
+                      child: const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Icon(
+                          Icons.favorite,
+                          color: Color(0xFFFF4B6E),
+                          size: 26,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 14,
-                      color: isDark ? Colors.grey[500] : Colors.grey[400],
-                    ),
                   ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF00C977), Color(0xFF00B369)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Ver Detalhes',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
               ],
             ),

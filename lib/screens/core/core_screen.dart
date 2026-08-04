@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/theme_service.dart';
@@ -29,21 +30,23 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
   late PageController _pageController;
   final ApiService _apiService = ApiService();
   
-  final List<Widget> _pages = [
-    const HomeScreen(),
-    const WorkshopsScreen(),
-    const OrdersScreen(),
-    const ProfileScreen(),
-  ];
+  late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex ?? 0;
     _pageController = PageController(initialPage: _currentIndex);
+    _pages = [
+      HomeScreen(onNavigateToTab: _onNavTap),
+      const WorkshopsScreen(),
+      OrdersScreen(initialTab: widget.ordersInitialTab),
+      const ProfileScreen(),
+    ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _refreshUnreadNotifications();
+      _checkReactivation();
       if (_currentIndex == _pages.length - 1) {
         Provider.of<NotificationProvider>(context, listen: false).markProfileBadgeSeen();
       }
@@ -98,6 +101,181 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
       // Apenas logar no debug para evitar travamentos na UI
       debugPrint('Erro ao atualizar notificações: $e');
     }
+  }
+
+  Future<void> _checkReactivation() async {
+    try {
+      final result = await _apiService.get('/customer/reactivation');
+      if (!mounted) return;
+      if (result['success'] == true && result['eligible'] == true) {
+        final coupon = result['coupon'] as Map<String, dynamic>?;
+        if (coupon != null) {
+          _showReactivationModal(coupon);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _showReactivationModal(Map<String, dynamic> coupon) {
+    final code = coupon['code'] ?? '';
+    final discount = coupon['discount_percent'] ?? 10;
+    final validUntil = coupon['valid_until'] ?? '';
+
+    String dateStr = '';
+    if (validUntil.isNotEmpty) {
+      try {
+        final dt = DateTime.parse(validUntil);
+        dateStr = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+      } catch (_) {}
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00C977).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.waving_hand,
+                  color: Color(0xFF00C977),
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Sentimos sua falta!',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Ganhe $discount% de desconto no seu próximo serviço',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: code));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Código copiado!'),
+                      backgroundColor: Color(0xFF00C977),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00C977).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFF00C977).withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        code,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF00C977),
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.copy, size: 18, color: Color(0xFF00C977)),
+                    ],
+                  ),
+                ),
+              ),
+              if (dateStr.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Válido até $dateStr',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.grey[500] : Colors.grey[500],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _onNavTap(1);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C977),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Agendar agora',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'Agora não',
+                  style: TextStyle(
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override

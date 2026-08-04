@@ -1161,7 +1161,7 @@ class ApiService {
         if (payload is List) {
           final list = payload.whereType<Map>().map<Map<String, dynamic>>((n) {
             if (n is Map<String, dynamic>) return Map<String, dynamic>.from(n);
-            return Map<String, dynamic>.from(n as Map);
+            return Map<String, dynamic>.from(n);
           }).toList();
           return {
             'success': true,

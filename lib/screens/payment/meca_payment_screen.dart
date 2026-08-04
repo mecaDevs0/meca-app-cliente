@@ -121,6 +121,16 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   bool _cardsMigrationNoticeShown = false;
   bool _cardsMigratedToAsaas = false;
 
+  // ── Promo code state ──
+  final TextEditingController _promoController = TextEditingController();
+  bool _isValidatingPromo = false;
+  String? _appliedPromoCode;
+  double _promoDiscount = 0.0;
+  int? _promoCodeId;
+  String? _promoError;
+  List<dynamic> _availablePromoCodes = [];
+  bool _promoAppliedToBooking = false;
+
   Timer? _statusTimer;
 
   String _statusLabel(String raw) {
@@ -239,6 +249,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     _statusTimer?.cancel();
     _pixExpirationTimer?.cancel();
     _cvvController.dispose();
+    _promoController.dispose();
     super.dispose();
   }
 
@@ -402,6 +413,221 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     _selectedInstallmentPlan = plan;
   }
 
+  // ── Promo code methods ──────────────────────────────────────────
+
+  Future<void> _validatePromoCode() async {
+    final code = _promoController.text.trim();
+    if (code.isEmpty) return;
+
+    setState(() {
+      _isValidatingPromo = true;
+      _promoError = null;
+    });
+
+    try {
+      final bookingValueCents = (widget.totalAmount * 100).round();
+      final result = await _apiService.post('/promo-codes/validate', {
+        'code': code,
+        'booking_value': bookingValueCents,
+      });
+      if (!mounted) return;
+
+      if (result['success'] == true && result['valid'] == true) {
+        setState(() {
+          _appliedPromoCode = (result['promo_code']?['code'] ?? code).toString();
+          _promoDiscount = (result['discount_amount'] ?? 0).toDouble();
+          _promoCodeId = result['promo_code']?['id'];
+          _promoError = null;
+        });
+      } else {
+        setState(() {
+          _promoError = result['error']?.toString() ?? 'Cupom inválido';
+          _appliedPromoCode = null;
+          _promoDiscount = 0;
+          _promoCodeId = null;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _promoError = 'Erro ao validar cupom');
+    } finally {
+      if (mounted) setState(() => _isValidatingPromo = false);
+    }
+  }
+
+  void _removePromoCode() {
+    setState(() {
+      _appliedPromoCode = null;
+      _promoDiscount = 0;
+      _promoCodeId = null;
+      _promoError = null;
+      _promoController.clear();
+    });
+  }
+
+  Future<bool> _applyPromoToBooking() async {
+    if (_appliedPromoCode == null) return true;
+    final bookingId = widget.bookingData['id']?.toString() ?? '';
+    if (bookingId.isEmpty) return true;
+
+    try {
+      final result = await _apiService.post('/promo-codes/apply', {
+        'code': _appliedPromoCode,
+        'booking_id': int.tryParse(bookingId) ?? bookingId,
+      });
+      if (result['success'] == true) {
+        _promoAppliedToBooking = true;
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _removePromoFromBooking() async {
+    if (!_promoAppliedToBooking) return;
+    final bookingId = widget.bookingData['id']?.toString() ?? '';
+    if (bookingId.isEmpty) return;
+    try {
+      await _apiService.post('/promo-codes/remove', {
+        'booking_id': int.tryParse(bookingId) ?? bookingId,
+      });
+    } catch (_) {}
+    _promoAppliedToBooking = false;
+  }
+
+  Future<void> _loadAvailablePromoCodes() async {
+    try {
+      final result = await _apiService.get('/customer/promo-codes');
+      if (!mounted) return;
+      if (result['success'] == true) {
+        final data = result['data'];
+        if (data is Map && data['promo_codes'] is List) {
+          setState(() => _availablePromoCodes = data['promo_codes'] as List);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _showPromoCouponsSheet() async {
+    await _loadAvailablePromoCodes();
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final isDark = theme.brightness == Brightness.dark;
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Meus Cupons',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_availablePromoCodes.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      'Nenhum cupom disponível',
+                      style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
+                    ),
+                  ),
+                )
+              else
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.4,
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _availablePromoCodes.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) {
+                      final pc = _availablePromoCodes[i];
+                      final code = pc['code'] ?? '';
+                      final value = (pc['value'] ?? 0).toDouble();
+                      final days = pc['days_remaining'] as int?;
+                      final source = pc['source'] ?? '';
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+                          ),
+                        ),
+                        title: Row(
+                          children: [
+                            Text(
+                              code,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              pc['type'] == 'percentage' ? '${value.toStringAsFixed(0)}%' : 'R\$${value.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF00C977),
+                              ),
+                            ),
+                          ],
+                        ),
+                        subtitle: Text(
+                          days != null ? '$source • ${days}d restantes' : source,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.white38 : Colors.black38,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _promoController.text = code;
+                          _validatePromoCode();
+                        },
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────
+
   Future<void> _handlePay() async {
     if (_isSubmitting) return;
 
@@ -440,6 +666,18 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     });
 
     try {
+      // Apply promo code to booking before payment
+      if (_appliedPromoCode != null && !_promoAppliedToBooking) {
+        final applied = await _applyPromoToBooking();
+        if (!applied) {
+          if (mounted) {
+            AppAlerts.showWarning(context, title: 'Erro', message: 'Não foi possível aplicar o cupom. Tente novamente.');
+            setState(() => _isSubmitting = false);
+          }
+          return;
+        }
+      }
+
       final bookingId = widget.bookingData['id']?.toString() ?? '';
       if (bookingId.isEmpty) {
         throw Exception('Identificador do agendamento não encontrado.');
@@ -609,6 +847,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           return;
         }
 
+        await _removePromoFromBooking();
         AppAlerts.showError(
           context,
           message: errMsg.isNotEmpty
@@ -1200,7 +1439,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       return null;
     }
 
-    if (card == null || card.isEmpty) {
+    if (card.isEmpty) {
       print('❌ [Payment] Cartão não encontrado na lista para cardId: $cardId');
       print(
           '🔍 [Payment] IDs disponíveis: ${_savedCards.map((c) => c['id']?.toString()).join(", ")}');
@@ -1430,6 +1669,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildPaymentSummaryCard(theme),
+              const SizedBox(height: 16),
+              _buildPromoCodeSection(theme),
               const SizedBox(height: 20),
               _buildPaymentMethodSelector(theme),
               const SizedBox(height: 20),
@@ -1499,24 +1740,179 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         ? 'https://baas.asaas.com/selos/Servicos_financeiros_Asaas-Reduzida-Negativo-Branco.svg?id=2a6ee772-f63f-424d-9d0e-1a3811b0f64c'
         : 'https://baas.asaas.com/selos/Servicos_financeiros_Asaas-Reduzida-Positivo.svg?id=2a6ee772-f63f-424d-9d0e-1a3811b0f64c';
     return Center(
-      child: Opacity(
-        opacity: 0.5,
-        child: SvgPicture.network(
-          sealUrl,
-          height: 32,
-          fit: BoxFit.contain,
-          placeholderBuilder: (_) => const SizedBox.shrink(),
+      child: GestureDetector(
+        onTap: () => launchUrl(Uri.parse(sealUrl), mode: LaunchMode.externalApplication),
+        child: Opacity(
+          opacity: 0.5,
+          child: SvgPicture.network(
+            sealUrl,
+            height: 32,
+            fit: BoxFit.contain,
+            placeholderBuilder: (_) => const SizedBox.shrink(),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildPaymentSummaryCard(ThemeData theme) {
-    // Cálculo interno para consistência com backend (cliente não vê detalhes de split).
-    final totalCents = (widget.totalAmount * 100).round();
-    final mecaFeeCents = (totalCents * 0.12).round();
-    final workshopCents = totalCents - mecaFeeCents;
+  Widget _buildPromoCodeSection(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    const green = Color(0xFF00C977);
 
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _appliedPromoCode != null
+              ? green.withValues(alpha: 0.3)
+              : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.confirmation_number_outlined, size: 18, color: green),
+              const SizedBox(width: 8),
+              Text(
+                'Cupom de Desconto',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_appliedPromoCode != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: green.withValues(alpha: isDark ? 0.12 : 0.06),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle, size: 18, color: green),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _appliedPromoCode!,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          'Desconto: -R\$${_promoDiscount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: green,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _removePromoCode,
+                    icon: Icon(Icons.close, size: 18, color: isDark ? Colors.white38 : Colors.black38),
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _promoController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: InputDecoration(
+                      hintText: 'Digite o código',
+                      hintStyle: TextStyle(
+                        color: isDark ? Colors.white30 : Colors.black26,
+                      ),
+                      filled: true,
+                      fillColor: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      isDense: true,
+                    ),
+                    style: TextStyle(
+                      fontSize: 15,
+                      letterSpacing: 1,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: _isValidatingPromo ? null : _validatePromoCode,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: green,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    child: _isValidatingPromo
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Text(
+                            'Aplicar',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                SizedBox(
+                  height: 44,
+                  width: 44,
+                  child: OutlinedButton(
+                    onPressed: _showPromoCouponsSheet,
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: green.withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: EdgeInsets.zero,
+                    ),
+                    child: const Icon(Icons.list_alt, size: 20, color: green),
+                  ),
+                ),
+              ],
+            ),
+            if (_promoError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _promoError!,
+                style: const TextStyle(fontSize: 13, color: Colors.red),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentSummaryCard(ThemeData theme) {
     final surfaceColor = theme.colorScheme.surfaceVariant
         .withOpacity(theme.brightness == Brightness.dark ? 0.35 : 0.9);
     final borderColor = theme.dividerColor
@@ -1549,10 +1945,26 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                 ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
+          if (_promoDiscount > 0) ...[
+            _buildSummaryRow(
+              theme,
+              'Subtotal',
+              _currencyFormatter.format(widget.totalAmount),
+              secondary: true,
+            ),
+            _buildSummaryRow(
+              theme,
+              'Desconto (cupom)',
+              '-${_currencyFormatter.format(_promoDiscount)}',
+              secondary: true,
+            ),
+          ],
           _buildSummaryRow(
             theme,
             'Total a pagar',
-            _displayTotalToPay(theme),
+            _promoDiscount > 0
+                ? _currencyFormatter.format((widget.totalAmount - _promoDiscount).clamp(0, double.infinity))
+                : _displayTotalToPay(theme),
             isTotal: true,
           ),
           if (_selectedMethod == 'credit_card' &&
@@ -2083,7 +2495,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               final interestCents = (plan['interest_cents'] as int?) ?? 0;
               final interestValue = interestCents / 100.0;
               String title;
-              String? subtitle;
+              String subtitle;
               if (n == 1) {
                 title = 'À vista';
                 subtitle = _currencyFormatter.format(totalValue);
@@ -2135,8 +2547,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            if (subtitle != null)
-                              Text(
+                            Text(
                                 subtitle,
                                 style: TextStyle(
                                   fontSize: 11,

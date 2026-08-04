@@ -185,7 +185,8 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
       _modelController.text = _capitalize(data['model']?.toString() ?? '');
       _yearController.text = data['year']?.toString() ?? '';
       _colorController.text = _capitalize(data['color']?.toString() ?? '');
-      _mileageController.text = data['mileage_km']?.toString() ?? '';
+      final rawMileage = data['mileage_km']?.toString() ?? '';
+      _mileageController.text = _MileageFormatter.format(rawMileage.replaceAll('.', '').replaceAll(',', ''));
       final normalizedFuel = _normalizeFuelValue(data['fuel']?.toString());
       _selectedFuel = normalizedFuel;
       _fuelController.text = normalizedFuel ?? '';
@@ -428,13 +429,14 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                 controller: _mileageController,
                 decoration: const InputDecoration(
                   labelText: 'Quilometragem (km)',
-                  hintText: 'Ex: 45000',
+                  hintText: 'Ex: 50.000',
                   prefixIcon: Icon(Icons.speed),
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
+                  _MileageFormatter(),
                 ],
               ),
               const SizedBox(height: 20),
@@ -512,6 +514,30 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
         ),
       ),
     );
+  }
+}
+
+class _MileageFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll('.', '');
+    if (digits.isEmpty) return newValue.copyWith(text: '');
+    final formatted = format(digits);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  static String format(String digits) {
+    if (digits.isEmpty) return '';
+    final buffer = StringBuffer();
+    for (int i = 0; i < digits.length; i++) {
+      final pos = digits.length - i;
+      if (i > 0 && pos % 3 == 0) buffer.write('.');
+      buffer.write(digits[i]);
+    }
+    return buffer.toString();
   }
 }
 

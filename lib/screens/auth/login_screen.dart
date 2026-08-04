@@ -556,14 +556,23 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   void _saveDeviceTokenInBackground() {
     Future.microtask(() async {
       try {
-        await Future.delayed(const Duration(milliseconds: 500));
-        final playerId = OneSignalService.getSubscriptionId();
-        if (playerId == null || playerId.isEmpty) return;
         final prefs = await _apiService.getStorage();
         final userId = prefs.getString('user_id');
+
+        // Identificar o usuário no OneSignal IMEDIATAMENTE (não depende de subscription)
         if (userId != null) {
           await OneSignalService.setExternalUserId(userId);
         }
+
+        // Aguardar subscription com retry (pode demorar no primeiro login)
+        String? playerId;
+        for (int i = 0; i < 6; i++) {
+          await Future.delayed(const Duration(seconds: 2));
+          playerId = OneSignalService.getSubscriptionId();
+          if (playerId != null && playerId.isNotEmpty) break;
+        }
+        if (playerId == null || playerId.isEmpty) return;
+
         final result = await _apiService.saveDeviceToken(playerId);
         if (kDebugMode) {
           if (result['success'] == true) {
