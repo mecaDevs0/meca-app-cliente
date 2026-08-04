@@ -15,6 +15,7 @@ class ReferralScreen extends StatefulWidget {
 
 class _ReferralScreenState extends State<ReferralScreen> {
   final ApiService _apiService = ApiService();
+  final GlobalKey _shareButtonKey = GlobalKey();
   bool _isLoading = true;
   Map<String, dynamic>? _data;
   String? _error;
@@ -67,10 +68,19 @@ class _ReferralScreenState extends State<ReferralScreen> {
     final code = _data?['referral_code'] ?? '';
     if (code.isEmpty) return;
     try {
+      Rect? shareOrigin;
+      final renderObj = _shareButtonKey.currentContext?.findRenderObject();
+      if (renderObj is RenderBox && renderObj.hasSize) {
+        final pos = renderObj.localToGlobal(Offset.zero);
+        shareOrigin = pos & renderObj.size;
+      }
       await Share.share(
         'Agende serviços automotivos pelo MECA! Use meu código $code no cadastro. Baixe: https://www.mecabr.com/app/?ref=$code',
+        subject: 'Código de indicação MECA',
+        sharePositionOrigin: shareOrigin,
       );
     } catch (e) {
+      debugPrint('[MECA] Share error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -308,6 +318,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
+                  key: _shareButtonKey,
                   onPressed: code.isNotEmpty ? _shareCode : null,
                   icon: const Icon(Icons.share, size: 16),
                   label: const Text('Compartilhar'),
