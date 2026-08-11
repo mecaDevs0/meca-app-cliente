@@ -1719,22 +1719,23 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       builder: (context, notificationProvider, child) {
         final hasUnread = _hasUnreadNotificationsForStatus(notificationProvider, status);
         return Tab(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
               Text(label),
-              if (hasUnread) ...[
-                const SizedBox(width: 6),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
+              if (hasUnread)
+                Positioned(
+                  right: -10,
+                  top: -2,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
-              ],
             ],
           ),
         );

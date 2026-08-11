@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../main.dart';
 import '../services/api_service.dart';
 import '../services/onesignal_service.dart';
 
@@ -46,20 +47,29 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   Future<void> _initializeApp() async {
     try {
       await Future.delayed(const Duration(seconds: 2));
-      
+
       if (!mounted) return;
-      
+
+      // Deep link já cuidou da navegação — não sobrescrever
+      if (deepLinkNavigated) {
+        debugPrint('[Splash] deep link already navigated, skipping');
+        return;
+      }
+
       await _apiService.loadToken();
-      
+
       if (!mounted) return;
-      
+
+      if (deepLinkNavigated) return;
+
       // Check if user is logged in
       final result = await _apiService.getProfile();
-      
+
       if (!mounted) return;
-      
+
+      if (deepLinkNavigated) return;
+
       if (result['success'] == true) {
-        // Ir para home imediatamente; device token em background
         Navigator.pushReplacementNamed(context, '/home');
         _saveDeviceTokenInBackground();
       } else {
@@ -74,7 +84,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         }
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !deepLinkNavigated) {
         final prefs = await SharedPreferences.getInstance();
         final onboardingDone = prefs.getBool('onboarding_completed') ?? false;
         if (!mounted) return;

@@ -34,6 +34,9 @@ import 'providers/notification_provider.dart';
 // Global navigator key para navegação de notificações
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+// Flag de coordenação: deep link handler seta true para impedir SplashScreen de sobrescrever a navegação
+bool deepLinkNavigated = false;
+
 void main() async {
   // Wrapper para capturar erros não tratados
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -213,6 +216,8 @@ class MecaClienteApp extends StatefulWidget {
 
 class _MecaClienteAppState extends State<MecaClienteApp> {
   late final AppLinks _appLinks;
+  Uri? _lastHandledUri;
+  int _lastHandledAt = 0;
 
   @override
   void initState() {
@@ -223,16 +228,28 @@ class _MecaClienteAppState extends State<MecaClienteApp> {
 
   void _initDeepLinks() {
     _appLinks.uriLinkStream.listen((Uri uri) {
+      debugPrint('[DeepLink] stream received: $uri');
       Future.delayed(const Duration(milliseconds: 300), () => _handleDeepLink(uri));
     });
     _appLinks.getInitialLink().then((uri) {
       if (uri != null) {
+        debugPrint('[DeepLink] initial link: $uri');
         Future.delayed(const Duration(seconds: 1), () => _handleDeepLink(uri));
       }
     });
   }
 
   Future<void> _handleDeepLink(Uri uri) async {
+    // Debounce: ignorar mesma URI em menos de 2 segundos
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (_lastHandledUri?.toString() == uri.toString() &&
+        (now - _lastHandledAt) < 2000) {
+      debugPrint('[DeepLink] skipped duplicate: $uri');
+      return;
+    }
+    _lastHandledUri = uri;
+    _lastHandledAt = now;
+
     final pathSegments = uri.pathSegments;
     String? workshopId;
 
@@ -259,9 +276,14 @@ class _MecaClienteAppState extends State<MecaClienteApp> {
     }
 
     if (workshopId != null && workshopId.isNotEmpty) {
-      for (int i = 0; i < 5; i++) {
+      deepLinkNavigated = true;
+      debugPrint('[DeepLink] navigating to workshop: $workshopId');
+
+      for (int i = 0; i < 10; i++) {
         final nav = navigatorKey.currentState;
         if (nav != null) {
+          // Colocar Home na base da stack e workshop-detail por cima
+          nav.pushNamedAndRemoveUntil('/home', (route) => false);
           nav.pushNamed('/workshop-detail', arguments: {'id': workshopId});
           return;
         }
