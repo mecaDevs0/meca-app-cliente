@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:provider/provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/onesignal_service.dart';
+import '../../services/appsflyer_service.dart';
 import '../../utils/phone_formatter.dart';
 import '../../utils/cpf_formatter.dart';
 import '../../utils/email_formatter.dart';
@@ -115,6 +117,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     if (result['success']) {
       if (!_isLogin) {
+        final newUserId = result['data']?['id']?.toString() ?? '';
+        AppsFlyerService.instance.logRegistration('email', newUserId);
         if (!mounted) return;
         AppAlerts.showSuccess(
           context,
@@ -588,6 +592,18 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   Future<void> _onLoginSuccess() async {
+    if (!mounted) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id') ?? '';
+      if (userId.isNotEmpty) {
+        AppsFlyerService.instance.setCustomerUserId(userId);
+        AppsFlyerService.instance.logLogin(userId);
+      }
+      AppsFlyerService.instance.applyDeferredDeepLink();
+    } catch (_) {}
+
     if (!mounted) return;
     Provider.of<NotificationProvider>(context, listen: false).clearAll();
     Navigator.pushReplacementNamed(context, '/home');

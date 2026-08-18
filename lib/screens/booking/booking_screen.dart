@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../services/api_service.dart';
+import '../../services/appsflyer_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/photo/photo_repository.dart';
 import '../../services/photo/photo_service.dart';
@@ -404,7 +405,20 @@ class _BookingScreenState extends State<BookingScreen> {
       
       if (result['success'] == true) {
         final bookingId = result['data']['id'] ?? result['data']['booking_id'];
-        
+
+        AppsFlyerService.instance.logServiceRequest(
+          bookingId?.toString() ?? '',
+          _selectedService?['name']?.toString() ?? widget.serviceName,
+          widget.workshopId,
+        );
+        if (_selectedDate != null) {
+          AppsFlyerService.instance.logBookingConfirmed(
+            bookingId?.toString() ?? '',
+            widget.workshopId,
+            _selectedDate!.toIso8601String(),
+          );
+        }
+
         // Fazer upload das imagens se houver
         if (_uploadedImages.isNotEmpty && bookingId != null) {
           await _uploadImages(bookingId);

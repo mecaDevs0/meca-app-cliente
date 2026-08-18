@@ -53,6 +53,10 @@ dependencies:
   flutter_secure_storage: ^9.0.0
   timezone: ^0.9.4
   
+  # Analytics & Attribution
+  appsflyer_sdk: ^6.15.3
+  app_tracking_transparency: ^2.0.6
+
   # Photo & Image Processing
   flutter_image_compress: ^2.3.0
   path_provider: ^2.1.5

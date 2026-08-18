@@ -59,6 +59,8 @@
 	<string>O Meca precisa salvar fotos na sua galeria.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>O Meca precisa acessar sua galeria para selecionar fotos dos serviços do seu veículo.</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Usamos esse identificador para personalizar sua experiência e medir a efetividade dos nossos anúncios.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

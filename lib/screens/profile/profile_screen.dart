@@ -6,6 +6,7 @@ import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/onesignal_service.dart';
+import '../../services/appsflyer_service.dart';
 import '../notifications/recent_notifications_screen.dart';
 import '../../providers/notification_provider.dart';
 import '../../utils/formatters.dart';
@@ -825,6 +826,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       
       await _apiService.logout();
     } catch (_) {}
+
+    AppsFlyerService.instance.clearCustomerUserId();
+
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
   }

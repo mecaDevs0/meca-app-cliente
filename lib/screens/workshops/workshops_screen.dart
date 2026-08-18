@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
 import '../../services/api_service.dart';
+import '../../services/appsflyer_service.dart';
 import '../../widgets/meca_toast.dart';
 import '../../services/location_service.dart';
 import '../../utils/cep_formatter.dart';
@@ -189,6 +190,9 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
 
   Future<void> _fetchWorkshops(double? userLat, double? userLng, {double? radiusKm}) async {
     final searchQuery = _searchController.text.trim().isNotEmpty ? _searchController.text.trim() : null;
+    if (searchQuery != null) {
+      AppsFlyerService.instance.logSearch(searchQuery);
+    }
     final hasLocation = userLat != null && userLng != null;
 
     Map<String, dynamic> result;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../services/appsflyer_service.dart';
 import '../../widgets/app_alerts.dart';
 
 class ReviewScreen extends StatefulWidget {
@@ -73,6 +74,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       );
 
       if (result['success']) {
+        AppsFlyerService.instance.logRating(widget.bookingId, _rating);
         _apiService.invalidateBookingCache(widget.bookingId);
         _apiService.invalidateBookingsCache();
         await AppAlerts.showSuccess(

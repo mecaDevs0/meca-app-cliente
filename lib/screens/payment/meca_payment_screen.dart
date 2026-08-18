@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../services/api_service.dart';
+import '../../services/appsflyer_service.dart';
 import '../../services/asaas_payment_service.dart';
 import '../../widgets/app_alerts.dart';
 import '../review/review_screen.dart';
@@ -235,6 +236,12 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   void initState() {
     super.initState();
     _selectedInstallments = widget.installments > 0 ? widget.installments : 1;
+
+    AppsFlyerService.instance.logInitiatedCheckout(
+      widget.bookingData['id']?.toString() ?? '',
+      widget.totalAmount / 100.0,
+    );
+
     _loadSavedCards();
     if (widget.workshopAcceptsInstallment && widget.totalAmount > 0) {
       _loadInstallmentPlans();
@@ -878,6 +885,14 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           (status == 'approved' || status == 'paid')) {
         print(
             '✅ [Payment] Pagamento APROVADO IMEDIATAMENTE - navegando para review');
+
+        AppsFlyerService.instance.logPurchase(
+          widget.bookingData['id']?.toString() ?? '',
+          paymentId ?? '',
+          widget.totalAmount / 100.0,
+          _selectedMethod ?? 'credit_card',
+        );
+
         AppAlerts.showSuccess(
           context,
           message: 'Pagamento aprovado com sucesso! Obrigado por usar o MECA.',
@@ -888,9 +903,6 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           _apiService.invalidateBookingCache(bookingId);
           _apiService.invalidateBookingsCache();
         }
-        // Aguardar para o cache ser invalidado, depois dismiss do Flushbar antes de navegar.
-        // O Flushbar (another_flushbar) empurra um FlushbarRoute na pilha — se não
-        // dismissar antes, Navigator.pop poparia o FlushbarRoute em vez da tela de pagamento.
         await Future.delayed(const Duration(milliseconds: 500));
         await AppAlerts.dismissCurrent();
         await _navigateToReviewScreen();
@@ -1229,6 +1241,13 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       _showCardsMigrationNoticeIfNeeded(data);
 
       if (status == 'approved' || status == 'paid') {
+        AppsFlyerService.instance.logPurchase(
+          widget.bookingData['id']?.toString() ?? '',
+          data['payment_id']?.toString() ?? data['id']?.toString() ?? '',
+          widget.totalAmount / 100.0,
+          _selectedMethod ?? 'credit_card',
+        );
+
         AppAlerts.showSuccess(context,
             message:
                 'Pagamento aprovado com sucesso! Obrigado por usar o MECA.');

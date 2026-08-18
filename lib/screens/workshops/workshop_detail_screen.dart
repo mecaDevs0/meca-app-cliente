@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
+import '../../services/appsflyer_service.dart';
 import '../../utils/formatters.dart';
 import '../booking/booking_screen.dart';
 import '../pre_compra/pre_compra_booking_screen.dart';
@@ -403,6 +404,11 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
           _showAllServices = false;
           _isFavorite = normalizedWorkshop['is_favorite'] == true || normalizedWorkshop['is_favorite'] == 1;
         });
+
+        AppsFlyerService.instance.logWorkshopView(
+          widget.workshopId,
+          normalizedWorkshop['name']?.toString() ?? '',
+        );
 
         _apiService.getWorkshopGallery(widget.workshopId).then((photos) {
           if (mounted) setState(() => _galleryPhotos = photos);

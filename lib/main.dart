@@ -29,7 +29,9 @@ import 'services/theme_service.dart';
 import 'services/notification_service.dart';
 import 'services/onesignal_service.dart';
 import 'services/api_service.dart';
+import 'services/appsflyer_service.dart';
 import 'providers/notification_provider.dart';
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 
 // Global navigator key para navegação de notificações
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -190,7 +192,24 @@ void main() async {
     // Silenciar erro de inicialização de serviços
   }
   });
-  
+
+  // Initialize AppsFlyer (after OneSignal)
+  Future.microtask(() async {
+    try {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        await AppTrackingTransparency.requestTrackingAuthorization();
+      }
+      await AppsFlyerService.instance.init();
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      if (userId != null) {
+        AppsFlyerService.instance.setCustomerUserId(userId);
+      }
+    } catch (e) {
+      if (kDebugMode) print('[AppsFlyer] Init error: $e');
+    }
+  });
+
   try {
     runApp(const MecaClienteApp());
   } catch (e) {

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../widgets/meca_toast.dart';
 
 import '../../services/api_service.dart';
+import '../../services/appsflyer_service.dart';
 import '../../widgets/app_alerts.dart';
 
 class AddVehicleScreen extends StatefulWidget {
@@ -268,6 +269,10 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
     setState(() => _loading = false);
 
     if (result['success']) {
+      AppsFlyerService.instance.logAddVehicle(
+        _brandController.text,
+        _modelController.text,
+      );
       await AppAlerts.showSuccess(
         context,
         message: (result['message'] ?? 'Veículo adicionado com sucesso!').toString(),
