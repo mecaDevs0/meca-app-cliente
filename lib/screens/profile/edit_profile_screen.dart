@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
@@ -29,7 +30,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _isLoading = false;
   bool _isSaving = false;
   bool _canEditCpf = false;
-  String? _originalCpf; // Armazenar CPF original para sempre enviar
+  String? _originalCpf;
+  DateTime? _birthDate;
 
   @override
   void initState() {
@@ -89,9 +91,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _originalCpf = null;
         }
 
+        final birthDateRaw = userData['birth_date'] ?? userData['birthDate'];
+        DateTime? parsedBirthDate;
+        if (birthDateRaw != null && birthDateRaw.toString().isNotEmpty) {
+          parsedBirthDate = DateTime.tryParse(birthDateRaw.toString());
+        }
+
         if (mounted) {
           setState(() {
             _canEditCpf = canEditCpf;
+            _birthDate = parsedBirthDate;
           });
         }
       } else {
@@ -135,6 +144,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'lastName': _lastNameController.text.trim().isEmpty ? null : _lastNameController.text.trim(),
         'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim().replaceAll(RegExp(r'\D'), ''),
         if (cpfValue != null) 'cpf': cpfValue,
+        'birth_date': _birthDate != null
+            ? DateFormat('yyyy-MM-dd').format(_birthDate!)
+            : null,
       };
 
       final result = await _apiService.updateProfile(payload);
@@ -286,6 +298,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             return null;
                           },
                         ),
+                        const SizedBox(height: 16),
+                        _buildBirthDateField(),
                         const SizedBox(height: 32),
                         _buildSaveButton(),
                       ],
@@ -358,6 +372,77 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             labelStyle: TextStyle(
               color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBirthDateField() {
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        final isDarkMode = themeService.isDarkMode;
+        final borderColor = isDarkMode ? Colors.grey[700]! : Colors.grey[300]!;
+
+        final displayText = _birthDate != null
+            ? DateFormat('dd/MM/yyyy').format(_birthDate!)
+            : '';
+
+        return GestureDetector(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _birthDate ?? DateTime(2000, 1, 1),
+              firstDate: DateTime(1920),
+              lastDate: DateTime.now(),
+              locale: const Locale('pt', 'BR'),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: ColorScheme.light(
+                      primary: const Color(0xFF00C977),
+                      onPrimary: Colors.white,
+                      surface: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                      onSurface: isDarkMode ? Colors.white : Colors.black,
+                    ),
+                    dialogBackgroundColor:
+                        isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                  ),
+                  child: child!,
+                );
+              },
+            );
+            if (picked != null && mounted) {
+              setState(() => _birthDate = picked);
+            }
+          },
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'Data de Nascimento',
+              prefixIcon: const Icon(Icons.cake, color: Color(0xFF00C977)),
+              filled: true,
+              fillColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: borderColor),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: borderColor),
+              ),
+              labelStyle: TextStyle(
+                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+              ),
+            ),
+            child: Text(
+              displayText.isEmpty ? 'Toque para selecionar' : displayText,
+              style: TextStyle(
+                color: displayText.isEmpty
+                    ? (isDarkMode ? Colors.grey[500] : Colors.grey[400])
+                    : (isDarkMode ? Colors.white : Colors.black),
+                fontSize: 16,
+              ),
             ),
           ),
         );

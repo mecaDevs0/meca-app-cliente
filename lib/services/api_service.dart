@@ -730,6 +730,8 @@ class ApiService {
         'last_name': profileData['lastName'] ?? profileData['last_name'],
         'phone': profileData['phone'],
         'cpf': profileData['cpf'],
+        if (profileData.containsKey('birth_date'))
+          'birth_date': profileData['birth_date'],
       };
       
       final response = await _dio.put('/customers/profile', data: apiData);
