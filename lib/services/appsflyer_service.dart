@@ -17,7 +17,7 @@ class AppsFlyerService {
     try {
       final options = AppsFlyerOptions(
         afDevKey: 'EJgci2EGWpS69K5FNqdFcS',
-        appId: 'br.com.megaleios.meca_cliente',
+        appId: '6743087361',
         showDebug: kDebugMode,
         timeToWaitForATTUserAuthorization: 10,
       );
