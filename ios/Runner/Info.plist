@@ -61,6 +61,93 @@
 	<string>O Meca precisa acessar sua galeria para selecionar fotos dos serviços do seu veículo.</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>Usamos esse identificador para personalizar sua experiência e medir a efetividade dos nossos anúncios.</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<!-- AppsFlyer -->
+		<dict><key>SKAdNetworkIdentifier</key><string>v9wttpbfk9.skadnetwork</string></dict>
+		<!-- Meta / Facebook -->
+		<dict><key>SKAdNetworkIdentifier</key><string>n38lu8286q.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>9rd848q77x.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>3rd42ekr43.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>3qcr597p9d.skadnetwork</string></dict>
+		<!-- Google -->
+		<dict><key>SKAdNetworkIdentifier</key><string>cstr6suwn9.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>4fzdc2evr5.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>4dzt52r2t5.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>2u9pt9hc89.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>ydx93a7ass.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>y5ghdn5j9k.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>n9x2a789qt.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>f38h382jlk.skadnetwork</string></dict>
+		<!-- TikTok -->
+		<dict><key>SKAdNetworkIdentifier</key><string>238da6jt44.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>22mmun2rn5.skadnetwork</string></dict>
+		<!-- Apple Search Ads -->
+		<dict><key>SKAdNetworkIdentifier</key><string>p78axxw29g.skadnetwork</string></dict>
+		<!-- Unity Ads -->
+		<dict><key>SKAdNetworkIdentifier</key><string>4468km3ulz.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>4pfyvq9l8r.skadnetwork</string></dict>
+		<!-- ironSource -->
+		<dict><key>SKAdNetworkIdentifier</key><string>su67r6k2v3.skadnetwork</string></dict>
+		<!-- Snap -->
+		<dict><key>SKAdNetworkIdentifier</key><string>424m5254lk.skadnetwork</string></dict>
+		<!-- Twitter/X -->
+		<dict><key>SKAdNetworkIdentifier</key><string>9yg77x724h.skadnetwork</string></dict>
+		<!-- AdColony -->
+		<dict><key>SKAdNetworkIdentifier</key><string>4pfyvq9l8r.skadnetwork</string></dict>
+		<!-- Chartboost -->
+		<dict><key>SKAdNetworkIdentifier</key><string>f73kdq92p3.skadnetwork</string></dict>
+		<!-- Vungle -->
+		<dict><key>SKAdNetworkIdentifier</key><string>gta9lk7p23.skadnetwork</string></dict>
+		<!-- AppLovin -->
+		<dict><key>SKAdNetworkIdentifier</key><string>ludvb6z3bs.skadnetwork</string></dict>
+		<!-- InMobi -->
+		<dict><key>SKAdNetworkIdentifier</key><string>wzmmz9fp6w.skadnetwork</string></dict>
+		<!-- Mintegral -->
+		<dict><key>SKAdNetworkIdentifier</key><string>kbd757ywx3.skadnetwork</string></dict>
+		<!-- Moloco -->
+		<dict><key>SKAdNetworkIdentifier</key><string>9t245vhmpl.skadnetwork</string></dict>
+		<!-- Digital Turbine -->
+		<dict><key>SKAdNetworkIdentifier</key><string>m8dbw4sv7c.skadnetwork</string></dict>
+		<!-- Liftoff -->
+		<dict><key>SKAdNetworkIdentifier</key><string>7ug5zh24hu.skadnetwork</string></dict>
+		<!-- Pangle -->
+		<dict><key>SKAdNetworkIdentifier</key><string>a2p9lx4jpn.skadnetwork</string></dict>
+		<!-- Yahoo -->
+		<dict><key>SKAdNetworkIdentifier</key><string>e5fvkxwrpn.skadnetwork</string></dict>
+		<!-- Criteo -->
+		<dict><key>SKAdNetworkIdentifier</key><string>hs6bdukanm.skadnetwork</string></dict>
+		<!-- Amazon -->
+		<dict><key>SKAdNetworkIdentifier</key><string>p78axxw29g.skadnetwork</string></dict>
+		<!-- Microsoft -->
+		<dict><key>SKAdNetworkIdentifier</key><string>8s468mfl3y.skadnetwork</string></dict>
+		<!-- Adikteev -->
+		<dict><key>SKAdNetworkIdentifier</key><string>uw77j35x4d.skadnetwork</string></dict>
+		<!-- Remerge -->
+		<dict><key>SKAdNetworkIdentifier</key><string>2fnua5tdw4.skadnetwork</string></dict>
+		<!-- Smadex -->
+		<dict><key>SKAdNetworkIdentifier</key><string>ppxm28t8ap.skadnetwork</string></dict>
+		<!-- Aarki -->
+		<dict><key>SKAdNetworkIdentifier</key><string>4w7y6s5ca2.skadnetwork</string></dict>
+		<!-- Kayzen -->
+		<dict><key>SKAdNetworkIdentifier</key><string>v72qych5uu.skadnetwork</string></dict>
+		<!-- Appreciate -->
+		<dict><key>SKAdNetworkIdentifier</key><string>mlmmfzh3r3.skadnetwork</string></dict>
+		<!-- Jampp -->
+		<dict><key>SKAdNetworkIdentifier</key><string>yclnxrl5pm.skadnetwork</string></dict>
+		<!-- YouAppi -->
+		<dict><key>SKAdNetworkIdentifier</key><string>3sh42y64q3.skadnetwork</string></dict>
+		<!-- Beeswax -->
+		<dict><key>SKAdNetworkIdentifier</key><string>c6k4g5qg8m.skadnetwork</string></dict>
+		<!-- CrossInstall -->
+		<dict><key>SKAdNetworkIdentifier</key><string>prcb7njmu6.skadnetwork</string></dict>
+		<!-- RevX -->
+		<dict><key>SKAdNetworkIdentifier</key><string>5a6flpkh64.skadnetwork</string></dict>
+		<!-- Persona.ly -->
+		<dict><key>SKAdNetworkIdentifier</key><string>44jx6755aq.skadnetwork</string></dict>
+		<!-- Dataseat -->
+		<dict><key>SKAdNetworkIdentifier</key><string>m5mvw97r93.skadnetwork</string></dict>
+	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
