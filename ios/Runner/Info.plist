@@ -47,6 +47,10 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCalendarsUsageDescription</key>
+	<string>O Meca usa acesso ao calendário para adicionar o agendamento do seu serviço automotivo.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>O Meca usa acesso ao calendário para adicionar o agendamento do seu serviço automotivo.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>O Meca precisa acessar sua câmera para tirar fotos dos serviços do seu veículo.</string>
 	<key>NSFaceIDUsageDescription</key>
