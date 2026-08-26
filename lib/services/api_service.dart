@@ -1805,17 +1805,26 @@ class ApiService {
     required String expiryYear,
     required String cvv,
     required String cpfCnpj,
+    String? email,
+    String? phone,
+    String? postalCode,
+    String? addressNumber,
   }) async {
     try {
       await loadToken();
-      final response = await _dio.post('/saved-cards/tokenize', data: {
+      final data = {
         'cardNumber': cardNumber.replaceAll(' ', ''),
         'holderName': holderName.trim(),
         'expiryMonth': expiryMonth.trim(),
         'expiryYear': expiryYear.trim(),
         'cvv': cvv.trim(),
         'cpfCnpj': cpfCnpj.replaceAll(RegExp(r'[.\-/]'), ''),
-      });
+      };
+      if (email != null && email.isNotEmpty) data['email'] = email;
+      if (phone != null && phone.isNotEmpty) data['phone'] = phone;
+      if (postalCode != null && postalCode.isNotEmpty) data['postalCode'] = postalCode;
+      if (addressNumber != null && addressNumber.isNotEmpty) data['addressNumber'] = addressNumber;
+      final response = await _dio.post('/saved-cards/tokenize', data: data);
       return Map<String, dynamic>.from(response.data ?? {});
     } catch (e) {
       if (e is DioException && e.response?.data is Map) {
@@ -2009,7 +2018,6 @@ class ApiService {
     double? totalWithInterest,
     double? interestPaidByBuyer,
     double? installmentValue,
-    /// Número de parcelas em que o comprador paga juros (vem do plano do gateway de pagamento)
     int? interestInstallments,
     int? pixExpirationInSeconds,
     bool? saveCard,
@@ -2017,6 +2025,7 @@ class ApiService {
     String? brand,
     String? expiryMonth,
     String? expiryYear,
+    double? discountAmount,
   }) async {
     try {
       await loadToken();
@@ -2077,7 +2086,9 @@ class ApiService {
       if (expiryYear != null && expiryYear.trim().isNotEmpty) {
         payload['expiryYear'] = expiryYear.trim();
       }
-      print('💳 [API] Criando pagamento para booking $bookingId com payload: paymentMethod=${payload['paymentMethod']}, hasCardToken=${payload.containsKey('cardToken')}, hasCvv=${payload.containsKey('cvv')}, installments=${payload['installments']}');
+      if (discountAmount != null && discountAmount > 0) {
+        payload['discount_amount'] = discountAmount;
+      }
 
       final response = await _dio.post('/bookings/$bookingId/payment', data: payload);
 

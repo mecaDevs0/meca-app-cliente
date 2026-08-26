@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     // Prevenir múltiplas tentativas simultâneas
     if (_isLoading) {
       if (kDebugMode) {
-        print('[Login] Tentativa bloqueada - já está processando');
+        debugPrint('[Login] Tentativa bloqueada - já está processando');
       }
       return;
     }
@@ -75,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final difference = now.difference(_lastSubmitAttempt!);
       if (difference.inSeconds < 2) {
         if (kDebugMode) {
-          print('[Login] Tentativa bloqueada - muito rápida (${difference.inMilliseconds}ms)');
+          debugPrint('[Login] Tentativa bloqueada - muito rápida (${difference.inMilliseconds}ms)');
         }
         return;
       }
@@ -103,7 +103,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
     } catch (e) {
       if (kDebugMode) {
-        print('[Login] Erro inesperado: $e');
+        debugPrint('[Login] Erro inesperado: $e');
       }
       result = {
         'success': false,
@@ -580,9 +580,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         final result = await _apiService.saveDeviceToken(playerId);
         if (kDebugMode) {
           if (result['success'] == true) {
-            print('[Login] Device token salvo em background');
+            debugPrint('[Login] Device token salvo em background');
           } else {
-            print('[Login] Device token em background: ${result['error']}');
+            debugPrint('[Login] Device token em background: ${result['error']}');
           }
         }
       } catch (e) {

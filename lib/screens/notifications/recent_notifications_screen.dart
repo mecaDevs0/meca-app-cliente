@@ -52,7 +52,7 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
         provider.markProfileBadgeSeen();
       }
     } catch (e) {
-      print('Erro ao carregar notificações: $e');
+      debugPrint('Erro ao carregar notificações: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -68,7 +68,7 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
       provider.markNotificationAsRead(notificationId);
       _loadNotifications();
     } catch (e) {
-      print('Erro ao marcar notificação como lida: $e');
+      debugPrint('Erro ao marcar notificação como lida: $e');
     }
   }
 
@@ -107,7 +107,7 @@ class _RecentNotificationsScreenState extends State<RecentNotificationsScreen> {
         MecaToast.show(context, result['error'] ?? 'Erro ao marcar notificações como lidas');
       }
     } catch (e) {
-      print('Erro ao marcar todas como lidas: $e');
+      debugPrint('Erro ao marcar todas como lidas: $e');
       if (!mounted) return;
       MecaToast.show(context, 'Erro ao conectar com o servidor. Tente novamente.');
     }

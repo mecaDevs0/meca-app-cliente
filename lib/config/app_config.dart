@@ -31,8 +31,8 @@ class AppConfig {
   // PLATAFORMA MECA
   // ========================================
 
-  /// Taxa interna da plataforma (cálculo; cliente não vê taxa).
-  static const double mecaPlatformFee = 0.12;
+  /// Default platform fee — should be overridden by workshop-specific value from API
+  static const double mecaPlatformFeeDefault = 0.12;
 
   // ========================================
   // FIPE API (Consulta de Veículos)

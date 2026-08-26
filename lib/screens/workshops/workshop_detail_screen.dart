@@ -1970,21 +1970,17 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     if (latRaw != null) {
       final lat = _parseDouble(latRaw);
       normalized['latitude'] = lat;
-      print('   Latitude normalizada: $lat');
     } else {
       normalized['latitude'] = null;
-      print('   Latitude é null');
     }
-    
+
     // Normalizar longitude
     final lngRaw = normalized['longitude'];
     if (lngRaw != null) {
       final lng = _parseDouble(lngRaw);
       normalized['longitude'] = lng;
-      print('   Longitude normalizada: $lng');
     } else {
       normalized['longitude'] = null;
-      print('   Longitude é null');
     }
     
     return normalized;

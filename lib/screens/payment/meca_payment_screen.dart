@@ -237,9 +237,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     super.initState();
     _selectedInstallments = widget.installments > 0 ? widget.installments : 1;
 
+    // totalAmount is already in REAIS
     AppsFlyerService.instance.logInitiatedCheckout(
       widget.bookingData['id']?.toString() ?? '',
-      widget.totalAmount / 100.0,
+      widget.totalAmount,
     );
 
     _loadSavedCards();
@@ -778,6 +779,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               installmentValue: installmentValue,
               interestInstallments: interestInstallments,
               pixExpirationInSeconds: _selectedMethod == 'pix' ? 3600 : null,
+              discountAmount: _promoDiscount > 0 ? _promoDiscount : null,
             );
 
       if (!mounted) return;
@@ -872,25 +874,16 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       final orderId = data['order_id']?.toString();
       final chargeId = data['charge_id']?.toString();
 
-      print('💳 [Payment] ========== RESPOSTA DA API ==========');
-      print('💳 [Payment] Status recebido: $status');
-      print('💳 [Payment] Payment ID: $paymentId');
-      print('💳 [Payment] Order ID: $orderId');
-      print('💳 [Payment] Charge ID: $chargeId');
-      print('💳 [Payment] Data completo: $data');
-      print('💳 [Payment] ======================================');
+      debugPrint('💳 [Payment] Status=$status paymentId=$paymentId');
 
       // Se pagamento foi aprovado IMEDIATAMENTE, não mostrar tela de análise
       if (_selectedMethod == 'credit_card' &&
           (status == 'approved' || status == 'paid')) {
-        print(
-            '✅ [Payment] Pagamento APROVADO IMEDIATAMENTE - navegando para review');
-
         AppsFlyerService.instance.logPurchase(
           widget.bookingData['id']?.toString() ?? '',
           paymentId ?? '',
-          widget.totalAmount / 100.0,
-          _selectedMethod ?? 'credit_card',
+          widget.totalAmount,
+          _selectedMethod,
         );
 
         AppAlerts.showSuccess(
@@ -1244,8 +1237,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         AppsFlyerService.instance.logPurchase(
           widget.bookingData['id']?.toString() ?? '',
           data['payment_id']?.toString() ?? data['id']?.toString() ?? '',
-          widget.totalAmount / 100.0,
-          _selectedMethod ?? 'credit_card',
+          widget.totalAmount,
+          _selectedMethod,
         );
 
         AppAlerts.showSuccess(context,
@@ -1317,10 +1310,22 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     }
   }
 
+  int _pollCount = 0;
+  static const int _maxPollAttempts = 30; // 5 minutes at 10s intervals
+
   void _startStatusPolling() {
     _statusTimer?.cancel();
+    _pollCount = 0;
     if (_paymentId == null) return;
-    _statusTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _statusTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      _pollCount++;
+      if (_pollCount > _maxPollAttempts) {
+        timer.cancel();
+        if (mounted) {
+          setState(() {});
+        }
+        return;
+      }
       _checkPaymentStatus(silent: true);
     });
   }
@@ -1434,13 +1439,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   }
 
   String? _extractCardToken(String? cardId) {
-    if (cardId == null) {
-      print('⚠️ [Payment] cardId é null');
-      return null;
-    }
-
-    print('🔍 [Payment] Buscando token para cardId: $cardId');
-    print('🔍 [Payment] Total de cartões salvos: ${_savedCards.length}');
+    if (cardId == null) return null;
 
     // Tentar encontrar o cartão por diferentes campos de ID
     Map<String, dynamic>? card;
@@ -1454,28 +1453,17 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         orElse: () => <String, dynamic>{},
       );
     } catch (e) {
-      print('❌ [Payment] Erro ao buscar cartão: $e');
       return null;
     }
 
-    if (card.isEmpty) {
-      print('❌ [Payment] Cartão não encontrado na lista para cardId: $cardId');
-      print(
-          '🔍 [Payment] IDs disponíveis: ${_savedCards.map((c) => c['id']?.toString()).join(", ")}');
-      return null;
-    }
+    if (card.isEmpty) return null;
 
     // Tentar diferentes campos de token
     final token =
         card['card_token'] ?? card['cardToken'] ?? card['token'] ?? '';
     final tokenString = token.toString();
 
-    print(
-        '✅ [Payment] Token encontrado: ${tokenString.isNotEmpty ? tokenString.substring(0, Math.min(20, tokenString.length)) + "..." : "VAZIO"}');
-
     if (tokenString.isEmpty) {
-      print(
-          '❌ [Payment] Cartão encontrado mas token está vazio. Campos disponíveis: ${card.keys.join(", ")}');
       return null;
     }
 

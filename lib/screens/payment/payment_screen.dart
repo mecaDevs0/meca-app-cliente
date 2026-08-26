@@ -26,6 +26,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   final ApiService _apiService = ApiService();
   bool _billingChecked = false;
   bool _checkingBilling = true;
+  String? _billingError;
 
   @override
   void initState() {
@@ -57,9 +58,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _billingChecked = true;
+        _billingError = 'Não foi possível verificar seus dados. Toque para tentar novamente.';
         _checkingBilling = false;
       });
+      debugPrint('[Payment] Billing check failed: $e');
     }
   }
 
@@ -77,12 +79,27 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   static int _parseMaxInstallments(dynamic value, int defaultValue) {
     if (value == null) return defaultValue;
-    if (value is int) return value.clamp(1, 24);
+    if (value is int) return value.clamp(1, 12);
     final n = int.tryParse(value.toString());
-    return n != null ? n.clamp(1, 24) : defaultValue;
+    return n != null ? n.clamp(1, 12) : defaultValue;
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
   }
 
   double? _extractQuoteAmount(Map<String, dynamic> booking, Map<String, dynamic> service) {
+    // Prioridade 1: campo explícito em reais (API nova) — sem heurística
+    for (final key in ['final_price_reais', 'finalPriceReais']) {
+      final val = booking[key];
+      if (val != null) {
+        final d = val is num ? val.toDouble() : double.tryParse(val.toString());
+        if (d != null && d > 0) return d;
+      }
+    }
+    // Prioridade 2: campos legados (parsing com heurística centavos/reais)
     final candidateKeys = ['final_price', 'finalPrice', 'final_amount', 'finalAmount', 'approved_amount', 'approvedAmount', 'fin_price_cents'];
     for (final key in candidateKeys) {
       if (!booking.containsKey(key)) continue;
@@ -96,24 +113,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return null;
   }
 
+  // Booking price fields (final_price, estimated_price) are stored in CENTAVOS.
+  // Converts centavos to reais for display.
   double? _parseBackendPrice(dynamic raw) {
     if (raw == null) return null;
+    final num value;
     if (raw is num) {
-      final value = raw.toDouble();
-      if (value == 0) return null;
-      if (value % 1 == 0) return value / 100;
-      return value;
-    }
-    if (raw is String) {
-      final cleaned = raw.trim();
+      value = raw;
+    } else if (raw is String) {
+      final cleaned = raw.trim().replaceAll(',', '.');
       if (cleaned.isEmpty) return null;
-      final parsed = double.tryParse(cleaned.replaceAll(',', '.'));
-      if (parsed == null || parsed == 0) return null;
-      if (cleaned.contains('.') || cleaned.contains(',')) return parsed;
-      if (parsed % 1 == 0) return parsed / 100;
-      return parsed;
+      final parsed = double.tryParse(cleaned);
+      if (parsed == null) return null;
+      value = parsed;
+    } else {
+      return null;
     }
-    return null;
+    if (value == 0) return null;
+    // Values >= 100 are treated as centavos (R$1.00 minimum)
+    if (value >= 100) return value.toDouble() / 100;
+    return value.toDouble();
   }
 
   @override
@@ -129,8 +148,53 @@ class _PaymentScreenState extends State<PaymentScreen> {
       );
     }
 
+    if (_billingError != null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Pagamento'),
+          backgroundColor: const Color(0xFF00C977),
+          foregroundColor: Colors.white,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  _billingError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16, color: Colors.black87),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _billingError = null;
+                      _checkingBilling = true;
+                    });
+                    _checkBillingData();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00C977),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Tentar novamente'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final quoteAmount = _extractQuoteAmount(widget.booking, widget.service) ?? 0.0;
-    final mecaFee = quoteAmount > 0 ? quoteAmount * AppConfig.mecaPlatformFee : 0.0;
+    final workshopFeeRate = _parseDouble(widget.workshop['meca_fee_percentage']) ?? AppConfig.mecaPlatformFeeDefault;
+    final effectiveFeeRate = workshopFeeRate > 1 ? workshopFeeRate / 100 : workshopFeeRate;
+    final mecaFee = quoteAmount > 0 ? quoteAmount * effectiveFeeRate : 0.0;
     return MecaPaymentScreen(
       bookingData: widget.booking,
       totalAmount: quoteAmount,

@@ -155,7 +155,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
       } else {
         final allowManual = result['allowManualInput'] != false;
         final errMsg = result['error']?.toString() ?? result['message']?.toString() ?? 'Placa não encontrada. Preencha manualmente.';
-        print('ℹ️ [AddCar] Não encontrado — allowManualInput: $allowManual');
+        debugPrint('ℹ️ [AddCar] Não encontrado — allowManualInput: $allowManual');
         setState(() {
           _plateNotFound = true;
           _allowManualInput = allowManual;
@@ -167,7 +167,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
         }
       }
     } catch (e) {
-      print('❌ [AddCar] Erro: $e');
+      debugPrint('❌ [AddCar] Erro: $e');
       if (mounted) {
         setState(() {
           _plateNotFound = true;
@@ -240,7 +240,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                     profileResult['data']['customer_id'];
       }
     } catch (e) {
-      print('Erro ao obter perfil: $e');
+      debugPrint('Erro ao obter perfil: $e');
     }
 
     if (customerId == null || customerId.isEmpty) {

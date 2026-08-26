@@ -224,6 +224,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
   }
 
   Widget _buildPaymentCard(Map<String, dynamic> payment, bool isDark) {
+    // payments.amount is stored in REAIS (not centavos)
     final amount = double.tryParse(payment['amount']?.toString() ?? '') ?? 0.0;
     final method = (payment['payment_method'] as String? ?? '').toUpperCase();
     final status = payment['status'] as String? ?? '';

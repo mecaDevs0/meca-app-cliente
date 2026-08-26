@@ -135,7 +135,7 @@ class _BookingScreenState extends State<BookingScreen> {
         );
       }
     } catch (e) {
-      print('Erro ao carregar veículos: $e');
+      debugPrint('Erro ao carregar veículos: $e');
       AppAlerts.showError(
         context,
         message: 'Não foi possível listar seus veículos agora. Tente novamente em instantes.',
@@ -163,7 +163,7 @@ class _BookingScreenState extends State<BookingScreen> {
         );
       }
     } catch (e) {
-      print('Erro ao carregar serviços: $e');
+      debugPrint('Erro ao carregar serviços: $e');
       AppAlerts.showError(
         context,
         message: 'Não foi possível carregar os serviços da oficina agora. Tente novamente.',
@@ -467,7 +467,7 @@ class _BookingScreenState extends State<BookingScreen> {
             scheduledDate: scheduledDate,
           );
         } catch (e) {
-          print('Erro ao agendar lembretes: $e');
+          debugPrint('Erro ao agendar lembretes: $e');
         }
         
         await _showSnackBar('Agendamento criado com sucesso!', isError: false);
@@ -1937,10 +1937,7 @@ class _BookingScreenState extends State<BookingScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    print('🔘 [BookingScreen] Botão Tirar Foto clicado!');
-                    _takePhoto();
-                  },
+                  onPressed: _takePhoto,
                   icon: const Icon(Icons.camera_alt, size: 20),
                   label: const Text('Tirar Foto'),
                   style: OutlinedButton.styleFrom(
@@ -2012,13 +2009,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
 
   Future<void> _takePhoto() async {
-    print('📸 [BookingScreen] Botão Tirar Foto pressionado');
-    
     try {
-      // Usar image_picker diretamente - ele já gerencia permissões automaticamente
-      // e dispara o popup NATIVO do sistema quando necessário
-      print('📸 [BookingScreen] Abrindo câmera via image_picker...');
-      
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
         source: ImageSource.camera,
@@ -2026,18 +2017,11 @@ class _BookingScreenState extends State<BookingScreen> {
         maxHeight: 1080,
         imageQuality: 85,
       );
-      
-      if (image == null) {
-        print('📸 [BookingScreen] Usuário cancelou a captura');
-        return;
-      }
-      
-      print('📸 [BookingScreen] Foto capturada: ${image.path}');
-      
-      // Verificar se o arquivo original existe
+
+      if (image == null) return;
+
       final originalFile = File(image.path);
       if (!await originalFile.exists()) {
-        print('❌ [BookingScreen] Arquivo original não existe: ${image.path}');
         if (mounted) {
           AppAlerts.showError(
             context,
@@ -2046,13 +2030,9 @@ class _BookingScreenState extends State<BookingScreen> {
         }
         return;
       }
-      
-      // Verificar tamanho do arquivo
+
       final fileSize = await originalFile.length();
-      print('📸 [BookingScreen] Tamanho do arquivo original: $fileSize bytes');
-      
       if (fileSize == 0) {
-        print('❌ [BookingScreen] Arquivo está vazio');
         if (mounted) {
           AppAlerts.showError(
             context,
@@ -2061,14 +2041,11 @@ class _BookingScreenState extends State<BookingScreen> {
         }
         return;
       }
-      
-      // Salvar em diretório temporário (copia o arquivo)
+
       final photoRepo = PhotoRepository();
       final tempFile = await photoRepo.saveTempFile(originalFile);
-      
-      // Verificar se a cópia foi bem-sucedida
+
       if (!await tempFile.exists()) {
-        print('❌ [BookingScreen] Erro ao copiar arquivo para diretório temporário');
         if (mounted) {
           AppAlerts.showError(
             context,
@@ -2077,20 +2054,14 @@ class _BookingScreenState extends State<BookingScreen> {
         }
         return;
       }
-      
-      final tempFileSize = await tempFile.length();
-      print('📸 [BookingScreen] Foto salva em: ${tempFile.path}');
-      print('📸 [BookingScreen] Tamanho do arquivo copiado: $tempFileSize bytes');
-      
+
       if (mounted) {
         setState(() {
           _uploadedImages.add(tempFile);
         });
-        print('📸 [BookingScreen] Foto adicionada à lista. Total: ${_uploadedImages.length}');
       }
-    } catch (e, stackTrace) {
-      print('❌ [BookingScreen] Erro ao tirar foto: $e');
-      print('❌ [BookingScreen] Stack trace: $stackTrace');
+    } catch (e) {
+      debugPrint('[BookingScreen] Erro ao tirar foto: $e');
       if (mounted) {
         AppAlerts.showError(
           context,
@@ -2156,7 +2127,7 @@ class _BookingScreenState extends State<BookingScreen> {
         }
       }
     } catch (e) {
-      print('Erro ao selecionar imagem: $e');
+      debugPrint('Erro ao selecionar imagem: $e');
       if (mounted) {
         AppAlerts.showError(
           context,
@@ -2175,46 +2146,27 @@ class _BookingScreenState extends State<BookingScreen> {
   Future<void> _uploadImages(String bookingId) async {
     if (_uploadedImages.isEmpty) return;
 
-    print('📤 [BookingScreen] Iniciando upload de ${_uploadedImages.length} imagem(ns)');
-    
     for (int i = 0; i < _uploadedImages.length; i++) {
       final imageFile = _uploadedImages[i];
       try {
-        // Verificar se o arquivo existe antes de fazer upload
-        if (!await imageFile.exists()) {
-          print('❌ [BookingScreen] Arquivo não existe antes do upload: ${imageFile.path}');
-          continue;
-        }
-        
-        final fileSize = await imageFile.length();
-        print('📤 [BookingScreen] Upload ${i + 1}/${_uploadedImages.length}: ${imageFile.path} (${fileSize} bytes)');
-        
+        if (!await imageFile.exists()) continue;
+
         final result = await _uploadService.uploadImage(
           imageFile,
           bookingId,
-          onProgress: (progress) {
-            print('📤 [BookingScreen] Upload progress: ${progress.percentage.toStringAsFixed(0)}%');
-          },
         );
 
         if (result.success) {
-          print('✅ [BookingScreen] Upload bem-sucedido: ${result.imageUrl}');
-          // Limpar arquivo temporário após upload bem-sucedido
           try {
             await _photoService.deleteTempPhoto(imageFile.path);
-          } catch (e) {
-            print('⚠️ [BookingScreen] Erro ao deletar arquivo temporário: $e');
-          }
+          } catch (_) {}
         } else {
-          print('❌ [BookingScreen] Erro ao fazer upload da imagem: ${result.error}');
+          debugPrint('[BookingScreen] Erro upload imagem: ${result.error}');
         }
-      } catch (e, stackTrace) {
-        print('❌ [BookingScreen] Erro ao fazer upload da imagem: $e');
-        print('❌ [BookingScreen] Stack trace: $stackTrace');
+      } catch (e) {
+        debugPrint('[BookingScreen] Erro upload imagem: $e');
       }
     }
-    
-    print('📤 [BookingScreen] Upload de imagens concluído');
   }
 
   @override

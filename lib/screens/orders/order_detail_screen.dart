@@ -7,7 +7,10 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../services/api_service.dart';
+import '../../services/calendar_service.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/booking_timeline_widget.dart';
 import '../../utils/formatters.dart';
@@ -37,6 +40,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   final Map<int, bool> _quoteSelectedItems = {};
   final Map<int, String?> _quoteSelectedOptions = {};
   bool _quoteSelectionInitialized = false;
+
+  // Calendar state
+  bool _calendarAdded = false;
+  bool _calendarLoading = false;
 
   // Timeline state
   List<Map<String, dynamic>> _timelineEvents = [];
@@ -230,6 +237,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   double? _resolveServiceAmount(Map<String, dynamic> bookingData) {
+    // Prioridade: campo explícito em reais da API
+    final epReais = bookingData['estimated_price_reais'];
+    if (epReais != null) {
+      final d = epReais is num ? epReais.toDouble() : double.tryParse(epReais.toString());
+      if (d != null && d > 0) return d;
+    }
     final candidates = [
       bookingData['service_price'],
       bookingData['service']?['price'],
@@ -434,6 +447,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _checkBookingStatus();
     _setupBookingStatusListener();
     _loadTimeline();
+    _loadCalendarState();
   }
 
   Future<void> _loadBookingDetailsFromId() async {
@@ -750,9 +764,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   static int _parseMaxInstallments(dynamic value, int defaultValue) {
     if (value == null) return defaultValue;
-    if (value is int) return value.clamp(1, 24);
+    if (value is int) return value.clamp(1, 12);
     final n = int.tryParse(value.toString());
-    return n != null ? n.clamp(1, 24) : defaultValue;
+    return n != null ? n.clamp(1, 12) : defaultValue;
   }
 
   Future<void> _redirectToPayment({Map<String, dynamic>? bookingData}) async {
@@ -983,6 +997,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                 child: _buildReminderCard(),
+              ),
+            if (_shouldShowCalendarButton())
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                child: _buildCalendarButton(),
               ),
             Padding(
               padding: const EdgeInsets.all(20),
@@ -2007,8 +2026,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     final description = item['description'] ?? 'Item sem descrição';
                     final quantityRaw = item['quantity'] ?? 1;
                     final quantity = quantityRaw is int ? quantityRaw : (quantityRaw is String ? int.tryParse(quantityRaw) ?? 1 : 1);
-                    final unitPriceRaw = item['unit_price'] ?? 0;
-                    final unitPriceCents = unitPriceRaw is int ? unitPriceRaw : (unitPriceRaw is String ? int.tryParse(unitPriceRaw) ?? 0 : (unitPriceRaw is double ? unitPriceRaw.toInt() : 0));
+                    final unitPriceCents = PriceUtils.toCents(item['unit_price']);
                     final unitPrice = unitPriceCents / 100.0;
                     final totalItem = unitPrice * quantity;
                     return Container(
@@ -2182,7 +2200,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           zoomControlsEnabled: false,
                           mapToolbarEnabled: false,
                           onMapCreated: (GoogleMapController controller) {
-                            print('🗺️ [OrderDetail] Mapa interativo criado com sucesso!');
+                            debugPrint('🗺️ [OrderDetail] Mapa interativo criado com sucesso!');
                           },
                         ),
                       )
@@ -4511,6 +4529,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   double? _extractFinalPriceFromMap(Map<String, dynamic> bookingData) {
+    // Prioridade 1: campo explícito em reais (API nova) — sem heurística
+    final reaisKeys = ['final_price_reais', 'finalPriceReais'];
+    for (final key in reaisKeys) {
+      final val = bookingData[key];
+      if (val != null) {
+        final d = val is num ? val.toDouble() : double.tryParse(val.toString());
+        if (d != null && d > 0) return d;
+      }
+    }
+
+    // Prioridade 2: campos legados (parsing com heurística centavos/reais)
     final candidateKeys = [
       'final_price',
       'finalPrice',
@@ -4524,17 +4553,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     for (final key in candidateKeys) {
       if (!bookingData.containsKey(key)) continue;
       final candidate = bookingData[key];
-      
-      // DEBUG: Log para verificar valor bruto
-      debugPrint('💰 [OrderDetail] _extractFinalPriceFromMap: key=$key, raw=$candidate, type=${candidate.runtimeType}');
-      
       final parsed = _parseBackendPrice(candidate);
-      
-      // DEBUG: Log para verificar valor convertido
-      if (parsed != null && parsed > 0) {
-        debugPrint('💰 [OrderDetail] _extractFinalPriceFromMap: parsed=$parsed (R\$ ${parsed.toStringAsFixed(2)})');
-        return parsed;
-      }
+      if (parsed != null && parsed > 0) return parsed;
     }
     return null;
   }
@@ -4851,26 +4871,211 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  bool _shouldShowCalendarButton() {
+    final status = (_bookingDetails?['status'] ?? widget.booking['status'])?.toString() ?? '';
+    final normalized = _normalizeStatusKey(status);
+    const preServiceStatuses = {
+      'pending',
+      'pending_customer',
+      'confirmed',
+      'awaiting_quote_approval',
+      'awaiting_service_start',
+      'vehicle_at_workshop',
+    };
+    if (!preServiceStatuses.contains(normalized)) return false;
+
+    final appointmentDate = _bookingDetails?['appointment_date']
+        ?? widget.booking['appointment_date']
+        ?? widget.booking['scheduled_date'];
+    if (appointmentDate == null) return false;
+
+    try {
+      return DateTime.parse(appointmentDate.toString()).isAfter(DateTime.now());
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _loadCalendarState() async {
+    final bookingId = widget.booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final added = prefs.getBool('calendar_added_$bookingId') ?? false;
+    if (added && mounted) {
+      setState(() => _calendarAdded = true);
+    }
+  }
+
+  Future<void> _saveCalendarState() async {
+    final bookingId = widget.booking['id']?.toString() ?? '';
+    if (bookingId.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('calendar_added_$bookingId', true);
+  }
+
+  Future<void> _addToCalendar() async {
+    if (_calendarLoading) return;
+    setState(() => _calendarLoading = true);
+
+    try {
+      final success = await CalendarService.addBookingToCalendar(
+        booking: widget.booking,
+        bookingDetails: _bookingDetails,
+      );
+
+      if (!mounted) {
+        _calendarLoading = false;
+        return;
+      }
+
+      if (success) {
+        setState(() {
+          _calendarAdded = true;
+          _calendarLoading = false;
+        });
+        _saveCalendarState();
+        AppAlerts.showSuccess(
+          context,
+          message: 'Adicionado ao calendário! 📅',
+        );
+      } else {
+        setState(() => _calendarLoading = false);
+      }
+    } catch (e) {
+      if (!mounted) {
+        _calendarLoading = false;
+        return;
+      }
+      setState(() => _calendarLoading = false);
+      AppAlerts.showError(
+        context,
+        message: 'Não foi possível adicionar ao calendário. Tente novamente.',
+      );
+    }
+  }
+
+  Widget _buildCalendarButton() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    const green = Color(0xFF00C977);
+
+    final bgColor = _calendarAdded
+        ? green
+        : (isDarkMode ? const Color(0xFF1A1A1A) : Colors.white);
+    final borderColor = _calendarAdded
+        ? green
+        : green.withValues(alpha: 0.5);
+    final iconColor = _calendarAdded
+        ? Colors.white
+        : green;
+    final titleColor = _calendarAdded
+        ? Colors.white
+        : (isDarkMode ? Colors.white : const Color(0xFF252940));
+    final subtitleColor = _calendarAdded
+        ? Colors.white.withValues(alpha: 0.9)
+        : (isDarkMode ? Colors.grey[400]! : Colors.grey[600]!);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor, width: 1.5),
+        boxShadow: _calendarAdded
+            ? [
+                BoxShadow(
+                  color: green.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _calendarLoading ? null : _addToCalendar,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+            child: Row(
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: Icon(
+                    _calendarAdded ? Icons.check_circle : Icons.calendar_month,
+                    key: ValueKey(_calendarAdded),
+                    color: iconColor,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _calendarAdded ? 'Adicionado ao Calendário ✓' : 'Adicionar ao Calendário',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: titleColor,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _calendarAdded
+                            ? 'Toque para adicionar novamente'
+                            : 'Salve na sua agenda e não esqueça',
+                        style: TextStyle(fontSize: 12, color: subtitleColor),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_calendarLoading)
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _calendarAdded ? Colors.white : green,
+                    ),
+                  )
+                else
+                  Icon(
+                    _calendarAdded ? Icons.refresh : Icons.add_circle_outline,
+                    color: iconColor,
+                    size: 22,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildReminderCard() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final reminderEnabled = (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled']) == true;
-    final gradient = reminderEnabled ? const LinearGradient(colors: [Color(0xFF00C977), Color(0xFF00B369)]) : null;
-    final inactiveColor = isDarkMode ? const Color(0xFF2A2A2A) : const Color(0xFFE8E8E8);
+    const green = Color(0xFF00C977);
 
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: gradient,
-        color: gradient == null ? inactiveColor : null,
+        color: reminderEnabled
+            ? green
+            : (isDarkMode ? const Color(0xFF1A1A1A) : Colors.white),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: reminderEnabled ? const Color(0xFF00C977) : (isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
+          color: reminderEnabled ? green : green.withValues(alpha: 0.5),
           width: 1.5,
         ),
         boxShadow: reminderEnabled
             ? [
                 BoxShadow(
-                  color: const Color(0xFF00C977).withOpacity(0.3),
+                  color: green.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -4889,7 +5094,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               children: [
                 Icon(
                   reminderEnabled ? Icons.notifications_active : Icons.notifications_off,
-                  color: reminderEnabled ? Colors.white : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                  color: reminderEnabled ? Colors.white : green,
                   size: 24,
                 ),
                 const SizedBox(width: 12),
@@ -4902,18 +5107,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: reminderEnabled ? Colors.white : (isDarkMode ? Colors.grey[300] : Colors.grey[700]),
+                          color: reminderEnabled ? Colors.white : (isDarkMode ? Colors.white : const Color(0xFF252940)),
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         reminderEnabled
-                            ? 'Você receberá notificações 1 dia antes, no dia e 1 hora antes'
-                            : 'Receba notificações 1 dia antes, no dia e 1 hora antes',
+                            ? 'Notificações ativadas para este serviço'
+                            : 'Receba alertas antes do serviço',
                         style: TextStyle(
                           fontSize: 12,
                           color: reminderEnabled
-                              ? Colors.white.withOpacity(0.9)
+                              ? Colors.white.withValues(alpha: 0.9)
                               : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
                         ),
                       ),
@@ -4922,7 +5127,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ),
                 Icon(
                   reminderEnabled ? Icons.toggle_on : Icons.toggle_off,
-                  color: reminderEnabled ? Colors.white : (isDarkMode ? Colors.grey[500] : Colors.grey[400]),
+                  color: reminderEnabled ? Colors.white : green,
                   size: 32,
                 ),
               ],
@@ -5088,12 +5293,10 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
         orElse: () => null,
       );
       if (selectedOpt != null) {
-        final raw = selectedOpt['unit_price'] ?? 0;
-        return (raw is int ? raw : (raw is String ? int.tryParse(raw) ?? 0 : (raw is double ? raw.toInt() : 0))) / 100.0;
+        return PriceUtils.toCents(selectedOpt['unit_price']) / 100.0;
       }
     }
-    final unitPriceRaw = item['unit_price'] ?? 0;
-    return (unitPriceRaw is int ? unitPriceRaw : (unitPriceRaw is String ? int.tryParse(unitPriceRaw) ?? 0 : (unitPriceRaw is double ? unitPriceRaw.toInt() : 0))) / 100.0;
+    return PriceUtils.toCents(item['unit_price']) / 100.0;
   }
 
   double? _parseDiagnosticValue(dynamic raw) {
@@ -5269,8 +5472,7 @@ class _QuoteDetailModalState extends State<QuoteDetailModal> {
                             ...options.map<Widget>((opt) {
                               final optId = opt['id']?.toString() ?? '';
                               final optDesc = opt['description']?.toString() ?? '';
-                              final optPriceRaw = opt['unit_price'] ?? 0;
-                              final optPrice = (optPriceRaw is int ? optPriceRaw : (optPriceRaw is String ? int.tryParse(optPriceRaw) ?? 0 : (optPriceRaw is double ? optPriceRaw.toInt() : 0))) / 100.0;
+                              final optPrice = PriceUtils.toCents(opt['unit_price']) / 100.0;
                               final isOptSelected = _selectedOptionIds[index] == optId;
                               return InkWell(
                                 onTap: () => setState(() => _selectedOptionIds[index] = optId),

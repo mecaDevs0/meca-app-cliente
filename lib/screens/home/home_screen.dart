@@ -162,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         });
       }
     } catch (e) {
-      print('Erro ao carregar dados: $e');
+      debugPrint('[Home] Erro ao carregar dados: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -183,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           return;
         }
       } catch (e) {
-        print('Erro ao obter localização: $e');
+        debugPrint('Erro ao obter localização: $e');
       }
     }
     await _updateNearbyWorkshopsNoLocation();
@@ -223,9 +223,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           // Card SOS Guincho (apenas para São Paulo Capital)
           Builder(
             builder: (context) {
-              print('🔍 [SOS Guincho] Build: _isInSaoPaulo = $_isInSaoPaulo, _checkingLocation = $_checkingLocation');
               if (_isInSaoPaulo) {
-                print('✅ [SOS Guincho] Exibindo card SOS!');
                 return Column(
                   children: [
                     Padding(
@@ -235,8 +233,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     const SizedBox(height: 24),
                   ],
                 );
-              } else {
-                print('⚠️ [SOS Guincho] Card NÃO será exibido (_isInSaoPaulo = false)');
               }
               return const SizedBox.shrink();
             },
@@ -1310,12 +1306,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _checkIfInSaoPaulo(double latitude, double longitude) async {
     if (_checkingLocation) {
-      print('⚠️ [SOS Guincho] Já está verificando localização, ignorando...');
+      debugPrint('[SOS Guincho] Já está verificando localização, ignorando...');
       return;
     }
     
-    print('🔍 [SOS Guincho] ========== INICIANDO VERIFICAÇÃO ==========');
-    print('🔍 [SOS Guincho] Coordenadas recebidas: lat=$latitude, lng=$longitude');
+    debugPrint('[SOS Guincho] Verificando localização: lat=$latitude, lng=$longitude');
     
     if (!mounted) return;
     setState(() {
@@ -1338,64 +1333,64 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         longitude,
       ) / 1000; // Converter para km
       
-      print('🔍 [SOS Guincho] Distância do centro SP: ${distance.toStringAsFixed(2)}km');
+      debugPrint('[SOS Guincho] Distância do centro SP: ${distance.toStringAsFixed(2)}km');
       
       // Verificar se está dentro do raio
       final isInRadius = distance <= radiusKm;
-      print('🔍 [SOS Guincho] Está no raio? $isInRadius');
+      debugPrint('[SOS Guincho] Está no raio? $isInRadius');
       
       // Verificação adicional: usar geocoding para confirmar cidade
       // IMPORTANTE: Se estiver no raio de 50km, considerar como SP mesmo se geocoding falhar
       bool isSaoPauloCity = false;
       if (isInRadius) {
         try {
-          print('🔍 [SOS Guincho] Fazendo geocoding para confirmar cidade...');
+          debugPrint('[SOS Guincho] Fazendo geocoding para confirmar cidade...');
           final placemarks = await placemarkFromCoordinates(latitude, longitude);
           if (placemarks.isNotEmpty) {
             final place = placemarks.first;
             final city = place.locality?.toLowerCase() ?? '';
             final adminArea = place.administrativeArea?.toLowerCase() ?? '';
             
-            print('🔍 [SOS Guincho] Cidade: $city, Estado: $adminArea');
+            debugPrint('[SOS Guincho] Cidade: $city, Estado: $adminArea');
             
             // Verificar se é São Paulo, SP
             isSaoPauloCity = (city.contains('são paulo') || city.contains('sao paulo')) &&
                             (adminArea.contains('sp') || adminArea.contains('são paulo'));
             
-            print('🔍 [SOS Guincho] Geocoding confirmou São Paulo? $isSaoPauloCity');
+            debugPrint('[SOS Guincho] Geocoding confirmou São Paulo? $isSaoPauloCity');
             
             // Se geocoding não confirmar mas está no raio de 50km, usar distância como fallback
             if (!isSaoPauloCity) {
-              print('⚠️ [SOS Guincho] Geocoding não confirmou, mas está no raio - usando distância');
+              debugPrint('[SOS Guincho] Geocoding não confirmou, mas está no raio - usando distância');
               isSaoPauloCity = true; // Se está dentro de 50km do centro, considerar SP
             }
           } else {
-            print('⚠️ [SOS Guincho] Nenhum placemark encontrado, usando verificação de distância');
+            debugPrint('[SOS Guincho] Nenhum placemark encontrado, usando verificação de distância');
             // Se não conseguir geocoding mas está no raio, considerar como SP
             isSaoPauloCity = true;
           }
         } catch (e) {
-          print('❌ [SOS Guincho] Erro ao fazer geocoding: $e');
+          debugPrint('[SOS Guincho] Erro ao fazer geocoding: $e');
           // Se geocoding falhar, usar apenas a verificação de distância
           // Se está dentro de 50km, considerar como SP
           isSaoPauloCity = true;
-          print('🔍 [SOS Guincho] Usando verificação de distância apenas: $isSaoPauloCity');
+          debugPrint('[SOS Guincho] Usando verificação de distância apenas: $isSaoPauloCity');
         }
       } else {
-        print('⚠️ [SOS Guincho] Fora do raio de ${radiusKm}km - não exibindo card');
+        debugPrint('[SOS Guincho] Fora do raio de ${radiusKm}km');
       }
       
-      print('✅ [SOS Guincho] Resultado final: _isInSaoPaulo = $isSaoPauloCity');
+      debugPrint('[SOS Guincho] Resultado: _isInSaoPaulo = $isSaoPauloCity');
       
       if (!mounted) return;
-      print('✅ [SOS Guincho] Atualizando estado: _isInSaoPaulo = $isSaoPauloCity');
+      debugPrint('[SOS Guincho] Atualizando estado: _isInSaoPaulo = $isSaoPauloCity');
       setState(() {
         _isInSaoPaulo = isSaoPauloCity;
         _checkingLocation = false;
       });
-      print('✅ [SOS Guincho] Estado atualizado via setState! Card deve ${isSaoPauloCity ? "aparecer" : "NÃO aparecer"}');
+      debugPrint('[SOS Guincho] Estado atualizado: card ${isSaoPauloCity ? "visível" : "oculto"}');
     } catch (e) {
-      print('❌ [SOS Guincho] Erro ao verificar localização São Paulo: $e');
+      debugPrint('[SOS Guincho] Erro ao verificar localização: $e');
       if (!mounted) return;
       setState(() {
         _isInSaoPaulo = false;

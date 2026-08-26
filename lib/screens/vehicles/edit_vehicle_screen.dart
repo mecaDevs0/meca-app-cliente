@@ -66,7 +66,7 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
                     profileResult['data']['customer_id'];
       }
     } catch (e) {
-      print('Erro ao obter perfil: $e');
+      debugPrint('Erro ao obter perfil: $e');
     }
 
     if (customerId == null || customerId.isEmpty) {

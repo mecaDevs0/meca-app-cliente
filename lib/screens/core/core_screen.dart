@@ -88,7 +88,7 @@ class _CoreScreenState extends State<CoreScreen> with SingleTickerProviderStateM
     try {
       // PROTEÇÃO: Se usuário já marcou como lidas (contador = 0), NÃO sobrescrever
       if (notificationProvider.unreadNotifications == 0 && notificationProvider.notifications.isNotEmpty) {
-        print('🔒 [CoreScreen] Mantendo notificações locais (já marcadas como lidas)');
+        debugPrint('[CoreScreen] Mantendo notificações locais (já marcadas como lidas)');
         return;
       }
       

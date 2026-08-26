@@ -81,7 +81,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       }
     } catch (e) {
       // Silenciar erros
-      print('Erro ao marcar notificações como lidas: $e');
+      debugPrint('Erro ao marcar notificações como lidas: $e');
     }
   }
 
@@ -198,7 +198,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         }
       }
     } catch (e) {
-      print('Erro ao carregar dados dos veículos: $e');
+      debugPrint('Erro ao carregar dados dos veículos: $e');
     }
   }
 
@@ -1452,7 +1452,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                                       onPressed: () {
                                         final url = 'https://wa.me/$whatsappNumber';
                                         // ignore: avoid_print
-                                        print('Abrindo WhatsApp: $url');
+                                        debugPrint('Abrindo WhatsApp: $url');
                                         // Usar url_launcher para abrir WhatsApp
                                         // ignore: unawaited_futures
                                         launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);

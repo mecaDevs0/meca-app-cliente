@@ -52,17 +52,16 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
     }
   }
 
-  Future<bool> _onWillPop() async {
-    Navigator.of(context).pop(_hasChanges);
-    return false;
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithRoute: (didPop, route) {
+        if (didPop) return;
+        Navigator.of(context).pop(_hasChanges);
+      },
       child: Scaffold(
       backgroundColor: isDarkMode ? const Color(0xFF121212) : const Color(0xFFF5F5F5),
       appBar: AppBar(
@@ -291,13 +290,19 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
   String _getCardIcon(String brand) {
     switch (brand.toLowerCase()) {
       case 'visa':
-        return 'V';
+        return 'VISA';
       case 'mastercard':
-        return 'M';
+        return 'MC';
       case 'amex':
-        return 'A';
+        return 'AMEX';
+      case 'elo':
+        return 'ELO';
+      case 'diners':
+        return 'DIN';
+      case 'hipercard':
+        return 'HIPER';
       default:
-        return '?';
+        return brand.isNotEmpty ? brand.substring(0, (brand.length > 4 ? 4 : brand.length)).toUpperCase() : '?';
     }
   }
 
@@ -388,6 +393,10 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
     final expiryYearController = TextEditingController();
     final cvvController = TextEditingController();
     final cpfController = TextEditingController();
+    final holderEmailController = TextEditingController();
+    final holderPhoneController = TextEditingController();
+    final holderPostalCodeController = TextEditingController();
+    final holderAddressNumberController = TextEditingController();
     bool isSubmitting = false;
 
     try {
@@ -395,6 +404,12 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
       if (profile['success'] == true && profile['data'] != null) {
         final cpf = profile['data']['cpf']?.toString() ?? '';
         if (cpf.isNotEmpty) cpfController.text = cpf;
+        final email = profile['data']['email']?.toString() ?? '';
+        if (email.isNotEmpty) holderEmailController.text = email;
+        final phone = profile['data']['phone']?.toString() ?? '';
+        if (phone.isNotEmpty) holderPhoneController.text = phone;
+        final zip = profile['data']['zip_code']?.toString() ?? profile['data']['postal_code']?.toString() ?? '';
+        if (zip.isNotEmpty) holderPostalCodeController.text = zip;
       }
     } catch (_) {}
 
@@ -463,6 +478,41 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                       inputFormatters: [_CpfFormatter()],
                     ),
                     const SizedBox(height: 12),
+                    TextField(
+                      controller: holderEmailController,
+                      decoration: const InputDecoration(labelText: 'E-mail do titular', hintText: 'email@exemplo.com'),
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: holderPhoneController,
+                      decoration: const InputDecoration(labelText: 'Celular do titular', hintText: '(11) 99999-9999'),
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(11)],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: holderPostalCodeController,
+                            decoration: const InputDecoration(labelText: 'CEP do titular', hintText: '00000-000'),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: holderAddressNumberController,
+                            decoration: const InputDecoration(labelText: 'Nº', hintText: '123'),
+                            keyboardType: TextInputType.text,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
@@ -528,6 +578,10 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                               expiryYear: expiryYearController.text.trim(),
                               cvv: cvvController.text.trim(),
                               cpfCnpj: cpfClean,
+                              email: holderEmailController.text.trim(),
+                              phone: holderPhoneController.text.replaceAll(RegExp(r'\D'), '').trim(),
+                              postalCode: holderPostalCodeController.text.replaceAll(RegExp(r'\D'), '').trim(),
+                              addressNumber: holderAddressNumberController.text.trim(),
                             );
                             if (!mounted) return;
                             Navigator.of(dialogContext).pop();

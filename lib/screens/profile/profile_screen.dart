@@ -100,7 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       
-      print('Erro ao carregar dados do cliente: $e');
+      debugPrint('Erro ao carregar dados do cliente: $e');
       
       String errorMessage = 'Erro ao conectar com o servidor';
       if (e.toString().contains('Connection refused') || 
@@ -741,7 +741,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // NÃO sobrescrever com dados do servidor que podem estar bugados
         if (previousUnread == 0 && provider.notifications.isNotEmpty) {
           // Usuário já marcou como lidas, manter estado local
-          print('🔒 Mantendo notificações locais (já marcadas como lidas)');
+          debugPrint('Mantendo notificações locais (já marcadas como lidas)');
           return;
         }
         
@@ -783,7 +783,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Erro ao sincronizar notificações: $e');
+        debugPrint('Erro ao sincronizar notificações: $e');
       }
     }
   }
@@ -821,7 +821,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           await OneSignalService.removeExternalUserId();
         }
       } catch (e) {
-        print('Erro ao remover device token: $e');
+        debugPrint('Erro ao remover device token: $e');
       }
       
       await _apiService.logout();

@@ -47,7 +47,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         });
       }
     } catch (e) {
-      print('Erro ao carregar configurações: $e');
+      debugPrint('Erro ao carregar configurações: $e');
     } finally {
       setState(() => _isLoading = false);
     }

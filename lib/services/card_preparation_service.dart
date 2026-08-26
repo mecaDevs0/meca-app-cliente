@@ -3,8 +3,8 @@ import 'package:dio/dio.dart';
 import '../config/app_config.dart';
 import '../core/http_client_config.dart';
 
-/// Serviço que prepara e valida dados do cartão antes de enviar ao backend.
-/// O backend MECA encaminha os dados ao Asaas via TLS.
+/// Prepares and validates card data before sending to backend.
+/// Card data travels over TLS to the MECA API, which forwards to Asaas server-side.
 class CardPreparationService {
   late Dio _dio;
 
@@ -17,7 +17,6 @@ class CardPreparationService {
     configureDioForProduction(_dio);
   }
 
-  /// Obter chave pública do Asaas
   Future<String?> getPublicKey() async {
     try {
       final response = await _dio.get('/asaas/public-key');
@@ -33,9 +32,6 @@ class CardPreparationService {
     }
   }
 
-  /// Prepara e valida dados do cartão para envio ao backend.
-  /// No app Flutter, os dados são enviados via TLS para o backend MECA,
-  /// que encaminha ao Asaas no servidor.
   Future<Map<String, dynamic>> prepareCard({
     required String cardNumber,
     required String expiryMonth,
@@ -80,17 +76,48 @@ class CardPreparationService {
     }
   }
 
-  /// Detectar bandeira do cartão
   String _detectBrand(String cardNumber) {
-    if (cardNumber.startsWith('4')) {
-      return 'VISA';
-    } else if (cardNumber.startsWith('5') || cardNumber.startsWith('2')) {
-      return 'MASTERCARD';
-    } else if (cardNumber.startsWith('3')) {
-      return 'AMEX';
-    } else if (cardNumber.startsWith('6')) {
-      return 'ELO';
+    if (cardNumber.startsWith('4')) return 'VISA';
+
+    // Mastercard: 2221-2720 or 51-55
+    if (cardNumber.length >= 4) {
+      final prefix4 = int.tryParse(cardNumber.substring(0, 4)) ?? 0;
+      if (prefix4 >= 2221 && prefix4 <= 2720) return 'MASTERCARD';
     }
+    if (cardNumber.length >= 2) {
+      final prefix2 = int.tryParse(cardNumber.substring(0, 2)) ?? 0;
+      if (prefix2 >= 51 && prefix2 <= 55) return 'MASTERCARD';
+    }
+
+    // Amex: 34 or 37
+    if (cardNumber.startsWith('34') || cardNumber.startsWith('37')) {
+      return 'AMEX';
+    }
+
+    // Elo: common ranges
+    const eloRanges = ['636368', '438935', '504175', '451416', '636297', '506699'];
+    for (final prefix in eloRanges) {
+      if (cardNumber.startsWith(prefix)) return 'ELO';
+    }
+    if (cardNumber.length >= 6) {
+      final prefix6 = int.tryParse(cardNumber.substring(0, 6)) ?? 0;
+      if (prefix6 >= 509048 && prefix6 <= 509067) return 'ELO';
+      if (prefix6 >= 650031 && prefix6 <= 650033) return 'ELO';
+      if (prefix6 >= 650035 && prefix6 <= 650051) return 'ELO';
+    }
+
+    // Diners: 300-305, 36, 38
+    if (cardNumber.length >= 3) {
+      final prefix3 = int.tryParse(cardNumber.substring(0, 3)) ?? 0;
+      if (prefix3 >= 300 && prefix3 <= 305) return 'DINERS';
+    }
+    if (cardNumber.startsWith('36') || cardNumber.startsWith('38')) {
+      return 'DINERS';
+    }
+
+    // Hipercard
+    if (cardNumber.startsWith('606282')) return 'HIPERCARD';
+
     return 'UNKNOWN';
   }
 }
