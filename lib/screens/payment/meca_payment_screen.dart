@@ -978,6 +978,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     final expiryMonthController = TextEditingController();
     final expiryYearController = TextEditingController();
     final cvvController = TextEditingController();
+    final holderCpfController = TextEditingController();
+    final holderCepController = TextEditingController();
+    final holderAddressNumberController = TextEditingController();
     try {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -1011,6 +1014,50 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                           hintText: 'NOME COMPLETO',
                         ),
                         textCapitalization: TextCapitalization.characters,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: holderCpfController,
+                        decoration: const InputDecoration(
+                          labelText: 'CPF do titular do cartão',
+                          hintText: '000.000.000-00',
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(11),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: TextField(
+                              controller: holderCepController,
+                              decoration: const InputDecoration(
+                                labelText: 'CEP do titular',
+                                hintText: '00000-000',
+                              ),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(8),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: holderAddressNumberController,
+                              decoration: const InputDecoration(
+                                labelText: 'Nº',
+                                hintText: 'Ex: 123',
+                              ),
+                              keyboardType: TextInputType.text,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -1083,6 +1130,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
       final rawNumber = cardNumberController.text.replaceAll(' ', '');
       final holderName = holderNameController.text.trim();
+      final holderCpf = holderCpfController.text.replaceAll(RegExp(r'\D'), '');
+      final holderCep = holderCepController.text.replaceAll(RegExp(r'\D'), '');
+      final holderAddressNumber = holderAddressNumberController.text.trim();
       final expMonth = expiryMonthController.text.trim().padLeft(2, '0');
       var expYear = expiryYearController.text.trim();
       final cvv = cvvController.text.trim();
@@ -1097,6 +1147,18 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         AppAlerts.showWarning(context,
             title: 'Dados inválidos',
             message: 'Informe o nome impresso no cartão.');
+        return;
+      }
+      if (holderCpf.length != 11) {
+        AppAlerts.showWarning(context,
+            title: 'Dados inválidos',
+            message: 'Informe o CPF do titular do cartão (11 dígitos).');
+        return;
+      }
+      if (holderCep.length != 8) {
+        AppAlerts.showWarning(context,
+            title: 'Dados inválidos',
+            message: 'Informe o CEP do titular do cartão (8 dígitos).');
         return;
       }
       if (expMonth.length != 2 || expYear.isEmpty) {
@@ -1181,6 +1243,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         'brand': brand,
         'expiryMonth': expMonth,
         'expiryYear': expYear,
+        if (holderCpf.isNotEmpty) 'holderCpf': holderCpf,
+        if (holderCep.isNotEmpty) 'holderPostalCode': holderCep,
+        if (holderAddressNumber.isNotEmpty) 'holderAddressNumber': holderAddressNumber,
       };
       if (totalWithInterest != null && totalWithInterest > 0) {
         payload['totalWithInterest'] = totalWithInterest;
@@ -1304,6 +1369,9 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     } finally {
       cardNumberController.dispose();
       holderNameController.dispose();
+      holderCpfController.dispose();
+      holderCepController.dispose();
+      holderAddressNumberController.dispose();
       expiryMonthController.dispose();
       expiryYearController.dispose();
       cvvController.dispose();
