@@ -3167,18 +3167,114 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildInvoiceButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: _viewInvoice,
-        icon: const Icon(Icons.receipt_long, color: Color(0xFF00C977)),
-        label: const Text('Ver Nota Fiscal', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF00C977))),
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Color(0xFF00C977), width: 1.5),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _apiService.getBookingInvoices(widget.booking['id']?.toString() ?? ''),
+      builder: (context, snapshot) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final cardColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+        final borderColor = isDark ? Colors.grey[800]! : Colors.grey[200]!;
+        final subColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C977)))),
+          );
+        }
+
+        final invoices = <Map<String, dynamic>>[];
+        if (snapshot.hasData && snapshot.data?['success'] == true && snapshot.data?['data'] is List) {
+          for (final inv in (snapshot.data!['data'] as List)) {
+            invoices.add(Map<String, dynamic>.from(inv as Map));
+          }
+        }
+
+        if (invoices.isEmpty) {
+          return SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _viewInvoice,
+              icon: const Icon(Icons.receipt_long, color: Color(0xFF00C977)),
+              label: const Text('Ver Nota Fiscal', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF00C977))),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF00C977), width: 1.5),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          );
+        }
+
+        const statusLabels = {'AUTHORIZED': 'Emitida', 'PENDING': 'Pendente', 'SCHEDULED': 'Processando', 'ERROR': 'Erro'};
+        const statusColors = {'AUTHORIZED': Color(0xFF00C977), 'PENDING': Color(0xFFF59E0B), 'SCHEDULED': Color(0xFF60A5FA), 'ERROR': Color(0xFFEF4444)};
+        final issuerLabels = {'workshop': 'NF Serviço', 'meca': 'NF Intermediação'};
+        final currFmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.receipt_long, color: Color(0xFF00C977), size: 20),
+                  const SizedBox(width: 8),
+                  Text('Notas Fiscais', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black87)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...invoices.map((inv) {
+                final st = inv['asaas_status']?.toString() ?? 'PENDING';
+                final issuer = inv['issuer_type']?.toString() ?? 'workshop';
+                final pdfUrl = inv['pdf_url']?.toString();
+                final value = double.tryParse(inv['value']?.toString() ?? '0') ?? 0;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.description, color: statusColors[st] ?? Colors.grey, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(issuerLabels[issuer] ?? issuer, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                            Text(currFmt.format(value), style: TextStyle(fontSize: 12, color: subColor)),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: (statusColors[st] ?? Colors.grey).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(statusLabels[st] ?? st, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: statusColors[st] ?? Colors.grey)),
+                      ),
+                      if (st == 'AUTHORIZED' && pdfUrl != null && pdfUrl.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () async {
+                            final uri = Uri.tryParse(pdfUrl);
+                            if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          },
+                          child: const Icon(Icons.open_in_new, color: Color(0xFF00C977), size: 18),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
     );
   }
 

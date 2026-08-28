@@ -1024,6 +1024,10 @@ class ApiService {
     return get('/bookings/$bookingId/invoice', skipCache: true);
   }
 
+  Future<Map<String, dynamic>> getBookingInvoices(String bookingId) async {
+    return get('/bookings/$bookingId/invoices', skipCache: true);
+  }
+
   /// Aprovar finalização do serviço (cliente)
   Future<Map<String, dynamic>> approveFinalization(String bookingId) async {
     try {
