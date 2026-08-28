@@ -58,7 +58,7 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithRoute: (didPop, route) {
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         Navigator.of(context).pop(_hasChanges);
       },
