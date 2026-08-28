@@ -50,6 +50,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _timelineExpanded = false;
   bool _timelineLoading = false;
 
+  // Invoices (Notas Fiscais) state — cached future to avoid refetching on every rebuild
+  Future<Map<String, dynamic>>? _invoicesFuture;
+
   List<Map<String, dynamic>> _coerceUploads(dynamic raw) {
     if (raw == null) return const [];
 
@@ -448,6 +451,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _setupBookingStatusListener();
     _loadTimeline();
     _loadCalendarState();
+    _invoicesFuture = _apiService.getBookingInvoices(widget.booking['id']?.toString() ?? '');
   }
 
   Future<void> _loadBookingDetailsFromId() async {
@@ -3167,8 +3171,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildInvoiceButton() {
+    _invoicesFuture ??= _apiService.getBookingInvoices(widget.booking['id']?.toString() ?? '');
     return FutureBuilder<Map<String, dynamic>>(
-      future: _apiService.getBookingInvoices(widget.booking['id']?.toString() ?? ''),
+      future: _invoicesFuture,
       builder: (context, snapshot) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final cardColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
