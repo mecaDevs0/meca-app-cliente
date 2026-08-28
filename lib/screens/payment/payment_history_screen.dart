@@ -363,6 +363,12 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                 const SizedBox(width: 8),
                 // Status badge
                 _buildStatusBadge(status),
+                // NF indicator
+                if (payment['invoice_status'] == 'AUTHORIZED')
+                  const Padding(
+                    padding: EdgeInsets.only(left: 6),
+                    child: Icon(Icons.description, color: Color(0xFF00C977), size: 16),
+                  ),
               ],
             ),
             // Installments line — only shown for credit card with more than 1 installment
