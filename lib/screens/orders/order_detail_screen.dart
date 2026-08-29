@@ -3195,19 +3195,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         }
 
         if (invoices.isEmpty) {
-          return SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _viewInvoice,
-              icon: const Icon(Icons.receipt_long, color: Color(0xFF00C977)),
-              label: const Text('Ver Nota Fiscal', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF00C977))),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF00C977), width: 1.5),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          );
+          return const SizedBox.shrink();
         }
 
         const statusLabels = {'AUTHORIZED': 'Emitida', 'PENDING': 'Pendente', 'SCHEDULED': 'Processando', 'ERROR': 'Erro'};
