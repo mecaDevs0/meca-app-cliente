@@ -57,6 +57,14 @@ class AppsFlyerService {
       final deepLink = result.deepLink;
       if (deepLink == null) return;
 
+      final refCode = deepLink.getStringValue('deep_link_sub1');
+      if (refCode != null && refCode.isNotEmpty) {
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setString('pending_referral_code', refCode);
+          if (kDebugMode) print('[AppsFlyer] Saved referral code: $refCode');
+        });
+      }
+
       final screen = deepLink.getStringValue('screen');
       final id = deepLink.getStringValue('id');
       if (screen == null) return;
@@ -74,6 +82,14 @@ class AppsFlyerService {
 
       final isFirstLaunch = payload['is_first_launch'];
       if (isFirstLaunch != true && isFirstLaunch != 'true') return;
+
+      final refCode = payload['deep_link_sub1']?.toString();
+      if (refCode != null && refCode.isNotEmpty) {
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setString('pending_referral_code', refCode);
+          if (kDebugMode) print('[AppsFlyer] Deferred referral code: $refCode');
+        });
+      }
 
       final screen = payload['af_dp']?.toString() ?? payload['screen']?.toString();
       final id = payload['id']?.toString();

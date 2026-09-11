@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
 import '../../services/theme_service.dart';
@@ -64,10 +65,16 @@ class _ReferralScreenState extends State<ReferralScreen> {
     );
   }
 
+  String _getShareText() {
+    final code = _data?['referral_code'] ?? '';
+    final shareUrl = _data?['share_url'] ?? 'https://meca.onelink.me/ARwB';
+    return 'Agende serviços automotivos pelo MECA! Use meu código $code no cadastro e ganhe 5% OFF no 1º serviço. Baixe: $shareUrl';
+  }
+
   Future<void> _shareCode() async {
     final code = _data?['referral_code'] ?? '';
     if (code.isEmpty) return;
-    final shareText = 'Agende serviços automotivos pelo MECA! Use meu código $code no cadastro. Baixe: https://www.mecabr.com/app/?ref=$code';
+    final shareText = _getShareText();
     try {
       Rect? shareOrigin;
       final renderObj = _shareButtonKey.currentContext?.findRenderObject();
@@ -92,6 +99,21 @@ class _ReferralScreenState extends State<ReferralScreen> {
           duration: Duration(seconds: 3),
         ),
       );
+    }
+  }
+
+  Future<void> _shareViaWhatsApp() async {
+    final code = _data?['referral_code'] ?? '';
+    if (code.isEmpty) return;
+    final shareText = _getShareText();
+    final encoded = Uri.encodeComponent(shareText);
+    final whatsappUrl = Uri.parse('https://wa.me/?text=$encoded');
+    try {
+      await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('[MECA] WhatsApp share error: $e');
+      if (!mounted) return;
+      _shareCode();
     }
   }
 
@@ -325,7 +347,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                   key: _shareButtonKey,
                   onPressed: code.isNotEmpty ? _shareCode : null,
                   icon: const Icon(Icons.share, size: 16),
-                  label: const Text('Compartilhar'),
+                  label: const Text('Enviar'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: const Color(0xFF00C977),
@@ -340,6 +362,26 @@ class _ReferralScreenState extends State<ReferralScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: code.isNotEmpty ? _shareViaWhatsApp : null,
+              icon: const Icon(Icons.chat_rounded, size: 18),
+              label: const Text('Compartilhar no WhatsApp'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF25D366),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFF25D366).withOpacity(0.4),
+                disabledForegroundColor: Colors.white54,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 0,
+              ),
+            ),
           ),
         ],
       ),

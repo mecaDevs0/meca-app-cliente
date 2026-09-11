@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:in_app_review/in_app_review.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_service.dart';
 import '../../services/appsflyer_service.dart';
 import '../../widgets/app_alerts.dart';
@@ -50,6 +53,110 @@ class _ReviewScreenState extends State<ReviewScreen> {
     return theme.colorScheme.primary;
   }
 
+  /// R2: Show referral card after successful review (post-payment flow).
+  Future<void> _showReferralCard() async {
+    if (!widget.fromPayment) return;
+
+    try {
+      final result = await _apiService.get('/customer/referral');
+      if (result['success'] != true) return;
+      final code = result['data']?['referral_code'] ?? '';
+      if (code.isEmpty || !mounted) return;
+
+      await showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) {
+          final theme = Theme.of(ctx);
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.dividerColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Icon(Icons.card_giftcard_rounded, size: 48, color: const Color(0xFF00C977)),
+                const SizedBox(height: 16),
+                Text(
+                  'Gostou do serviço?',
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Indique um amigo e ganhe 10% OFF!\nSeu amigo também ganha 5% no 1º serviço.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Share.share(
+                        'Agende serviços automotivos pelo MECA! Use meu código $code no cadastro e ganhe 5% OFF no 1º serviço. Baixe: https://meca.onelink.me/ARwB',
+                      );
+                      Navigator.pop(ctx);
+                    },
+                    icon: const Icon(Icons.share_rounded, color: Colors.white),
+                    label: const Text('Compartilhar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C977),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('Agora não', style: TextStyle(color: theme.textTheme.bodySmall?.color)),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('[Referral] Post-payment card error: $e');
+    }
+  }
+
+  /// V1-V4: After a 4-5★ review with 1+ paid booking, prompt native store review.
+  /// Rate limited to once per 90 days via SharedPreferences.
+  Future<void> _maybeRequestStoreReview() async {
+    if (_rating < 4) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastRequest = prefs.getInt('store_review_last_request') ?? 0;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
+
+      if (lastRequest > 0 && (now - lastRequest) < ninetyDaysMs) return;
+
+      final inAppReview = InAppReview.instance;
+      if (await inAppReview.isAvailable()) {
+        await prefs.setInt('store_review_last_request', now);
+        await Future.delayed(const Duration(seconds: 1));
+        await inAppReview.requestReview();
+      }
+    } catch (e) {
+      debugPrint('[InAppReview] Error: $e');
+    }
+  }
+
   Future<void> _submitRating() async {
     if (_rating < 1 || _rating > 5) {
       await AppAlerts.showWarning(
@@ -77,12 +184,23 @@ class _ReviewScreenState extends State<ReviewScreen> {
         AppsFlyerService.instance.logRating(widget.bookingId, _rating);
         _apiService.invalidateBookingCache(widget.bookingId);
         _apiService.invalidateBookingsCache();
+
+        // V1-V4: Trigger native store review for 4-5★ ratings
+        await _maybeRequestStoreReview();
+
+        if (!mounted) return;
         await AppAlerts.showSuccess(
           context,
-          message: 'Avaliação enviada com sucesso! Obrigado por compartilhar sua experiência.',
+          message: result['reward'] != null
+              ? 'Avaliação enviada! Você ganhou ${result['reward']['percent'] ?? 5}% de desconto 🎉'
+              : 'Avaliação enviada com sucesso! Obrigado por compartilhar sua experiência.',
         );
         if (!mounted) return;
         await Future.delayed(const Duration(milliseconds: 400));
+        if (!mounted) return;
+
+        // R2: Show referral card after review in post-payment flow
+        await _showReferralCard();
         if (!mounted) return;
 
         if (widget.fromPayment) {

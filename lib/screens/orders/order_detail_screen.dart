@@ -3226,40 +3226,54 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 final issuer = inv['issuer_type']?.toString() ?? 'workshop';
                 final pdfUrl = inv['pdf_url']?.toString();
                 final value = double.tryParse(inv['value']?.toString() ?? '0') ?? 0;
+                final errorReason = inv['error_reason']?.toString();
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.description, color: statusColors[st] ?? Colors.grey, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(issuerLabels[issuer] ?? issuer, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-                            Text(currFmt.format(value), style: TextStyle(fontSize: 12, color: subColor)),
+                      Row(
+                        children: [
+                          Icon(Icons.description, color: statusColors[st] ?? Colors.grey, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(issuerLabels[issuer] ?? issuer, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                                Text(currFmt.format(value), style: TextStyle(fontSize: 12, color: subColor)),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: (statusColors[st] ?? Colors.grey).withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(statusLabels[st] ?? st, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: statusColors[st] ?? Colors.grey)),
+                          ),
+                          if (st == 'AUTHORIZED' && pdfUrl != null && pdfUrl.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () async {
+                                final uri = Uri.tryParse(pdfUrl);
+                                if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+                              },
+                              child: const Icon(Icons.open_in_new, color: Color(0xFF00C977), size: 18),
+                            ),
                           ],
-                        ),
+                        ],
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: (statusColors[st] ?? Colors.grey).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(12),
+                      if (st == 'ERROR' && errorReason != null && errorReason.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 28, top: 4),
+                          child: Text(
+                            errorReason,
+                            style: TextStyle(fontSize: 11, color: isDark ? Colors.red[300] : Colors.red[700]),
+                          ),
                         ),
-                        child: Text(statusLabels[st] ?? st, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: statusColors[st] ?? Colors.grey)),
-                      ),
-                      if (st == 'AUTHORIZED' && pdfUrl != null && pdfUrl.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () async {
-                            final uri = Uri.tryParse(pdfUrl);
-                            if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
-                          },
-                          child: const Icon(Icons.open_in_new, color: Color(0xFF00C977), size: 18),
-                        ),
-                      ],
                     ],
                   ),
                 );

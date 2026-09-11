@@ -13,6 +13,7 @@ import '../../utils/formatters.dart';
 import 'edit_password_screen.dart';
 import '../loyalty/loyalty_screen.dart';
 import '../referral/referral_screen.dart';
+import '../challenges/challenges_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -512,11 +513,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _buildSettingTile(
           icon: Icons.card_giftcard,
           title: 'Indique e Ganhe',
-          subtitle: 'Convide amigos e ganhe R\$ 10',
+          subtitle: 'Convide amigos e ganhe 10% OFF',
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ReferralScreen()),
+            );
+          },
+        ),
+        _buildSettingTile(
+          icon: Icons.emoji_events,
+          title: 'Desafios do Mês',
+          subtitle: 'Complete metas e ganhe pontos bônus',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ChallengesScreen()),
             );
           },
         ),

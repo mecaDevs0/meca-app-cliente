@@ -29,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _cpfController = TextEditingController();
+  final _referralCodeController = TextEditingController();
   final ApiService _apiService = ApiService();
   bool _isLogin = true;
   bool _isLoading = false;
@@ -55,6 +56,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     _nameController.dispose();
     _phoneController.dispose();
     _cpfController.dispose();
+    _referralCodeController.dispose();
     super.dispose();
   }
 
@@ -119,6 +121,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (!_isLogin) {
         final newUserId = result['data']?['id']?.toString() ?? '';
         AppsFlyerService.instance.logRegistration('email', newUserId);
+
+        // Save referral code to apply after first login
+        final referralCode = _referralCodeController.text.trim();
+        if (referralCode.isNotEmpty) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('pending_referral_code', referralCode);
+        }
+
         if (!mounted) return;
         AppAlerts.showSuccess(
           context,
@@ -130,6 +140,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         // Entrar na tela principal imediatamente; device token em background (não bloqueia login)
         await _onLoginSuccess();
         _saveDeviceTokenInBackground();
+        _applyPendingReferralCode();
       }
     } else {
       if (!mounted) return;
@@ -515,6 +526,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   return null;
                                 },
                               ),
+                              const SizedBox(height: 20),
+                              TextFormField(
+                                style: const TextStyle(color: Colors.black),
+                                controller: _referralCodeController,
+                                textCapitalization: TextCapitalization.characters,
+                                decoration: const InputDecoration(
+                                  labelText: 'Código de indicação (opcional)',
+                                  prefixIcon: Icon(Icons.card_giftcard),
+                                  hintText: 'Ex: MECAH7K2P',
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                              ),
                               const SizedBox(height: 30),
                               _isLoading
                                   ? const MecaApiLoadingWidget(message: 'Entrando...')
@@ -556,6 +580,31 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
+
+  void _applyPendingReferralCode() {
+    Future.microtask(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final code = prefs.getString('pending_referral_code');
+        if (code == null || code.isEmpty) return;
+
+        await prefs.remove('pending_referral_code');
+        final result = await _apiService.post('/customer/referral/apply', {'code': code});
+        if (kDebugMode) {
+          debugPrint('[Referral] Apply result: $result');
+        }
+        if (result['success'] == true && result['welcome_coupon'] != null && mounted) {
+          AppAlerts.showSuccess(
+            context,
+            message: result['message'] ?? 'Código de indicação aplicado! Você ganhou um desconto.',
+            title: 'Bem-vindo(a)! 🎉',
+          );
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('[Referral] Apply error: $e');
+      }
+    });
+  }
 
   void _saveDeviceTokenInBackground() {
     Future.microtask(() async {

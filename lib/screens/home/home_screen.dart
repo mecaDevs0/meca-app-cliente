@@ -335,66 +335,47 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               final isXLarge = screenWidth >= 430;
               final isLarge = !isXLarge && screenWidth >= 414;
 
-              final double miaWidthFactor;
-              final double contentLeftFactor;
-              final double miaOffsetFactor;
+              const double miaWidth = 175.0;
+              const double miaHeight = 315.0;
+              const double miaOffset = -45.0;
+              final double contentLeft = screenWidth < 360 ? 90.0 : 105.0;
+
               final double titleFontSize;
               final double titleLetterSpacing;
-              final double subtitleFontSize;
               final double descFontSize;
               final double arrowPadding;
               final double arrowSize;
               final double arrowGap;
 
               if (isXLarge) {
-                miaWidthFactor = 0.42;
-                contentLeftFactor = 0.28;
-                miaOffsetFactor = -0.09;
                 titleFontSize = 24.0;
                 titleLetterSpacing = 1.8;
-                subtitleFontSize = 17.0;
                 descFontSize = 14.0;
                 arrowPadding = 12.0;
                 arrowSize = 18.0;
                 arrowGap = 10.0;
               } else if (isLarge) {
-                miaWidthFactor = 0.38;
-                contentLeftFactor = 0.26;
-                miaOffsetFactor = -0.08;
                 titleFontSize = 22.0;
                 titleLetterSpacing = 1.5;
-                subtitleFontSize = 16.0;
                 descFontSize = 13.0;
                 arrowPadding = 10.0;
                 arrowSize = 16.0;
                 arrowGap = 8.0;
               } else if (isSmall) {
-                miaWidthFactor = 0.30;
-                contentLeftFactor = 0.20;
-                miaOffsetFactor = -0.04;
                 titleFontSize = 16.0;
                 titleLetterSpacing = 0.5;
-                subtitleFontSize = 14.0;
                 descFontSize = 12.0;
                 arrowPadding = 8.0;
                 arrowSize = 14.0;
                 arrowGap = 4.0;
               } else {
-                miaWidthFactor = 0.34;
-                contentLeftFactor = 0.23;
-                miaOffsetFactor = -0.06;
                 titleFontSize = 18.0;
                 titleLetterSpacing = 0.8;
-                subtitleFontSize = 16.0;
                 descFontSize = 13.0;
                 arrowPadding = 10.0;
                 arrowSize = 16.0;
                 arrowGap = 8.0;
               }
-
-              final miaWidth = screenWidth * miaWidthFactor;
-              final miaHeight = miaWidth * 1.8;
-              final contentLeft = screenWidth * contentLeftFactor;
 
               return Stack(
                 clipBehavior: Clip.none,
@@ -473,15 +454,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Diagnóstico Inteligente',
-                                style: TextStyle(
-                                  fontSize: subtitleFontSize,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
                                 'Descubra o problema com a MIA',
                                 style: TextStyle(
                                   fontSize: descFontSize,
@@ -509,7 +481,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   Positioned(
                     bottom: 0,
-                    left: screenWidth * miaOffsetFactor,
+                    left: miaOffset,
                     child: IgnorePointer(
                       child: SizedBox(
                         width: miaWidth,

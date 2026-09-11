@@ -25,6 +25,8 @@ import 'screens/payment/payment_history_screen.dart';
 import 'screens/pre_compra/pre_compra_detail_screen.dart';
 import 'screens/loyalty/loyalty_screen.dart';
 import 'screens/referral/referral_screen.dart';
+import 'screens/review/review_screen.dart';
+import 'screens/challenges/challenges_screen.dart';
 import 'services/theme_service.dart';
 import 'services/notification_service.dart';
 import 'services/onesignal_service.dart';
@@ -115,12 +117,24 @@ void main() async {
             break;
           case 'review_incentive':
             final reviewBookingId = data['booking_id']?.toString();
+            final reviewWorkshopId = data['workshop_id']?.toString();
             if (reviewBookingId != null && reviewBookingId.isNotEmpty) {
-              navigatorKey.currentState?.pushNamed('/order-detail', arguments: {'id': reviewBookingId});
+              navigatorKey.currentState?.pushNamed('/review', arguments: {
+                'booking_id': reviewBookingId,
+                'workshop_id': reviewWorkshopId ?? '',
+              });
             }
             break;
           case 'referral_reward':
-            navigatorKey.currentState?.pushNamed('/home');
+            navigatorKey.currentState?.pushNamed('/referral');
+            break;
+          case 'challenge_completed':
+          case 'monthly_challenge':
+            navigatorKey.currentState?.pushNamed('/challenges');
+            break;
+          case 'loyalty_points':
+          case 'loyalty_level_up':
+            navigatorKey.currentState?.pushNamed('/loyalty');
             break;
           default:
             break;
@@ -413,6 +427,16 @@ class _MecaClienteAppState extends State<MecaClienteApp> {
                   return MaterialPageRoute(builder: (_) => const LoyaltyScreen());
                 case '/referral':
                   return MaterialPageRoute(builder: (_) => const ReferralScreen());
+                case '/challenges':
+                  return MaterialPageRoute(builder: (_) => const ChallengesScreen());
+                case '/review':
+                  final args = settings.arguments as Map<String, dynamic>? ?? {};
+                  return MaterialPageRoute(
+                    builder: (_) => ReviewScreen(
+                      bookingId: args['booking_id']?.toString() ?? '',
+                      workshopId: args['workshop_id']?.toString() ?? '',
+                    ),
+                  );
                 default:
                   return MaterialPageRoute(builder: (_) => const SplashScreen());
               }

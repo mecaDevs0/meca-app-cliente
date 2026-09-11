@@ -567,8 +567,10 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
 
   String _bucketForStatus(String rawStatus) {
     final normalized = _normalizeStatusKeyForList(rawStatus);
-    if (normalized == 'paid' || normalized == 'completed' || normalized == 'cancelled') return 'completed';
-    if (normalized == 'confirmed' || normalized == 'in_progress') return 'confirmed';
+    if (normalized == 'paid' || normalized == 'completed' || normalized == 'cancelled' ||
+        normalized == 'awaiting_payment') return 'completed';
+    if (normalized == 'confirmed' || normalized == 'in_progress' ||
+        normalized == 'awaiting_finalization_approval' || normalized == 'in_dispute') return 'confirmed';
     return 'pending';
   }
 

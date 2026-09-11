@@ -886,9 +886,14 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           _selectedMethod,
         );
 
+        // L2: Show points earned with payment success
+        final estimatedPoints = widget.totalAmount.floor();
+        final pointsMsg = estimatedPoints > 0
+            ? '\n+$estimatedPoints pontos de fidelidade adicionados!'
+            : '';
         AppAlerts.showSuccess(
           context,
-          message: 'Pagamento aprovado com sucesso! Obrigado por usar o MECA.',
+          message: 'Pagamento aprovado com sucesso!$pointsMsg',
         );
         // Invalidar cache do booking para forçar reload
         final bookingId = widget.bookingData['id']?.toString();
@@ -1457,9 +1462,13 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         _statusTimer?.cancel();
         _pixExpirationTimer?.cancel();
         if (!silent) {
+          final estimatedPoints = widget.totalAmount.floor();
+          final pointsMsg = estimatedPoints > 0
+              ? '\n+$estimatedPoints pontos de fidelidade adicionados!'
+              : '';
           AppAlerts.showSuccess(
             context,
-            message: 'Pagamento confirmado! Obrigado por usar o MECA.',
+            message: 'Pagamento confirmado!$pointsMsg',
           );
         }
         if (mounted) {

@@ -68,93 +68,108 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
     showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-        title: null,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: Colors.orange[50],
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.warning_amber_rounded, color: Colors.orange[700], size: 28),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Oficina Distante',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Esta oficina está a aproximadamente ${widget.distanceKm!.toStringAsFixed(0)} km de você.',
-              style: TextStyle(fontSize: 14, color: Colors.grey[600], height: 1.4),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.orange[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.route_rounded, color: Colors.orange[600], size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Pode haver custos extras de deslocamento',
-                      style: TextStyle(fontSize: 12, color: Colors.orange[700], fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'Deseja continuar mesmo assim?',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[800]),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [
-          Row(
+      builder: (dialogContext) {
+        final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
+        final bgColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+        final titleColor = isDark ? Colors.white : Colors.black87;
+        final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+        final questionColor = isDark ? Colors.grey[300] : Colors.grey[800];
+        final iconBgColor = isDark ? Colors.orange[900]!.withOpacity(0.3) : Colors.orange[50]!;
+        final warningBgColor = isDark ? Colors.orange[900]!.withOpacity(0.2) : Colors.orange[50]!;
+        final warningTextColor = isDark ? Colors.orange[300]! : Colors.orange[700]!;
+        final warningIconColor = isDark ? Colors.orange[400]! : Colors.orange[600]!;
+        final btnBorderColor = isDark ? Colors.grey[600]! : Colors.grey[300]!;
+        final btnTextColor = isDark ? Colors.grey[300]! : Colors.grey[600]!;
+
+        return AlertDialog(
+          backgroundColor: bgColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+          title: null,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    side: BorderSide(color: Colors.grey[300]!),
-                  ),
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: Text('Voltar', style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w600)),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.warning_amber_rounded, color: Colors.orange[700], size: 28),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Oficina Distante',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: titleColor),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Esta oficina está a aproximadamente ${widget.distanceKm!.toStringAsFixed(0)} km de você.',
+                style: TextStyle(fontSize: 14, color: subtitleColor, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: warningBgColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.route_rounded, color: warningIconColor, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Pode haver custos extras de deslocamento',
+                        style: TextStyle(fontSize: 12, color: warningTextColor, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF00C977),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('Sim, continuar', style: TextStyle(fontWeight: FontWeight.w600)),
-                ),
+              const SizedBox(height: 14),
+              Text(
+                'Deseja continuar mesmo assim?',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: questionColor),
+                textAlign: TextAlign.center,
               ),
             ],
           ),
-        ],
-      ),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      side: BorderSide(color: btnBorderColor),
+                    ),
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: Text('Voltar', style: TextStyle(color: btnTextColor, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF00C977),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: const Text('Sim, continuar', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     ).then((confirmed) {
       if (confirmed != true && mounted) {
         Navigator.of(context).pop(); // Volta para a tela anterior
