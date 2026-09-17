@@ -581,7 +581,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     if (s == 'concluido' || s == 'concluído') {
       return (paymentStatus == 'pago') ? 'completed' : 'confirmed';
     }
-    if (s == 'confirmado' || s == 'em_andamento' || s == 'aguardando_pagamento') return 'confirmed';
+    if (s == 'confirmado' || s == 'veiculo_na_oficina' || s == 'em_andamento' || s == 'aguardando_pagamento') return 'confirmed';
     if (s == 'cancelado') return 'completed';
     return 'pending'; // 'pendente'
   }

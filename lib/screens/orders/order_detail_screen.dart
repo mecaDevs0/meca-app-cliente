@@ -5164,6 +5164,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final reminderEnabled = (_bookingDetails?['reminder_enabled'] ?? widget.booking['reminder_enabled']) == true;
     const green = Color(0xFF00C977);
 
+    final disabledColor = isDarkMode ? Colors.grey[600]! : Colors.grey[400]!;
+    final disabledBorderColor = isDarkMode ? const Color(0xFF333333) : Colors.grey[300]!;
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -5172,7 +5175,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             : (isDarkMode ? const Color(0xFF1A1A1A) : Colors.white),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: reminderEnabled ? green : green.withValues(alpha: 0.5),
+          color: reminderEnabled ? green : disabledBorderColor,
           width: 1.5,
         ),
         boxShadow: reminderEnabled
@@ -5197,7 +5200,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               children: [
                 Icon(
                   reminderEnabled ? Icons.notifications_active : Icons.notifications_off,
-                  color: reminderEnabled ? Colors.white : green,
+                  color: reminderEnabled ? Colors.white : disabledColor,
                   size: 24,
                 ),
                 const SizedBox(width: 12),
@@ -5210,7 +5213,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: reminderEnabled ? Colors.white : (isDarkMode ? Colors.white : const Color(0xFF252940)),
+                          color: reminderEnabled ? Colors.white : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -5222,7 +5225,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           fontSize: 12,
                           color: reminderEnabled
                               ? Colors.white.withValues(alpha: 0.9)
-                              : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+                              : (isDarkMode ? Colors.grey[500] : Colors.grey[500]),
                         ),
                       ),
                     ],
@@ -5230,7 +5233,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ),
                 Icon(
                   reminderEnabled ? Icons.toggle_on : Icons.toggle_off,
-                  color: reminderEnabled ? Colors.white : green,
+                  color: reminderEnabled ? Colors.white : disabledColor,
                   size: 32,
                 ),
               ],

@@ -1106,6 +1106,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                           hintText: '3 ou 4 dígitos',
                         ),
                         keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => FocusScope.of(context).unfocus(),
                         obscureText: true,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
@@ -2374,6 +2376,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               ),
             ),
             keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
             obscureText: true,
             maxLength: 4,
             inputFormatters: [

@@ -470,8 +470,10 @@ class _BookingScreenState extends State<BookingScreen> {
           debugPrint('Erro ao agendar lembretes: $e');
         }
         
+        FocusScope.of(context).unfocus();
+
         await _showSnackBar('Agendamento criado com sucesso!', isError: false);
-        
+
         // Navegar para tela de agendamentos
         Navigator.pushNamedAndRemoveUntil(
           context,
