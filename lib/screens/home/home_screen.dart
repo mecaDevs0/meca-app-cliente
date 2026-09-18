@@ -47,6 +47,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _checkingLocation = false;
   /// True quando a lista de oficinas próximas foi obtida com coordenadas de fallback (ex.: São Paulo) por falta de permissão/posição.
   bool _usedFallbackLocationForNearby = false;
+  List<Map<String, dynamic>> _activeFlashes = [];
+  bool _flashEligible = true;
   static const double _nearbyWorkshopsRadiusKm = 30.0; // Ajuste 4: raio 30km na home
 
   @override
@@ -91,8 +93,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final futureBookings = _apiService.getBookings();
       final futureLocationAndNearby = _loadLocationAndNearby();
       final futureReminders = _apiService.getMaintenanceReminders();
+      final futureFlash = _apiService.get('/customer/flash-coupons/active').catchError((_) => <String, dynamic>{});
 
-      await Future.wait([futureBookings, futureLocationAndNearby, futureReminders]);
+      await Future.wait([futureBookings, futureLocationAndNearby, futureReminders, futureFlash]);
+
+      // Load flash coupons (non-blocking)
+      try {
+        final flashRes = await futureFlash;
+        if (mounted && flashRes['success'] == true) {
+          final coupons = (flashRes['flash_coupons'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+          final eligible = coupons.isNotEmpty ? (coupons.first['customer_eligible'] ?? true) : true;
+          setState(() {
+            _activeFlashes = coupons;
+            _flashEligible = eligible == true;
+          });
+        }
+      } catch (_) {}
 
       // Load maintenance reminders (non-blocking)
       if (mounted) {
@@ -214,6 +230,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.all(16),
             child: _buildHeader(),
           ),
+          if (_activeFlashes.isNotEmpty && _flashEligible)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: _buildFlashBanner(),
+            ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -289,6 +310,83 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           textAlign: TextAlign.right,
         ),
       ],
+    );
+  }
+
+  Widget _buildFlashBanner() {
+    if (_activeFlashes.isEmpty) return const SizedBox.shrink();
+    final flash = _activeFlashes.first;
+    final percent = flash['discount_percent'] ?? 0;
+    final serviceType = flash['service_type'];
+    final validUntil = flash['valid_until'];
+    final code = flash['code'] ?? '';
+
+    String timeLeft = '';
+    if (validUntil != null) {
+      try {
+        final exp = DateTime.parse(validUntil);
+        final diff = exp.difference(DateTime.now());
+        if (diff.isNegative) return const SizedBox.shrink();
+        final h = diff.inHours;
+        final m = diff.inMinutes % 60;
+        timeLeft = '${h}h${m.toString().padLeft(2, '0')}min';
+      } catch (_) {}
+    }
+
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return GestureDetector(
+          onTap: () {
+            if (widget.onNavigateToTab != null) {
+              widget.onNavigateToTab!(1);
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF00C977), Color(0xFF00A060)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                const Text('⚡', style: TextStyle(fontSize: 28)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${percent.toStringAsFixed(0)}% OFF ${serviceType != null ? 'em $serviceType' : 'em qualquer servico'}',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Cupom $code — $timeLeft restantes',
+                        style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Agendar',
+                    style: TextStyle(color: Color(0xFF00C977), fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

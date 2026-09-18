@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,6 +32,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
   int _timeRating = 0;
   final _commentController = TextEditingController();
   bool _isSubmitting = false;
+  final List<File> _selectedPhotos = [];
+  final _picker = ImagePicker();
 
   String _ratingLabel(int value) {
     switch (value) {
@@ -157,6 +161,25 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
   }
 
+  Future<void> _pickPhoto(ImageSource source) async {
+    if (_selectedPhotos.length >= 3) {
+      await AppAlerts.showWarning(context, message: 'Maximo de 3 fotos por avaliacao.', title: 'Limite atingido');
+      return;
+    }
+    try {
+      final picked = await _picker.pickImage(source: source, maxWidth: 1080, imageQuality: 80);
+      if (picked != null) {
+        setState(() => _selectedPhotos.add(File(picked.path)));
+      }
+    } catch (e) {
+      debugPrint('[ReviewScreen] Photo pick error: $e');
+    }
+  }
+
+  void _removePhoto(int index) {
+    setState(() => _selectedPhotos.removeAt(index));
+  }
+
   Future<void> _submitRating() async {
     if (_rating < 1 || _rating > 5) {
       await AppAlerts.showWarning(
@@ -178,6 +201,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         qualityRating: _qualityRating > 0 ? _qualityRating : null,
         priceRating: _priceRating > 0 ? _priceRating : null,
         timeRating: _timeRating > 0 ? _timeRating : null,
+        photos: _selectedPhotos.isNotEmpty ? _selectedPhotos : null,
       );
 
       if (result['success']) {
@@ -189,11 +213,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
         await _maybeRequestStoreReview();
 
         if (!mounted) return;
+        final reward = result['reward'];
+        final msg = result['message'] as String?;
         await AppAlerts.showSuccess(
           context,
-          message: result['reward'] != null
-              ? 'Avaliação enviada! Você ganhou ${result['reward']['percent'] ?? 5}% de desconto 🎉'
-              : 'Avaliação enviada com sucesso! Obrigado por compartilhar sua experiência.',
+          message: msg ?? (reward != null
+              ? 'Avaliacao enviada! Voce ganhou ${reward['percent'] ?? 3}% de desconto'
+              : 'Avaliacao enviada com sucesso! Obrigado por compartilhar sua experiencia.'),
         );
         if (!mounted) return;
         await Future.delayed(const Duration(milliseconds: 400));
@@ -533,6 +559,146 @@ class _ReviewScreenState extends State<ReviewScreen> {
                         ),
                       ),
                     ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Card 4: Fotos
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: cardColor,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: borderColor),
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.shadowColor.withOpacity(isDark ? 0.10 : 0.06),
+                      blurRadius: 14,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Fotos do servico',
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.onSurface.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'opcional',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(0.5),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _selectedPhotos.isNotEmpty
+                            ? const Color(0xFF00C977).withOpacity(0.1)
+                            : theme.colorScheme.primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _selectedPhotos.isNotEmpty
+                            ? '5% OFF garantido com foto!'
+                            : 'Envie foto e ganhe 5% OFF (sem foto: 3%)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _selectedPhotos.isNotEmpty
+                              ? const Color(0xFF00C977)
+                              : theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_selectedPhotos.isNotEmpty)
+                      SizedBox(
+                        height: 80,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _selectedPhotos.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (ctx, i) => Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.file(_selectedPhotos[i], width: 80, height: 80, fit: BoxFit.cover),
+                              ),
+                              Positioned(
+                                top: 2, right: 2,
+                                child: GestureDetector(
+                                  onTap: () => _removePhoto(i),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black54,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (_selectedPhotos.isNotEmpty)
+                      const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => _pickPhoto(ImageSource.camera),
+                            icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                            label: const Text('Camera'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: theme.colorScheme.primary,
+                              side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.3)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => _pickPhoto(ImageSource.gallery),
+                            icon: const Icon(Icons.photo_library_rounded, size: 18),
+                            label: const Text('Galeria'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: theme.colorScheme.primary,
+                              side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.3)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_selectedPhotos.length < 3)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          '${_selectedPhotos.length}/3 fotos',
+                          style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                        ),
+                      ),
                   ],
                 ),
               ),

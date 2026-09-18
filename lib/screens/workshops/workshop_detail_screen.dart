@@ -34,6 +34,7 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
   Map<String, dynamic>? _workshop;
   List<Map<String, dynamic>> _services = [];
   List<dynamic> _galleryPhotos = [];
+  List<Map<String, dynamic>> _reviewPhotos = [];
   bool _loading = false;
   String _error = '';
   bool _showAllServices = false;
@@ -428,6 +429,13 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
         _apiService.getWorkshopGallery(widget.workshopId).then((photos) {
           if (mounted) setState(() => _galleryPhotos = photos);
         });
+
+        _apiService.get('/reviews/workshop/${widget.workshopId}/photos').then((res) {
+          if (mounted && res['success'] == true) {
+            final photos = (res['data']?['photos'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+            setState(() => _reviewPhotos = photos);
+          }
+        }).catchError((_) {});
       } else {
         setState(() {
           _error = result['error'] ?? 'Erro ao carregar oficina';
@@ -704,6 +712,12 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
                 // Serviços oferecidos melhorados
                 _buildServicesCard(),
                 const SizedBox(height: 20),
+
+                // Fotos de servicos (reviews com fotos)
+                if (_reviewPhotos.isNotEmpty)
+                  _buildReviewPhotosSection(),
+                if (_reviewPhotos.isNotEmpty)
+                  const SizedBox(height: 20),
 
                 const SizedBox(height: 80), // Espaço para o botão fixo
               ],
@@ -1440,6 +1454,187 @@ class _WorkshopDetailScreenState extends State<WorkshopDetailScreen> {
               ),
               crossFadeState: _hoursExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
               duration: const Duration(milliseconds: 250),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReviewPhotosSection() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 12),
+          child: Row(
+            children: [
+              const Icon(Icons.camera_alt, size: 20, color: Color(0xFF00C977)),
+              const SizedBox(width: 8),
+              Text(
+                'Fotos de Serviços',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '(${_reviewPhotos.length})',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDarkMode ? Colors.white38 : Colors.black38,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 180,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _reviewPhotos.length,
+            itemBuilder: (context, index) {
+              final photo = _reviewPhotos[index];
+              final url = photo['url']?.toString() ?? '';
+              final name = photo['customer_name']?.toString() ?? 'Cliente';
+              final rating = (photo['rating'] is num) ? (photo['rating'] as num).toInt() : 5;
+              return GestureDetector(
+                onTap: () => _showReviewPhoto(url, name, rating),
+                child: Container(
+                  width: 140,
+                  margin: EdgeInsets.only(right: index < _reviewPhotos.length - 1 ? 10 : 0),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: isDarkMode ? const Color(0xFF1A1A1A) : Colors.grey[100],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (_, child, progress) => progress == null
+                              ? child
+                              : Container(
+                                  color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[200],
+                                  child: const Center(
+                                    child: SizedBox(
+                                      width: 20, height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Color(0xFF00C977))),
+                                    ),
+                                  ),
+                                ),
+                          errorBuilder: (_, __, ___) => Container(
+                            color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[200],
+                            child: const Icon(Icons.broken_image, color: Colors.grey),
+                          ),
+                        ),
+                        Positioned(
+                          left: 0, right: 0, bottom: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [Colors.black.withOpacity(0.75), Colors.transparent],
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(
+                                  children: List.generate(
+                                    rating.clamp(1, 5),
+                                    (_) => const Icon(Icons.star, size: 12, color: Color(0xFFFFB800)),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  name,
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showReviewPhoto(String url, String customerName, int rating) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      ...List.generate(
+                        rating.clamp(1, 5),
+                        (_) => const Icon(Icons.star, size: 16, color: Color(0xFFFFB800)),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          customerName,
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: InteractiveViewer(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (_, child, progress) => progress == null
+                      ? child
+                      : const SizedBox(
+                          height: 300,
+                          child: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(Color(0xFF00C977)))),
+                        ),
+                  errorBuilder: (_, __, ___) => SizedBox(
+                    height: 300,
+                    child: Center(
+                      child: Icon(Icons.broken_image, size: 48, color: isDarkMode ? Colors.white38 : Colors.grey),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),

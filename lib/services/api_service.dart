@@ -1670,20 +1670,52 @@ class ApiService {
     int? qualityRating,
     int? priceRating,
     int? timeRating,
+    List<File>? photos,
   }) async {
     try {
       await loadToken();
-      final data = <String, dynamic>{
+      final formMap = <String, dynamic>{
         'booking_id': bookingId,
         'rating': rating,
         'comment': comment ?? '',
       };
-      if (qualityRating != null && qualityRating > 0) data['quality_rating'] = qualityRating;
-      if (priceRating != null && priceRating > 0) data['price_rating'] = priceRating;
-      if (timeRating != null && timeRating > 0) data['time_rating'] = timeRating;
-      final response = await _dio.post('/reviews', data: data);
+      if (qualityRating != null && qualityRating > 0) formMap['quality_rating'] = qualityRating;
+      if (priceRating != null && priceRating > 0) formMap['price_rating'] = priceRating;
+      if (timeRating != null && timeRating > 0) formMap['time_rating'] = timeRating;
+
+      if (photos != null && photos.isNotEmpty) {
+        final multipartPhotos = <MultipartFile>[];
+        for (final photo in photos) {
+          multipartPhotos.add(await MultipartFile.fromFile(
+            photo.path,
+            filename: photo.path.split('/').last,
+          ));
+        }
+        formMap['photos'] = multipartPhotos;
+        final formData = FormData.fromMap(formMap);
+        final response = await _dio.post('/reviews', data: formData);
+        if (response.data != null && response.data['success'] == true) {
+          return {
+            'success': true,
+            'data': response.data['data'],
+            'reward': response.data['reward'],
+            'message': response.data['message'],
+          };
+        }
+        return {
+          'success': false,
+          'error': response.data?['error']?.toString() ?? 'Erro ao avaliar',
+        };
+      }
+
+      final response = await _dio.post('/reviews', data: formMap);
       if (response.data != null && response.data['success'] == true) {
-        return {'success': true, 'data': response.data['data']};
+        return {
+          'success': true,
+          'data': response.data['data'],
+          'reward': response.data['reward'],
+          'message': response.data['message'],
+        };
       }
       return {
         'success': false,
