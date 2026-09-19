@@ -2702,7 +2702,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       case 'awaiting_payment':
       case 'aguardando_pagamento':
       case 'finalizado_aguardando_pagamento':
-        return 'Aguardando Pagamento';
+        return 'Pendente';
       case 'cancelled':
       case 'cancelado':
         return 'Cancelado';

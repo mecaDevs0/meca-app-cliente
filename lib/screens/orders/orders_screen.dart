@@ -779,7 +779,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         };
       case 'aguardando_pagamento':
         return {
-          'label': 'Aguardando Pagamento',
+          'label': 'Pendente',
           'color': isDarkMode ? const Color(0xFF3D2F1A) : const Color(0xFFFCF4E5),
           'textColor': isDarkMode ? const Color(0xFFFFC94A) : const Color(0xFFDBA800),
         };
@@ -1687,7 +1687,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         'textColor': isDarkMode ? const Color(0xFF4ADE80) : const Color(0xFF2FD65C),
       },
       'awaiting_payment': {
-        'label': 'Aguardando Pagamento',
+        'label': 'Pendente',
         'color': isDarkMode ? const Color(0xFF1A2338) : const Color(0xFFE0F2FF),
         'textColor': isDarkMode ? const Color(0xFF5BA3FF) : const Color(0xFF1B6DC1),
       },
