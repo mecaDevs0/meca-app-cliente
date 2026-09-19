@@ -567,8 +567,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
 
   String _bucketForStatus(String rawStatus) {
     final normalized = _normalizeStatusKeyForList(rawStatus);
-    if (normalized == 'paid' || normalized == 'completed' || normalized == 'cancelled' ||
-        normalized == 'awaiting_payment') return 'completed';
+    if (normalized == 'awaiting_payment') return 'pending';
+    if (normalized == 'paid' || normalized == 'completed' || normalized == 'cancelled') return 'completed';
     if (normalized == 'confirmed' || normalized == 'in_progress' ||
         normalized == 'awaiting_finalization_approval' || normalized == 'in_dispute') return 'confirmed';
     return 'pending';
@@ -577,11 +577,11 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   /// Status de pré-compra → tab (mapeamento diferente do booking normal)
   String _bucketForPreCompraStatus(String rawStatus, {String? paymentStatus}) {
     final s = rawStatus.toLowerCase().trim();
-    // Backward compat: concluido sem pagamento = aguardando_pagamento (tab Confirmados)
     if (s == 'concluido' || s == 'concluído') {
-      return (paymentStatus == 'pago') ? 'completed' : 'confirmed';
+      return (paymentStatus == 'pago') ? 'completed' : 'pending';
     }
-    if (s == 'confirmado' || s == 'veiculo_na_oficina' || s == 'em_andamento' || s == 'aguardando_pagamento') return 'confirmed';
+    if (s == 'aguardando_pagamento' || s == 'finalizado_aguardando_pagamento' || s == 'awaiting_payment') return 'pending';
+    if (s == 'confirmado' || s == 'veiculo_na_oficina' || s == 'em_andamento') return 'confirmed';
     if (s == 'cancelado') return 'completed';
     return 'pending'; // 'pendente'
   }
