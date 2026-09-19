@@ -129,6 +129,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   double _promoDiscount = 0.0;
   int? _promoCodeId;
   String? _promoError;
+
+  double get _effectiveTotal => (widget.totalAmount - _promoDiscount).clamp(0, double.infinity);
   List<dynamic> _availablePromoCodes = [];
   bool _promoAppliedToBooking = false;
 
@@ -352,7 +354,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
   /// Carrega opções de parcelamento da API (GET /payments/installments). Passa booking_id para respeitar configuração da oficina.
   Future<void> _loadInstallmentPlans() async {
-    if (widget.totalAmount <= 0) return;
+    if (_effectiveTotal <= 0) return;
     setState(() {
       _loadingInstallmentPlans = true;
       _installmentPlans = null;
@@ -363,7 +365,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         widget.bookingData['oficina_id']?.toString();
     try {
       final result = await _apiService.getInstallments(
-        widget.totalAmount,
+        _effectiveTotal,
         bookingId: bookingId,
         workshopId: workshopId,
       );
@@ -401,11 +403,12 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   }
 
   List<Map<String, dynamic>> _fallbackInstallmentPlan() {
+    final cents = (_effectiveTotal * 100).round();
     return [
       {
         'installments': 1,
-        'installment_value_cents': (widget.totalAmount * 100).round(),
-        'total_cents': (widget.totalAmount * 100).round(),
+        'installment_value_cents': cents,
+        'total_cents': cents,
         'interest_cents': 0,
         'interest_free': true,
       },
@@ -444,6 +447,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           _promoCodeId = result['promo_code']?['id'];
           _promoError = null;
         });
+        if (widget.workshopAcceptsInstallment) _loadInstallmentPlans();
       } else {
         setState(() {
           _promoError = result['error']?.toString() ?? 'Cupom inválido';
@@ -468,6 +472,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       _promoError = null;
       _promoController.clear();
     });
+    if (widget.workshopAcceptsInstallment) _loadInstallmentPlans();
   }
 
   Future<bool> _applyPromoToBooking() async {
@@ -883,8 +888,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           _selectedMethod,
         );
 
-        // L2: Show points earned with payment success
-        final estimatedPoints = widget.totalAmount.floor();
+        final estimatedPoints = _effectiveTotal.floor();
         final pointsMsg = estimatedPoints > 0
             ? '\n+$estimatedPoints pontos de fidelidade adicionados!'
             : '';
@@ -1461,7 +1465,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         _statusTimer?.cancel();
         _pixExpirationTimer?.cancel();
         if (!silent) {
-          final estimatedPoints = widget.totalAmount.floor();
+          final estimatedPoints = _effectiveTotal.floor();
           final pointsMsg = estimatedPoints > 0
               ? '\n+$estimatedPoints pontos de fidelidade adicionados!'
               : '';
@@ -2046,7 +2050,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             theme,
             'Total a pagar',
             _promoDiscount > 0
-                ? _currencyFormatter.format((widget.totalAmount - _promoDiscount).clamp(0, double.infinity))
+                ? _currencyFormatter.format(_effectiveTotal)
                 : _displayTotalToPay(theme),
             isTotal: true,
           ),
@@ -2094,13 +2098,13 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         return _currencyFormatter.format(totalCents / 100.0);
       }
     }
-    return _currencyFormatter.format(widget.totalAmount);
+    return _currencyFormatter.format(_effectiveTotal);
   }
 
   /// Linha de parcelas: valor da parcela e, se houver juros, total com juros.
   String _displayInstallmentLine() {
     if (_selectedInstallmentPlan == null) {
-      return '${_selectedInstallments}x de ${_currencyFormatter.format(widget.totalAmount / _selectedInstallments)}';
+      return '${_selectedInstallments}x de ${_currencyFormatter.format(_effectiveTotal / _selectedInstallments)}';
     }
     final parcelCents =
         (_selectedInstallmentPlan!['installment_value_cents'] as int?) ?? 0;
@@ -2294,10 +2298,12 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Escolha um cartão salvo',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
+              Flexible(
+                child: Text(
+                  'Escolha um cartão salvo',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
               ),
               TextButton(
                 onPressed: _openSavedCards,
@@ -3025,7 +3031,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             (_paymentRecord?['installments'] ?? 1) > 1) ...[
           const SizedBox(height: 8),
           Text(
-            'Parcelamento: ${_paymentRecord?['installments']}x de ${_currencyFormatter.format(widget.totalAmount / (_paymentRecord?['installments'] ?? 1))}',
+            'Parcelamento: ${_paymentRecord?['installments']}x de ${_currencyFormatter.format(_effectiveTotal / (_paymentRecord?['installments'] ?? 1))}',
             style: theme.textTheme.bodyMedium,
           ),
         ],
