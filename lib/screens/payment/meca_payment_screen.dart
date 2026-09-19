@@ -434,10 +434,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
 
     try {
       final bookingValueCents = (widget.totalAmount * 100).round();
-      final result = await _apiService.post('/promo-codes/validate', {
-        'code': code,
-        'booking_value': bookingValueCents,
-      });
+      final result = await _apiService.validatePromoCode(code, bookingValueCents);
       if (!mounted) return;
 
       if (result['success'] == true && result['valid'] == true) {

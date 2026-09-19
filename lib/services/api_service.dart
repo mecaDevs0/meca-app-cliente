@@ -2251,6 +2251,26 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> validatePromoCode(String code, int bookingValueCents) async {
+    try {
+      await loadToken();
+      final response = await _dio.post('/promo-codes/validate', data: {
+        'code': code,
+        'booking_value': bookingValueCents,
+      });
+      final data = response.data;
+      if (data is Map) {
+        return Map<String, dynamic>.from(data);
+      }
+      return {'success': false, 'error': 'Resposta inválida'};
+    } on DioException catch (e) {
+      final msg = _extractServerMessage(e.response?.data);
+      return {'success': false, 'error': msg ?? 'Erro ao validar cupom'};
+    } catch (e) {
+      return {'success': false, 'error': 'Erro ao validar cupom'};
+    }
+  }
+
   Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
     try {
       await loadToken();
