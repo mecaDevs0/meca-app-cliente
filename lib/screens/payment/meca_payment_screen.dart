@@ -160,6 +160,56 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     }
   }
 
+  String _friendlyPaymentError(String raw) {
+    if (raw.isEmpty) return 'Não foi possível processar o pagamento. Tente novamente.';
+    final upper = raw.toUpperCase();
+
+    if (upper.contains('MENOR QUE R\$') || upper.contains('MENOR QUE R\$ ') ||
+        upper.contains('NÃO PODE SER MENOR') || upper.contains('NAO PODE SER MENOR') ||
+        upper.contains('MINIMUM') || upper.contains('VALOR MÍNIMO') ||
+        upper.contains('VALOR MINIMO')) {
+      return 'O valor mínimo para pagamento online é de R\$ 5,00. '
+          'Valores menores precisam ser combinados diretamente com a oficina.';
+    }
+
+    if (upper.contains('SALDO INSUFICIENTE') || upper.contains('INSUFFICIENT')) {
+      return 'Saldo insuficiente. Verifique seu saldo e tente novamente.';
+    }
+
+    if (upper.contains('CARTÃO RECUSADO') || upper.contains('CARTAO RECUSADO') ||
+        upper.contains('CARD_DECLINED') || upper.contains('DECLINED')) {
+      return 'Cartão recusado pela instituição financeira. Tente outro cartão ou use PIX.';
+    }
+
+    if (upper.contains('DADOS DO CARTÃO') || upper.contains('DADOS DO CARTAO') ||
+        upper.contains('INVALID_CARD') || upper.contains('CARD_NUMBER')) {
+      return 'Dados do cartão inválidos. Verifique o número, validade e CVV.';
+    }
+
+    if (upper.contains('EXPIRADO') || upper.contains('EXPIRED')) {
+      return 'Cartão expirado. Use outro cartão ou tente via PIX.';
+    }
+
+    if (upper.contains('TIMEOUT') || upper.contains('TIMED OUT') ||
+        upper.contains('TEMPO ESGOTADO')) {
+      return 'A conexão demorou demais. Verifique sua internet e tente novamente.';
+    }
+
+    if (upper.contains('DUPLICAT') || upper.contains('JÁ EXISTE') ||
+        upper.contains('JA EXISTE')) {
+      return 'Já existe um pagamento em andamento para este serviço. Aguarde a confirmação ou entre em contato com o suporte.';
+    }
+
+    if (upper.contains('ASAAS') || upper.contains('POST /') ||
+        upper.contains('GET /') || upper.contains('INTERNAL SERVER') ||
+        upper.contains('STATUS 5') || upper.contains('STACKTRACE') ||
+        upper.contains('EXCEPTION') || upper.contains('ERROR CODE')) {
+      return 'Houve um problema ao processar o pagamento. Tente novamente em alguns instantes.';
+    }
+
+    return raw;
+  }
+
   String _declineHelpText(String? gatewayMessage) {
     final msg = (gatewayMessage ?? '').trim();
     if (msg.isNotEmpty) {
@@ -861,9 +911,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
         await _removePromoFromBooking();
         AppAlerts.showError(
           context,
-          message: errMsg.isNotEmpty
-              ? errMsg
-              : 'Não foi possível iniciar o pagamento agora.',
+          message: _friendlyPaymentError(errMsg),
         );
         return;
       }
@@ -1201,9 +1249,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       );
       if (tokenizedCardResult == null || tokenizedCardResult['success'] != true) {
         AppAlerts.showError(context,
-            message:
-                tokenizedCardResult?['error']?.toString() ??
-                    'Não foi possível processar o cartão. Tente novamente.');
+            message: _friendlyPaymentError(
+                (tokenizedCardResult?['error'] ?? '').toString()));
         return;
       }
       final creditCard =
@@ -1291,9 +1338,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
           return;
         }
         AppAlerts.showError(context,
-            message: errMsg.isNotEmpty
-                ? errMsg
-                : 'Não foi possível iniciar o pagamento agora.');
+            message: _friendlyPaymentError(errMsg));
         return;
       }
 
@@ -1508,8 +1553,8 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
     } else if (!silent) {
       AppAlerts.showError(
         context,
-        message: result['error'] ??
-            'Não foi possível atualizar o status do pagamento.',
+        message: _friendlyPaymentError(
+            (result['error'] ?? '').toString()),
       );
     }
 
