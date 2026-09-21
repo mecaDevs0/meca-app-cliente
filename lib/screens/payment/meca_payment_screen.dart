@@ -1509,7 +1509,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
       if (status == 'approved' || status == 'paid') {
         _statusTimer?.cancel();
         _pixExpirationTimer?.cancel();
-        if (!silent) {
+        if (!silent && mounted) {
           final estimatedPoints = _effectiveTotal.floor();
           final pointsMsg = estimatedPoints > 0
               ? '\n+$estimatedPoints pontos de fidelidade adicionados!'
@@ -1518,10 +1518,11 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             context,
             message: 'Pagamento confirmado!$pointsMsg',
           );
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (!mounted) return;
         }
         if (mounted) {
           await AppAlerts.dismissCurrent();
-          // Redirecionar para tela de avaliação após pagamento confirmado
           await _navigateToReviewScreen();
         }
       } else if (status == 'declined' || status == 'denied') {
@@ -2870,9 +2871,10 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
               ],
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {
+                  onPressed: () async {
                     _statusTimer?.cancel();
-                    Navigator.pop(context, false);
+                    await AppAlerts.dismissCurrent();
+                    if (context.mounted) Navigator.pop(context, false);
                   },
                   icon: const Icon(Icons.close),
                   label: const Text('Fechar'),
