@@ -539,7 +539,7 @@ class _SavedCardsScreenState extends State<SavedCardsScreen> {
                             decoration: const InputDecoration(labelText: 'CVV', hintText: '123'),
                             keyboardType: TextInputType.number,
                             textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                            onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                             obscureText: true,
                             inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
                           ),

@@ -61,6 +61,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
   bool _showResult = false;
 
   Future<void> _navigateToReviewScreen() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     // Pré-compra: sem tela de avaliação — apenas fecha e retorna sucesso
     if (widget.isPreCompra) {
       _apiService.invalidateBookingsCache();
@@ -1156,7 +1157,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
                         ),
                         keyboardType: TextInputType.number,
                         textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                        onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                         obscureText: true,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
@@ -2426,7 +2427,7 @@ class _MecaPaymentScreenState extends State<MecaPaymentScreen> {
             ),
             keyboardType: TextInputType.number,
             textInputAction: TextInputAction.done,
-            onSubmitted: (_) => FocusScope.of(context).unfocus(),
+            onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             obscureText: true,
             maxLength: 4,
             inputFormatters: [

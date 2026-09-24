@@ -57,6 +57,7 @@ class _EditPasswordScreenState extends State<EditPasswordScreen> {
         duration: const Duration(milliseconds: 1200),
       );
       if (!mounted) return;
+      FocusManager.instance.primaryFocus?.unfocus();
       Navigator.pop(context);
     } else {
       AppAlerts.showError(

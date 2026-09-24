@@ -279,6 +279,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
         title: 'Tudo certo!',
       );
       if (mounted) {
+        FocusManager.instance.primaryFocus?.unfocus();
         Navigator.pop(context, true);
       }
     } else {

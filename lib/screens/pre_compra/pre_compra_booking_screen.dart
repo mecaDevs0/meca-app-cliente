@@ -251,9 +251,9 @@ class _PreCompraBookingScreenState extends State<PreCompraBookingScreen> {
 
       final result = await _api.post('/pre-compra', body);
       if (result['success'] == true) {
+        FocusManager.instance.primaryFocus?.unfocus();
         _showSnack('Pré-Compra agendada com sucesso!');
         if (!mounted) return;
-        // Vai para Meus Agendamentos (tab 2) igual a qualquer outro serviço
         Navigator.pushNamedAndRemoveUntil(
           context,
           '/orders',

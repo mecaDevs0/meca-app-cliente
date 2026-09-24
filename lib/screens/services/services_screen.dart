@@ -91,11 +91,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
             elevation: 0,
             iconTheme: const IconThemeData(color: Color(0xFF00C977)),
           ),
-          body: _loading
+          body: GestureDetector(
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            child: _loading
               ? const MecaApiLoadingWidget(message: 'Carregando serviços...')
               : _error.isNotEmpty
                   ? _buildErrorWidget()
                   : _buildServicesList(),
+          ),
         );
       },
     );
@@ -339,6 +342,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         else
           Expanded(
             child: ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               children: [
                 // Seção de Serviços Gerais

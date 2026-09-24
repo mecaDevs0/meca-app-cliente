@@ -229,6 +229,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         await _showReferralCard();
         if (!mounted) return;
 
+        FocusManager.instance.primaryFocus?.unfocus();
         if (widget.fromPayment) {
           Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
         } else {

@@ -249,7 +249,10 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
 
     return Scaffold(
       backgroundColor: isDarkMode ? const Color(0xFF0A0A0A) : Colors.white,
-      body: CustomScrollView(
+      body: GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: CustomScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         slivers: [
           SliverAppBar(
             pinned: true,
@@ -419,6 +422,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                   ),
           ),
         ],
+      ),
       ),
     );
   }

@@ -470,11 +470,13 @@ class _BookingScreenState extends State<BookingScreen> {
           debugPrint('Erro ao agendar lembretes: $e');
         }
         
-        FocusScope.of(context).unfocus();
+        FocusManager.instance.primaryFocus?.unfocus();
 
         await _showSnackBar('Agendamento criado com sucesso!', isError: false);
 
-        // Navegar para tela de agendamentos
+        if (!mounted) return;
+        FocusManager.instance.primaryFocus?.unfocus();
+
         Navigator.pushNamedAndRemoveUntil(
           context,
           '/orders',
@@ -528,11 +530,12 @@ class _BookingScreenState extends State<BookingScreen> {
       body: GestureDetector(
         onTap: () {
           // Fechar teclado ao clicar fora
-          FocusScope.of(context).unfocus();
+          FocusManager.instance.primaryFocus?.unfocus();
         },
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.all(20),
                 child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

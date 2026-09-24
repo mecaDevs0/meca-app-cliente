@@ -2,16 +2,19 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
 import '../core/http_client_config.dart';
+import '../main.dart' show navigatorKey;
 import '../utils/logger.dart';
 
 class ApiService {
   late Dio _dio;
   final Map<String, _CacheEntry> _cache = {};
   static const int _kMaxCacheEntries = 150;
+  static bool _redirectingToLogin = false;
 
   ApiService() {
     _dio = Dio(BaseOptions(
@@ -76,19 +79,29 @@ class ApiService {
         );
         return handler.next(response);
       },
-      onError: (error, handler) {
-        // Logs organizados usando logger
+      onError: (error, handler) async {
         final url = error.requestOptions.uri.toString();
         final method = error.requestOptions.method;
-        
+
         if (error.response != null) {
           final statusCode = error.response?.statusCode;
-          if (statusCode == 401 || statusCode == 403) {
-            // Silenciar erros de autenticação (são esperados)
-          } else {
+          if (statusCode == 401 && error.requestOptions.extra['_isRefresh'] != true) {
+            final refreshed = await _tryRefreshToken();
+            if (refreshed) {
+              try {
+                final prefs = await SharedPreferences.getInstance();
+                final newToken = prefs.getString('token');
+                error.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+                error.requestOptions.extra['_isRefresh'] = true;
+                final response = await _dio.fetch(error.requestOptions);
+                return handler.resolve(response);
+              } catch (_) {}
+            }
+            await _forceLogout();
+          } else if (statusCode != 401 && statusCode != 403) {
             AppLogger.api(method, url, statusCode: statusCode, error: error.response?.statusMessage);
           }
-        } else if (error.type == DioExceptionType.connectionTimeout || 
+        } else if (error.type == DioExceptionType.connectionTimeout ||
                    error.type == DioExceptionType.receiveTimeout) {
           AppLogger.warning('Timeout na requisição: $method $url', tag: 'API');
         } else {
@@ -97,6 +110,54 @@ class ApiService {
         return handler.next(error);
       },
     ));
+  }
+
+  Future<bool> _tryRefreshToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final oldToken = prefs.getString('token');
+      if (oldToken == null || oldToken.isEmpty) return false;
+
+      final response = await Dio(BaseOptions(
+        baseUrl: AppConfig.apiBaseUrl,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+      )).post('/auth/refresh', data: {'token': oldToken});
+
+      final data = response.data;
+      if (data != null && data['success'] == true) {
+        final newToken = data['data']?['token'];
+        if (newToken is String && newToken.isNotEmpty) {
+          await prefs.setString('token', newToken);
+          AppLogger.info('Token renovado com sucesso', tag: 'Auth');
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      AppLogger.warning('Falha ao renovar token: $e', tag: 'Auth');
+      return false;
+    }
+  }
+
+  Future<void> _forceLogout() async {
+    if (_redirectingToLogin) return;
+    _redirectingToLogin = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('token');
+      await prefs.remove('user_id');
+      clearCache();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final nav = navigatorKey.currentState;
+        if (nav != null) {
+          nav.pushNamedAndRemoveUntil('/login', (_) => false);
+        }
+        Future.delayed(const Duration(seconds: 3), () => _redirectingToLogin = false);
+      });
+    } catch (_) {
+      _redirectingToLogin = false;
+    }
   }
 
   String _getCacheKey(String url, Map<String, dynamic>? params) {

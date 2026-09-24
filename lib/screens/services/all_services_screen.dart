@@ -178,7 +178,9 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
           ),
         ],
       ),
-      body: _loading
+      body: GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: _loading
           ? const MecaApiLoadingWidget(message: 'Carregando serviços...')
           : _error.isNotEmpty
               ? _buildErrorState()
@@ -189,6 +191,7 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
                     Expanded(child: _buildServicesList()),
                   ],
                 ),
+      ),
     );
   }
 
@@ -589,6 +592,7 @@ class _AllServicesScreenState extends State<AllServicesScreen> {
     }
 
     return ListView.builder(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(16),
       itemCount: _filteredServices.length,
       itemBuilder: (context, index) {

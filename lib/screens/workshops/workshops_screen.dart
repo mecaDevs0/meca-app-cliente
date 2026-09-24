@@ -341,7 +341,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
       return;
     }
 
-    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _manualCepError = null;
       _isManualCepLoading = true;
@@ -381,7 +381,10 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
     
     return Scaffold(
       backgroundColor: isDarkMode ? const Color(0xFF0A0A0A) : const Color(0xFFF8F9FA),
-      body: CustomScrollView(
+      body: GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: CustomScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         slivers: [
           SliverAppBar(
             pinned: true,
@@ -585,6 +588,7 @@ class _WorkshopsScreenState extends State<WorkshopsScreen> {
             ),
         ],
       ),
+    ),
     );
   }
 

@@ -102,6 +102,7 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
         message: result['message'] ?? 'Veículo atualizado com sucesso!',
       );
       if (mounted) {
+        FocusManager.instance.primaryFocus?.unfocus();
         Navigator.pop(context, true);
       }
     } else {

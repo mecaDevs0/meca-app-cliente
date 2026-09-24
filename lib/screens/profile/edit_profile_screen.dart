@@ -161,6 +161,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         // Usar Future.microtask para evitar crash ao navegar
         Future.microtask(() {
           if (mounted) {
+            FocusManager.instance.primaryFocus?.unfocus();
             Navigator.pop(context, true);
             // Mostrar sucesso após navegar
             Future.delayed(const Duration(milliseconds: 300), () {

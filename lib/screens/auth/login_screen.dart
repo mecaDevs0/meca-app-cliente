@@ -654,6 +654,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     } catch (_) {}
 
     if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     Provider.of<NotificationProvider>(context, listen: false).clearAll();
     Navigator.pushReplacementNamed(context, '/home');
   }
